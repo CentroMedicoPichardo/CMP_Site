@@ -1,0 +1,791 @@
+{
+  "id": "00000000-0000-0000-0000-000000000000",
+  "prevId": "",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.roles": {
+      "name": "roles",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "nombre": {
+          "name": "nombre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "roles_nombre_unique": {
+          "columns": [
+            "nombre"
+          ],
+          "nullsNotDistinct": false,
+          "name": "roles_nombre_unique"
+        }
+      },
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.intentos_recuperacion": {
+      "name": "intentos_recuperacion",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "identificador": {
+          "name": "identificador",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "conteo": {
+          "name": "conteo",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "ultimo_intento": {
+          "name": "ultimo_intento",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "bloqueado_hasta": {
+          "name": "bloqueado_hasta",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.cursos": {
+      "name": "cursos",
+      "schema": "",
+      "columns": {
+        "id_curso": {
+          "name": "id_curso",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "titulo_curso": {
+          "name": "titulo_curso",
+          "type": "varchar(200)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "descripcion": {
+          "name": "descripcion",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "id_instructor": {
+          "name": "id_instructor",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "categoria": {
+          "name": "categoria",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fecha_inicio": {
+          "name": "fecha_inicio",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fecha_fin": {
+          "name": "fecha_fin",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "horario": {
+          "name": "horario",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "modalidad": {
+          "name": "modalidad",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dirigido_a": {
+          "name": "dirigido_a",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cupo_maximo": {
+          "name": "cupo_maximo",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ubicacion": {
+          "name": "ubicacion",
+          "type": "varchar(150)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "costo": {
+          "name": "costo",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'0.00'"
+        },
+        "url_imagen_portada": {
+          "name": "url_imagen_portada",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "activo": {
+          "name": "activo",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": true
+        },
+        "cupos_ocupados": {
+          "name": "cupos_ocupados",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "cursos_id_instructor_fkey": {
+          "name": "cursos_id_instructor_fkey",
+          "tableFrom": "cursos",
+          "tableTo": "medicos",
+          "schemaTo": "public",
+          "columnsFrom": [
+            "id_instructor"
+          ],
+          "columnsTo": [
+            "id_medico"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.academia_infantil": {
+      "name": "academia_infantil",
+      "schema": "",
+      "columns": {
+        "id_guia": {
+          "name": "id_guia",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "titulo_guia": {
+          "name": "titulo_guia",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "descripcion_corta": {
+          "name": "descripcion_corta",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "id_autor": {
+          "name": "id_autor",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fecha_publicacion": {
+          "name": "fecha_publicacion",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_DATE"
+        },
+        "url_imagen": {
+          "name": "url_imagen",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "etiquetas": {
+          "name": "etiquetas",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "descripcion_larga": {
+          "name": "descripcion_larga",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "activo": {
+          "name": "activo",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "academia_infantil_id_autor_fkey": {
+          "name": "academia_infantil_id_autor_fkey",
+          "tableFrom": "academia_infantil",
+          "tableTo": "medicos",
+          "schemaTo": "public",
+          "columnsFrom": [
+            "id_autor"
+          ],
+          "columnsTo": [
+            "id_medico"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.backups": {
+      "name": "backups",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "fecha": {
+          "name": "fecha",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        "tipo": {
+          "name": "tipo",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tamaño": {
+          "name": "tamaño",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "archivo_url": {
+          "name": "archivo_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "estado": {
+          "name": "estado",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'exitoso'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.nosotros": {
+      "name": "nosotros",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "mision": {
+          "name": "mision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "vision": {
+          "name": "vision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "valores": {
+          "name": "valores",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nuestra_historia": {
+          "name": "nuestra_historia",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "compromiso": {
+          "name": "compromiso",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "url_imagen": {
+          "name": "url_imagen",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'/pediatric-illustration.png'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.publicaciones": {
+      "name": "publicaciones",
+      "schema": "",
+      "columns": {
+        "id_publicacion": {
+          "name": "id_publicacion",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "titulo_noticia": {
+          "name": "titulo_noticia",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resumen_bajada": {
+          "name": "resumen_bajada",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "id_autor": {
+          "name": "id_autor",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fecha_publicacion": {
+          "name": "fecha_publicacion",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "CURRENT_DATE"
+        },
+        "etiquetas": {
+          "name": "etiquetas",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "url_imagen": {
+          "name": "url_imagen",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "contenido_completo": {
+          "name": "contenido_completo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "activo": {
+          "name": "activo",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "publicaciones_id_autor_fkey": {
+          "name": "publicaciones_id_autor_fkey",
+          "tableFrom": "publicaciones",
+          "tableTo": "medicos",
+          "schemaTo": "public",
+          "columnsFrom": [
+            "id_autor"
+          ],
+          "columnsTo": [
+            "id_medico"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.usuarios": {
+      "name": "usuarios",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "nombre": {
+          "name": "nombre",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "apellidoPaterno": {
+          "name": "apellidoPaterno",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "apellidoMaterno": {
+          "name": "apellidoMaterno",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "edad": {
+          "name": "edad",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sexo": {
+          "name": "sexo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "telefono": {
+          "name": "telefono",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "correo": {
+          "name": "correo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contrasena": {
+          "name": "contrasena",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rol_id": {
+          "name": "rol_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reset_token": {
+          "name": "reset_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reset_token_expiry": {
+          "name": "reset_token_expiry",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "intentos_fallidos": {
+          "name": "intentos_fallidos",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "bloqueado_hasta": {
+          "name": "bloqueado_hasta",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "version_token": {
+          "name": "version_token",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 1
+        },
+        "mfa_habilitado": {
+          "name": "mfa_habilitado",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "secreto_mfa": {
+          "name": "secreto_mfa",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "activo": {
+          "name": "activo",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "usuarios_rol_id_roles_id_fk": {
+          "name": "usuarios_rol_id_roles_id_fk",
+          "tableFrom": "usuarios",
+          "tableTo": "roles",
+          "schemaTo": "public",
+          "columnsFrom": [
+            "rol_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "usuarios_correo_unique": {
+          "columns": [
+            "correo"
+          ],
+          "nullsNotDistinct": false,
+          "name": "usuarios_correo_unique"
+        }
+      },
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.servicios": {
+      "name": "servicios",
+      "schema": "",
+      "columns": {
+        "id_servicio": {
+          "name": "id_servicio",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "titulo_servicio": {
+          "name": "titulo_servicio",
+          "type": "varchar(150)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "descripcion": {
+          "name": "descripcion",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ubicacion": {
+          "name": "ubicacion",
+          "type": "varchar(200)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "url_image": {
+          "name": "url_image",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "texto_alt": {
+          "name": "texto_alt",
+          "type": "varchar(150)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "diseno_tipo": {
+          "name": "diseno_tipo",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'vertical'"
+        },
+        "activo": {
+          "name": "activo",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    },
+    "public.medicos": {
+      "name": "medicos",
+      "schema": "",
+      "columns": {
+        "id_medico": {
+          "name": "id_medico",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "nombres": {
+          "name": "nombres",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "apellido_paterno": {
+          "name": "apellido_paterno",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "apellido_materno": {
+          "name": "apellido_materno",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "especialidad": {
+          "name": "especialidad",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hospital_clinica": {
+          "name": "hospital_clinica",
+          "type": "varchar(150)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "direccion": {
+          "name": "direccion",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "url_foto": {
+          "name": "url_foto",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "activo": {
+          "name": "activo",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "tables": {
+      "nosotros": {
+        "columns": {
+          "valores": {
+            "isArray": true,
+            "dimensions": 1,
+            "rawType": "text"
+          }
+        }
+      }
+    }
+  }
+}

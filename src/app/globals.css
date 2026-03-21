@@ -24,3 +24,76 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Estilos para el carrusel de noticias */
+.noticias-swiper {
+  padding-bottom: 40px !important;
+}
+
+.noticias-swiper .swiper-button-next,
+.noticias-swiper .swiper-button-prev {
+  color: #0A3D62;
+  background: white;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.noticias-swiper .swiper-button-next:after,
+.noticias-swiper .swiper-button-prev:after {
+  font-size: 18px;
+}
+
+.noticias-swiper .swiper-button-next:hover,
+.noticias-swiper .swiper-button-prev:hover {
+  background: #FFC300;
+  color: #0A3D62;
+}
+
+.noticias-swiper .swiper-pagination-bullet {
+  background: #0A3D62;
+  opacity: 0.3;
+}
+
+.noticias-swiper .swiper-pagination-bullet-active {
+  background: #FFC300;
+  opacity: 1;
+}
+
+.noticias-swiper .swiper-button-disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Animación para fadeIn del MFA */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes slide {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+.animate-slide {
+  animation: slide 2s infinite;
+}
+
