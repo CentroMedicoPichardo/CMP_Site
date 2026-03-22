@@ -1,3 +1,4 @@
+// src/app/api/backups/route.ts
 import { NextResponse } from 'next/server';
 import { Pool } from 'pg';
 import { writeFileSync, mkdirSync } from 'fs';
@@ -11,9 +12,10 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 // GET /api/backups - Listar historial de respaldos
 export async function GET() {
   try {
+    // 👈 ESPECIFICAR EL ESQUEMA auditoria
     const result = await pool.query(
       `SELECT id, fecha, tipo, tamaño, estado
-       FROM backups
+       FROM auditoria.backups
        ORDER BY fecha DESC`
     );
 
@@ -69,14 +71,15 @@ export async function POST(request: Request) {
     const backupDir = path.join(process.cwd(), 'public', 'backups');
     mkdirSync(backupDir, { recursive: true });
     const timestamp = Date.now();
-    const fileName = `backup-${timestamp}.sql`;
+    const fileName = `backup-${tipo}-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.sql`;
     const filePath = path.join(backupDir, fileName);
     writeFileSync(filePath, sqlDump, 'utf8');
 
     const tamañoKB = (Buffer.byteLength(sqlDump, 'utf8') / 1024).toFixed(2) + ' KB';
 
+    // 👈 ESPECIFICAR EL ESQUEMA auditoria
     const insertRes = await pool.query(
-      `INSERT INTO backups (tipo, tamaño, archivo_url) VALUES ($1, $2, $3) RETURNING id`,
+      `INSERT INTO auditoria.backups (tipo, tamaño, archivo_url) VALUES ($1, $2, $3) RETURNING id`,
       [tipo, tamañoKB, `backups/${fileName}`]
     );
     const backupId = insertRes.rows[0].id;

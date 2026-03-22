@@ -1,4 +1,4 @@
-import { pgTable, pgSchema, foreignKey, serial, varchar, text, integer, date, numeric, boolean, unique, timestamp } from "drizzle-orm/pg-core"
+import { pgTable, pgSchema, foreignKey, serial, varchar, text, integer, date, numeric, boolean, unique, timestamp, index } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 export const clinica = pgSchema("clinica");
@@ -110,7 +110,10 @@ export const backupsInAuditoria = auditoria.table("backups", {
 	"tamaño": varchar("tamaño", { length: 20 }),
 	archivoUrl: text("archivo_url"),
 	estado: varchar({ length: 20 }).default('exitoso'),
-});
+}, (table) => [
+	index("idx_backups_fecha").using("btree", table.fecha.desc().nullsFirst().op("timestamp_ops")),
+	index("idx_backups_tipo").using("btree", table.tipo.asc().nullsLast().op("text_ops")),
+]);
 
 export const intentosRecuperacionInAuditoria = auditoria.table("intentos_recuperacion", {
 	id: serial().primaryKey().notNull(),

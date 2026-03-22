@@ -28,8 +28,8 @@ export const adminRoutes = {
   usuarios: "/usuarios",
   medicos: "/medicos",           // ← Agregado
   servicios: "/adminservicios",        // ← Agregado
-  cursos: "/cursos",
-  quienesSomos: "/quienes-somos", // ← Agregado
+  cursosadm: "/cursos-admin",
+  quienesSomos: "/quienes-somos-admin", // ← Agregado
   noticias: "/noticias",          // ← Agregado
   videos: "/videos",              // ← Agregado
   articulos: "/articulos",        // ← Agregado

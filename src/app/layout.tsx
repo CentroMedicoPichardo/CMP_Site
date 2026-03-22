@@ -8,6 +8,10 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Footer } from "@/components/layout/Footer";
 import { SWRProvider } from "@/lib/swr-provider";
 
+// 👈 IMPORTAR ESTILOS DE REACT-TOASTIFY
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
 import "./globals.css";
 
 export const dynamic = "force-dynamic";
@@ -55,6 +59,20 @@ export default async function RootLayout({
             </main>
           </div>
           <Footer />
+          
+          {/* 👈 AGREGAR EL ToastContainer AQUÍ */}
+          <ToastContainer
+            position="top-right"
+            autoClose={5000}
+            hideProgressBar={false}
+            newestOnTop={false}
+            closeOnClick
+            rtl={false}
+            pauseOnFocusLoss
+            draggable
+            pauseOnHover
+            theme="light"
+          />
         </SWRProvider>
       </body>
     </html>

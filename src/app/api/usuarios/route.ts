@@ -1,3 +1,4 @@
+// src/app/api/usuarios/route.ts
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { usuarios, roles } from "@/lib/schema/index";
@@ -5,7 +6,7 @@ import { eq, asc } from "drizzle-orm";
 
 export async function GET() {
   try {
-    // 🛡️ Traemos usuarios con el nombre de su rol (Join)
+    // Traemos usuarios con el nombre de su rol (Join)
     // NO traemos la contraseña por seguridad
     const data = await db
       .select({
@@ -25,6 +26,7 @@ export async function GET() {
 
     return NextResponse.json(data);
   } catch (error: any) {
+    console.error("Error en GET usuarios:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

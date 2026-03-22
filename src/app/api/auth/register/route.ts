@@ -1,17 +1,17 @@
+// src/app/api/auth/register/route.ts
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { db } from '@/lib/db'; // 👈 Tu conexión Drizzle
-import { usuarios, roles } from '@/lib/schema/index'; // 👈 Tus tablas
-import { eq } from 'drizzle-orm'; // Operador "igual"
-import { otpMemoria } from '@/lib/otpStore'; // 👈 Nuestra memoria temporal
+import { db } from '@/lib/db';
+import { usuariosInSeguridad, rolesInSeguridad } from '@/lib/schema/index'; // 👈 Importar correctamente
+import { eq } from 'drizzle-orm';
+import { otpMemoria, verificarOTP } from '@/lib/otpStore';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     
-    // 1. Extraemos los datos INCLUYENDO el codigoVerificacion
     const { 
-        codigoVerificacion, // <--- Nuevo campo obligatorio
+        codigoVerificacion, 
         nombre, 
         apellidoPaterno, 
         apellidoMaterno, 
@@ -22,66 +22,59 @@ export async function POST(request: Request) {
         contrasena 
     } = body;
 
+    console.log("📥 Datos recibidos en registro:", {
+      nombre, apellidoPaterno, correo, edad, telefono, codigoVerificacion
+    });
 
+    // Validar campos obligatorios
+    if (!correo || !codigoVerificacion) {
+      return NextResponse.json({ 
+        message: "Faltan datos (correo o código de verificación)" 
+      }, { status: 400 });
+    }
+
+    // Verificar OTP
+    const otpValidation = verificarOTP(correo, codigoVerificacion);
+    console.log("🔍 Validación OTP:", otpValidation);
+    
+    if (!otpValidation.valido) {
+      return NextResponse.json({ 
+        message: otpValidation.mensaje 
+      }, { status: 400 });
+    }
+
+    // Validar contraseña
     const passRegex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
     
     if (!contrasena || contrasena.length < 8) {
-        return NextResponse.json({ message: "La contraseña debe tener al menos 8 caracteres." }, { status: 400 });
+        return NextResponse.json({ 
+          message: "La contraseña debe tener al menos 8 caracteres." 
+        }, { status: 400 });
     }
     
     if (!passRegex.test(contrasena)) {
-        return NextResponse.json({ message: "La contraseña es muy débil (faltan números o símbolos)." }, { status: 400 });
+        return NextResponse.json({ 
+          message: "La contraseña es muy débil (faltan números o símbolos)." 
+        }, { status: 400 });
     }
     
     // Validar secuencias (123, abc)
     const secuencias = ["123", "234", "345", "456", "789", "abc", "qwe"];
     if (secuencias.some(s => contrasena.includes(s))) {
-         return NextResponse.json({ message: "La contraseña contiene secuencias inseguras." }, { status: 400 });
+         return NextResponse.json({ 
+           message: "La contraseña contiene secuencias inseguras." 
+         }, { status: 400 });
     }
 
-    const ROL_POR_DEFECTO = 1;
+    const ROL_POR_DEFECTO = 1; // ID del rol cliente
 
-    // --- 🛡️ PASO 1: VALIDACIÓN PREVIA Y OTP ---
-
-    if (!correo || !codigoVerificacion) {
-        return NextResponse.json({ message: "Faltan datos (correo o código)" }, { status: 400 });
-    }
-
-    // A. Normalizar email para buscar en memoria
-    const emailNormalizado = correo.trim().toLowerCase(); 
-
-    // B. Buscar en memoria OTP
-    const registroGuardado = otpMemoria.get(emailNormalizado);
-
-    // C. Validaciones OTP
-    if (!registroGuardado) {
-        return NextResponse.json({ message: "El código no existe. Solicita uno nuevo." }, { status: 400 });
-    }
-
-    if (Date.now() > registroGuardado.expires) {
-        otpMemoria.delete(emailNormalizado);
-        return NextResponse.json({ message: "El código ha expirado." }, { status: 400 });
-    }
-
-    if (registroGuardado.code !== codigoVerificacion) {
-        return NextResponse.json({ message: "Código incorrecto." }, { status: 400 });
-    }
-
-    // --- 💾 PASO 2: LÓGICA DE REGISTRO (TU CÓDIGO) ---
-
-    // 2. Validar campos obligatorios del usuario
-    if (!contrasena || !nombre) {
-      return NextResponse.json(
-        { message: 'Faltan datos obligatorios (nombre, contrasena)' }, 
-        { status: 400 }
-      );
-    }
-
-    // 3. Verificar si el usuario ya existe en la BD
+    // Verificar si el usuario ya existe
     const usuariosEncontrados = await db
       .select()
-      .from(usuarios)
-      .where(eq(usuarios.correo, correo));
+      .from(usuariosInSeguridad)
+      .where(eq(usuariosInSeguridad.correo, correo));
+
+    console.log("👥 Usuarios encontrados:", usuariosEncontrados.length);
 
     if (usuariosEncontrados.length > 0) {
       return NextResponse.json(
@@ -90,25 +83,27 @@ export async function POST(request: Request) {
       );
     }
 
-    // 4. Verificar que el Rol 1 exista (Seguridad)
+    // Verificar que el Rol exista
     const rolesEncontrados = await db
       .select()
-      .from(roles)
-      .where(eq(roles.id, ROL_POR_DEFECTO));
+      .from(rolesInSeguridad)
+      .where(eq(rolesInSeguridad.id, ROL_POR_DEFECTO));
+
+    console.log("👥 Roles encontrados:", rolesEncontrados.length);
 
     if (rolesEncontrados.length === 0) {
       return NextResponse.json(
-        { message: 'Error de configuración: El Rol "Cliente" (ID 1) no existe en la base de datos.' }, 
+        { message: 'Error de configuración: El Rol "Cliente" (ID 1) no existe.' }, 
         { status: 500 }
       );
     }
 
-    // 5. Hashear contraseña
+    // Hashear contraseña
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(contrasena, salt);
 
-    // 6. Crear usuario con Drizzle
-    const nuevosUsuarios = await db.insert(usuarios).values({
+    // Crear usuario
+    const nuevosUsuarios = await db.insert(usuariosInSeguridad).values({
         nombre,
         apellidoPaterno,
         apellidoMaterno: apellidoMaterno || null,
@@ -117,16 +112,16 @@ export async function POST(request: Request) {
         telefono,
         correo,
         contrasena: hashedPassword,
-        rolId: ROL_POR_DEFECTO
+        rolId: ROL_POR_DEFECTO,
+        activo: true
     }).returning(); 
 
-    // 7. Retornar éxito
-    const usuarioCreado = nuevosUsuarios[0];
-    
-    // Limpiamos el código usado de la memoria
-    otpMemoria.delete(emailNormalizado);
+    console.log("✅ Usuario creado:", nuevosUsuarios[0]?.id);
 
-    // Quitamos la contraseña del objeto de respuesta
+    // Limpiamos el código usado
+    otpMemoria.delete(correo);
+
+    const usuarioCreado = nuevosUsuarios[0];
     const { contrasena: _, ...usuarioSinPass } = usuarioCreado;
 
     return NextResponse.json({

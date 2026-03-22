@@ -18,6 +18,14 @@ export default function AccederPage() {
     setNecesitaMfa(false); // Reset MFA si cambia de modo
   };
 
+  // 👈 Función para cuando el registro es exitoso
+  const handleRegistroExitoso = () => {
+    setModo('login');
+    setNecesitaMfa(false);
+    // Opcional: mostrar mensaje de éxito
+    // toast.success('Cuenta creada exitosamente, ahora inicia sesión');
+  };
+
   const renderFormulario = () => {
     if (necesitaMfa) {
       return (
@@ -39,7 +47,11 @@ export default function AccederPage() {
           />
         );
       case 'registro':
-        return <RegisterForm />;
+        return (
+          <RegisterForm 
+            onRegistroExitoso={handleRegistroExitoso}  // 👈 Pasar callback
+          />
+        );
       default:
         return null;
     }

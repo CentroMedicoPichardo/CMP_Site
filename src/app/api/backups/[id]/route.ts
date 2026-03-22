@@ -1,3 +1,4 @@
+// src/app/api/backups/[id]/route.ts
 import { NextResponse } from 'next/server';
 import { Pool } from 'pg';
 import { readFileSync, unlinkSync } from 'fs';
@@ -14,8 +15,9 @@ export async function GET(
     const { id } = await params;
     console.log(`GET /api/backups/${id} - Solicitando descarga`);
 
+    // 👈 ESPECIFICAR EL ESQUEMA auditoria
     const result = await pool.query(
-      'SELECT archivo_url FROM backups WHERE id = $1',
+      'SELECT archivo_url FROM auditoria.backups WHERE id = $1',
       [id]
     );
 
@@ -65,8 +67,9 @@ export async function DELETE(
     const { id } = await params;
     console.log(`DELETE /api/backups/${id} - Solicitando eliminación`);
 
+    // 👈 ESPECIFICAR EL ESQUEMA auditoria
     const result = await pool.query(
-      'SELECT archivo_url FROM backups WHERE id = $1',
+      'SELECT archivo_url FROM auditoria.backups WHERE id = $1',
       [id]
     );
 
@@ -95,7 +98,8 @@ export async function DELETE(
       console.warn(`DELETE /api/backups/${id} - No se pudo eliminar el archivo:`, (e as Error).message);
     }
 
-    await pool.query('DELETE FROM backups WHERE id = $1', [id]);
+    // 👈 ESPECIFICAR EL ESQUEMA auditoria
+    await pool.query('DELETE FROM auditoria.backups WHERE id = $1', [id]);
     console.log(`DELETE /api/backups/${id} - Registro eliminado de la BD`);
 
     return NextResponse.json({ success: true });

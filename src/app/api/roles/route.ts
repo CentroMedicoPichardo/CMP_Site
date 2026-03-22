@@ -1,3 +1,4 @@
+// src/app/api/roles/route.ts
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { roles } from "@/lib/schema/index";
@@ -8,6 +9,10 @@ export async function GET() {
     const data = await db.select().from(roles).orderBy(asc(roles.id));
     return NextResponse.json(data);
   } catch (error: any) {
-    return NextResponse.json({ error: "No se pudieron cargar los roles" }, { status: 500 });
+    console.error("Error en GET roles:", error);
+    return NextResponse.json(
+      { error: "No se pudieron cargar los roles" },
+      { status: 500 }
+    );
   }
 }

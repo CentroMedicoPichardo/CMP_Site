@@ -1,13 +1,18 @@
 // src/components/public/auth/RegisterForm.tsx
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Mail, Lock, Eye, EyeOff, Loader2, User, Phone, CheckCircle, XCircle, Calendar, Users } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { RegisterSocialButtons } from './RegisterSocialButtons';
+import { VerifyCodeForm } from './VerifyCodeForm';
+
+interface RegisterFormProps {
+  onRegistroExitoso?: () => void; // 👈 Nueva prop
+}
 
 interface RegisterData {
   nombre: string;
@@ -31,9 +36,10 @@ interface Errores {
   telefono?: string;
   contrasena?: string;
   confirmarContrasena?: string;
+  terminos?: string;
 }
 
-export function RegisterForm() {
+export function RegisterForm({ onRegistroExitoso }: RegisterFormProps = {}) {
   const router = useRouter();
   const [registerData, setRegisterData] = useState<RegisterData>({
     nombre: '',
@@ -50,7 +56,14 @@ export function RegisterForm() {
   const [mostrarContrasena, setMostrarContrasena] = useState(false);
   const [mostrarConfirmContrasena, setMostrarConfirmContrasena] = useState(false);
   const [cargando, setCargando] = useState(false);
-  const [passwordStrength, setPasswordStrength] = useState(0); // 0-4
+  const [passwordStrength, setPasswordStrength] = useState(0);
+  const [isPasswordValid, setIsPasswordValid] = useState(false);
+  const [aceptaTerminos, setAceptaTerminos] = useState(false);
+  const [emailDisponible, setEmailDisponible] = useState<boolean | null>(null);
+  const [verificandoEmail, setVerificandoEmail] = useState(false);
+  const [step, setStep] = useState<'form' | 'verify'>('form');
+  const [emailRegistro, setEmailRegistro] = useState('');
+  const [nombreRegistro, setNombreRegistro] = useState('');
 
   // Estados para campos enfocados
   const [nombreFocused, setNombreFocused] = useState(false);
@@ -63,19 +76,70 @@ export function RegisterForm() {
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [confirmFocused, setConfirmFocused] = useState(false);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setRegisterData({ ...registerData, [name]: value });
-    
-    // Limpiar error del campo
-    if (errores[name as keyof RegisterData]) {
-      setErrores({ ...errores, [name]: '' });
-    }
+  // Verificar si el correo ya está registrado (debounce)
+  useEffect(() => {
+    const delayDebounce = setTimeout(() => {
+      if (registerData.correo && /\S+@\S+\.\S+/.test(registerData.correo)) {
+        console.log("🔍 Verificando disponibilidad del email:", registerData.correo);
+        verificarEmailDisponible();
+      } else {
+        setEmailDisponible(null);
+      }
+    }, 500);
 
-    // Calcular fortaleza de contraseña
-    if (name === 'contrasena') {
-      calculatePasswordStrength(value);
+    return () => clearTimeout(delayDebounce);
+  }, [registerData.correo]);
+
+  const verificarEmailDisponible = async () => {
+    setVerificandoEmail(true);
+    try {
+      console.log("📡 GET /api/auth/check-email?email=", registerData.correo);
+      const res = await axios.get(`/api/auth/check-email?email=${encodeURIComponent(registerData.correo)}`);
+      console.log("📥 Respuesta check-email:", res.data);
+      setEmailDisponible(res.data.disponible);
+      if (!res.data.disponible) {
+        setErrores(prev => ({ ...prev, correo: 'Este correo ya está registrado' }));
+      } else {
+        setErrores(prev => ({ ...prev, correo: undefined }));
+      }
+    } catch (error) {
+      console.error('❌ Error verificando email:', error);
+      setEmailDisponible(null);
+    } finally {
+      setVerificandoEmail(false);
     }
+  };
+
+  // Función de validación de contraseña completa
+  const validatePassword = (password: string): { isValid: boolean; errors: string[] } => {
+    const errors: string[] = [];
+    
+    if (password.length < 8) errors.push('Mínimo 8 caracteres');
+    if (!/[A-Z]/.test(password)) errors.push('Al menos una letra mayúscula');
+    if (!/[a-z]/.test(password)) errors.push('Al menos una letra minúscula');
+    if (!/[0-9]/.test(password)) errors.push('Al menos un número');
+    if (!/[^a-zA-Z0-9]/.test(password)) errors.push('Al menos un carácter especial (!@#$%^&*)');
+    
+    const numberSequences = ['123', '234', '345', '456', '567', '678', '789', '890', '012'];
+    for (const seq of numberSequences) {
+      if (password.includes(seq)) {
+        errors.push(`No se permiten secuencias de números (${seq})`);
+        break;
+      }
+    }
+    
+    const letterSequences = ['abc', 'bcd', 'cde', 'def', 'efg', 'fgh', 'ghi', 'hij', 'ijk', 'jkl', 'klm', 'lmn', 'mno', 'nop', 'opq', 'pqr', 'qrs', 'rst', 'stu', 'tuv', 'uvw', 'vwx', 'wxy', 'xyz'];
+    const passwordLower = password.toLowerCase();
+    for (const seq of letterSequences) {
+      if (passwordLower.includes(seq)) {
+        errors.push(`No se permiten secuencias de letras (${seq})`);
+        break;
+      }
+    }
+    
+    if (/(.)\1{3,}/.test(password)) errors.push('No se permiten más de 3 caracteres repetidos');
+    
+    return { isValid: errors.length === 0, errors };
   };
 
   const calculatePasswordStrength = (password: string) => {
@@ -86,97 +150,179 @@ export function RegisterForm() {
     if (/[0-9]/.test(password)) strength++;
     if (/[^a-zA-Z0-9]/.test(password)) strength++;
     setPasswordStrength(Math.min(strength, 4));
+    
+    const validation = validatePassword(password);
+    setIsPasswordValid(validation.isValid);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    
+    if (name === 'telefono') {
+      const soloNumeros = value.replace(/[^0-9]/g, '');
+      setRegisterData({ ...registerData, [name]: soloNumeros });
+    } else {
+      setRegisterData({ ...registerData, [name]: value });
+    }
+    
+    if (errores[name as keyof RegisterData]) {
+      setErrores({ ...errores, [name]: '' });
+    }
+
+    if (name === 'contrasena') {
+      calculatePasswordStrength(value);
+    }
   };
 
   const validateForm = () => {
     const nuevosErrores: Errores = {};
 
-    // Validaciones de nombre
     if (!registerData.nombre) nuevosErrores.nombre = 'Ingresa tu nombre';
     else if (registerData.nombre.length < 2) nuevosErrores.nombre = 'El nombre debe tener al menos 2 caracteres';
+    else if (!/^[a-zA-ZáéíóúñÑ\s]+$/.test(registerData.nombre)) nuevosErrores.nombre = 'El nombre solo puede contener letras';
 
     if (!registerData.apellidoPaterno) nuevosErrores.apellidoPaterno = 'Ingresa tu apellido paterno';
     else if (registerData.apellidoPaterno.length < 2) nuevosErrores.apellidoPaterno = 'Apellido paterno inválido';
+    else if (!/^[a-zA-ZáéíóúñÑ\s]+$/.test(registerData.apellidoPaterno)) nuevosErrores.apellidoPaterno = 'Apellido paterno solo puede contener letras';
 
     if (!registerData.apellidoMaterno) nuevosErrores.apellidoMaterno = 'Ingresa tu apellido materno';
     else if (registerData.apellidoMaterno.length < 2) nuevosErrores.apellidoMaterno = 'Apellido materno inválido';
+    else if (!/^[a-zA-ZáéíóúñÑ\s]+$/.test(registerData.apellidoMaterno)) nuevosErrores.apellidoMaterno = 'Apellido materno solo puede contener letras';
 
-    // Validación de edad
     if (!registerData.edad) nuevosErrores.edad = 'Ingresa tu edad';
     else {
       const edadNum = parseInt(registerData.edad);
-      if (isNaN(edadNum) || edadNum < 1 || edadNum > 120) {
-        nuevosErrores.edad = 'Edad inválida (1-120 años)';
-      }
+      if (isNaN(edadNum)) nuevosErrores.edad = 'Edad inválida';
+      else if (edadNum < 18) nuevosErrores.edad = 'Debes ser mayor de 18 años para registrarte';
+      else if (edadNum > 100) nuevosErrores.edad = 'Edad máxima 100 años';
     }
 
-    // Validación de sexo
     if (!registerData.sexo) nuevosErrores.sexo = 'Selecciona tu sexo';
 
-    // Validaciones existentes
     if (!registerData.telefono) nuevosErrores.telefono = 'Ingresa tu teléfono';
-    else if (!/^[0-9]{9,15}$/.test(registerData.telefono)) nuevosErrores.telefono = 'Teléfono inválido (9-15 dígitos)';
+    else if (!/^[0-9]{10}$/.test(registerData.telefono)) nuevosErrores.telefono = 'Teléfono inválido (debe tener 10 dígitos)';
 
     if (!registerData.correo) nuevosErrores.correo = 'Ingresa tu correo';
     else if (!/\S+@\S+\.\S+/.test(registerData.correo)) nuevosErrores.correo = 'Correo inválido';
+    else if (emailDisponible === false) nuevosErrores.correo = 'Este correo ya está registrado';
 
-    if (!registerData.contrasena) nuevosErrores.contrasena = 'Ingresa una contraseña';
-    else if (registerData.contrasena.length < 8) nuevosErrores.contrasena = 'Mínimo 8 caracteres';
-    else if (passwordStrength < 3) nuevosErrores.contrasena = 'Contraseña débil';
+    if (!registerData.contrasena) {
+      nuevosErrores.contrasena = 'Ingresa una contraseña';
+    } else {
+      const passwordValidation = validatePassword(registerData.contrasena);
+      if (!passwordValidation.isValid) {
+        nuevosErrores.contrasena = passwordValidation.errors[0];
+      }
+    }
 
     if (!registerData.confirmarContrasena) nuevosErrores.confirmarContrasena = 'Confirma tu contraseña';
     else if (registerData.contrasena !== registerData.confirmarContrasena) {
       nuevosErrores.confirmarContrasena = 'Las contraseñas no coinciden';
     }
 
+    if (!aceptaTerminos) {
+      nuevosErrores.terminos = 'Debes aceptar los términos y condiciones';
+    }
+
     return nuevosErrores;
   };
 
+  // Enviar código OTP
+  const enviarCodigoOTP = async () => {
+    try {
+      console.log("📤 POST /api/auth/send-otp - Enviando código a:", registerData.correo);
+      const otpRes = await axios.post('/api/auth/send-otp', {
+        email: registerData.correo,
+        nombre: `${registerData.nombre} ${registerData.apellidoPaterno}`
+      });
+
+      console.log("📥 Respuesta send-otp:", otpRes.data);
+
+      if (otpRes.data.success) {
+        setEmailRegistro(registerData.correo);
+        setNombreRegistro(`${registerData.nombre} ${registerData.apellidoPaterno}`);
+        setStep('verify');
+        console.log("✅ Step cambiado a 'verify'");
+        toast.success('Código enviado a tu correo');
+      } else {
+        console.error("❌ send-otp no tuvo éxito:", otpRes.data);
+        toast.error(otpRes.data.message || 'Error al enviar código');
+      }
+    } catch (error: any) {
+      console.error('❌ Error enviando OTP:', error);
+      if (error.response) {
+        console.error("📥 Respuesta error:", error.response.data);
+        toast.error(error.response.data.error || error.response.data.message || 'Error al enviar código');
+      } else {
+        toast.error('Error de conexión');
+      }
+      throw error;
+    }
+  };
+
+// En RegisterForm.tsx, modifica handleFinalRegister
+
+ const handleFinalRegister = async (codigo: string) => {
+    console.log("🔐 handleFinalRegister llamado con código:", codigo);
+    
+    try {
+      setCargando(true);
+      
+      const datosRegistro = {
+        codigoVerificacion: codigo,
+        nombre: registerData.nombre,
+        apellidoPaterno: registerData.apellidoPaterno,
+        apellidoMaterno: registerData.apellidoMaterno,
+        edad: registerData.edad,
+        sexo: registerData.sexo,
+        telefono: registerData.telefono,
+        correo: registerData.correo,
+        contrasena: registerData.contrasena,
+      };
+      
+      const res = await axios.post('/api/auth/register', datosRegistro);
+      
+      console.log("✅ Registro exitoso!");
+      
+      toast.success('¡Cuenta creada exitosamente!');
+      
+      // 👈 Llamar al callback para cambiar a login
+      if (onRegistroExitoso) {
+        onRegistroExitoso();
+      }
+
+    } catch (error: any) {
+      console.error('❌ Error registro:', error);
+      if (error.response) {
+        toast.error(error.response.data.message || 'Error en el registro');
+      } else {
+        toast.error('Error de conexión');
+      }
+    } finally {
+      setCargando(false);
+    }
+  };
+  // Submit del formulario
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    console.log("📝 handleSubmit - Validando formulario...");
+
     const nuevosErrores = validateForm();
     if (Object.keys(nuevosErrores).length > 0) {
+      console.log("❌ Errores de validación:", nuevosErrores);
       setErrores(nuevosErrores);
       return;
     }
 
+    console.log("✅ Formulario válido. Enviando OTP...");
+
     try {
       setCargando(true);
-      
-      // Enviar solo los datos necesarios
-      const { confirmarContrasena, ...datosRegistro } = registerData;
-      
-      const res = await axios.post('/api/auth/register', datosRegistro);
-
-      toast.success('¡Registro exitoso! Redirigiendo...');
-      
-      // Guardar token si viene
-      if (res.data.token) {
-        localStorage.setItem('token', res.data.token);
-      }
-
-      // Redirigir al login después de 2 segundos
-      setTimeout(() => {
-        router.push('/login');
-      }, 2000);
-
-    } catch (error: any) {
-      console.error('Error registro:', error);
-      
-      if (error.response) {
-        const status = error.response.status;
-        
-        if (status === 400) {
-          toast.error(error.response.data.message || 'Datos inválidos');
-        } else if (status === 409) {
-          toast.error('El correo o teléfono ya está registrado');
-        } else {
-          toast.error('Error en el servidor');
-        }
-      } else {
-        toast.error('Error de red. Verifica tu conexión.');
-      }
+      await enviarCodigoOTP();
+      console.log("✅ OTP enviado correctamente");
+    } catch (error) {
+      console.error("❌ Error en handleSubmit:", error);
     } finally {
       setCargando(false);
     }
@@ -198,6 +344,64 @@ export function RegisterForm() {
     return 'Fuerte';
   };
 
+  // Componente de requisitos de contraseña
+  const PasswordRequirements = () => {
+    const requirements = [
+      { label: 'Mínimo 8 caracteres', test: (p: string) => p.length >= 8 },
+      { label: 'Al menos una mayúscula', test: (p: string) => /[A-Z]/.test(p) },
+      { label: 'Al menos una minúscula', test: (p: string) => /[a-z]/.test(p) },
+      { label: 'Al menos un número', test: (p: string) => /[0-9]/.test(p) },
+      { label: 'Al menos un carácter especial (!@#$%^&*)', test: (p: string) => /[^a-zA-Z0-9]/.test(p) },
+      { label: 'Sin secuencias de números (123, 234, etc.)', test: (p: string) => {
+        const seq = ['123', '234', '345', '456', '567', '678', '789', '890', '012'];
+        return !seq.some(s => p.includes(s));
+      }},
+      { label: 'Sin secuencias de letras (abc, bcd, etc.)', test: (p: string) => {
+        const seq = ['abc', 'bcd', 'cde', 'def', 'efg', 'fgh', 'ghi', 'hij', 'ijk', 'jkl', 'klm', 'lmn', 'mno', 'nop', 'opq', 'pqr', 'qrs', 'rst', 'stu', 'tuv', 'uvw', 'vwx', 'wxy', 'xyz'];
+        const pLower = p.toLowerCase();
+        return !seq.some(s => pLower.includes(s));
+      }},
+      { label: 'Sin más de 3 caracteres repetidos', test: (p: string) => !/(.)\1{3,}/.test(p) },
+    ];
+
+    return (
+      <div className="mt-2 p-3 bg-gray-50 rounded-lg text-xs space-y-1">
+        <p className="font-semibold text-gray-600 mb-1">Requisitos de contraseña:</p>
+        {requirements.map((req, idx) => {
+          const isMet = req.test(registerData.contrasena);
+          return (
+            <div key={idx} className="flex items-center gap-2">
+              {isMet ? (
+                <CheckCircle size={12} className="text-green-500" />
+              ) : (
+                <XCircle size={12} className="text-gray-300" />
+              )}
+              <span className={isMet ? 'text-green-600' : 'text-gray-500'}>
+                {req.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // Mostrar pantalla de verificación si estamos en ese paso
+  if (step === 'verify') {
+    return (
+      <VerifyCodeForm 
+        email={emailRegistro}
+        onBack={() => {
+          console.log("🔙 Volviendo al formulario de registro");
+          setStep('form');
+        }}
+        onVerify={handleFinalRegister}
+        loading={cargando}
+      />
+    );
+  }
+
+  // Formulario de registro
   return (
     <div className="w-full max-w-md mx-auto">
       {/* Título */}
@@ -233,7 +437,6 @@ export function RegisterForm() {
             <div className="flex-1 h-px bg-gradient-to-r from-[#FFC300]/50 to-transparent"></div>
           </div>
           
-          {/* Campos de nombre - Grid de 3 columnas */}
           <div className="grid grid-cols-3 gap-2">
             {/* Nombre */}
             <div className="relative col-span-1">
@@ -335,7 +538,6 @@ export function RegisterForm() {
             </div>
           </div>
 
-          {/* Mensajes de error para nombres en grid */}
           <div className="grid grid-cols-3 gap-2">
             {errores.nombre && <p className="text-[10px] text-red-500">{errores.nombre}</p>}
             {errores.apellidoPaterno && <p className="text-[10px] text-red-500">{errores.apellidoPaterno}</p>}
@@ -353,7 +555,6 @@ export function RegisterForm() {
             <div className="flex-1 h-px bg-gradient-to-r from-[#FFC300]/50 to-transparent"></div>
           </div>
           
-          {/* Campos de Edad y Sexo - Grid de 2 columnas */}
           <div className="grid grid-cols-2 gap-3">
             {/* Edad */}
             <div className="relative">
@@ -379,8 +580,8 @@ export function RegisterForm() {
                 <input
                   type="number"
                   name="edad"
-                  min="1"
-                  max="120"
+                  min="18"
+                  max="100"
                   value={registerData.edad}
                   onChange={handleChange}
                   onFocus={() => setEdadFocused(true)}
@@ -391,7 +592,7 @@ export function RegisterForm() {
               {errores.edad && <p className="mt-1 text-[10px] text-red-500">{errores.edad}</p>}
             </div>
 
-            {/* Sexo - Select */}
+            {/* Sexo */}
             <div className="relative">
               <div className={`
                 relative rounded-xl transition-all duration-200 bg-white border-2
@@ -426,7 +627,6 @@ export function RegisterForm() {
                   <option value="otro">Otro</option>
                 </select>
                 
-                {/* Flecha personalizada para el select */}
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
                   ▼
                 </div>
@@ -464,7 +664,7 @@ export function RegisterForm() {
                   ? '-top-3 text-xs bg-white px-2 text-[#FFC300] font-medium'
                   : 'top-1/2 -translate-y-1/2 text-sm text-gray-400 left-12'}
               `}>
-                Teléfono
+                Teléfono (10 dígitos)
               </label>
 
               <input
@@ -474,6 +674,7 @@ export function RegisterForm() {
                 onChange={handleChange}
                 onFocus={() => setTelefonoFocused(true)}
                 onBlur={() => setTelefonoFocused(false)}
+                maxLength={10}
                 className="w-full pl-12 pr-4 py-4 bg-transparent rounded-xl focus:outline-none text-gray-700 relative z-20 placeholder-transparent"
               />
             </div>
@@ -515,6 +716,22 @@ export function RegisterForm() {
                 onBlur={() => setCorreoFocused(false)}
                 className="w-full pl-12 pr-4 py-4 bg-transparent rounded-xl focus:outline-none text-gray-700 relative z-20 placeholder-transparent"
               />
+              
+              {verificandoEmail && registerData.correo && (
+                <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                  <Loader2 size={16} className="animate-spin text-gray-400" />
+                </div>
+              )}
+              {emailDisponible === true && registerData.correo && !verificandoEmail && (
+                <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                  <CheckCircle size={16} className="text-green-500" />
+                </div>
+              )}
+              {emailDisponible === false && registerData.correo && !verificandoEmail && (
+                <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                  <XCircle size={16} className="text-red-500" />
+                </div>
+              )}
             </div>
             {errores.correo && (
               <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
@@ -575,7 +792,6 @@ export function RegisterForm() {
               </button>
             </div>
             
-            {/* Indicador de fortaleza */}
             {registerData.contrasena && (
               <div className="mt-2">
                 <div className="flex gap-1 h-1">
@@ -592,6 +808,10 @@ export function RegisterForm() {
                   Fortaleza: <span className="font-medium">{getPasswordStrengthText()}</span>
                 </p>
               </div>
+            )}
+            
+            {registerData.contrasena && !isPasswordValid && (
+              <PasswordRequirements />
             )}
             
             {errores.contrasena && (
@@ -642,7 +862,6 @@ export function RegisterForm() {
               </button>
             </div>
             
-            {/* Indicador de coincidencia */}
             {registerData.confirmarContrasena && registerData.contrasena && (
               <div className="mt-1 flex items-center gap-1">
                 {registerData.contrasena === registerData.confirmarContrasena ? (
@@ -669,23 +888,32 @@ export function RegisterForm() {
         </div>
 
         {/* Términos y condiciones */}
-        <div className="flex items-start gap-2">
-          <input
-            type="checkbox"
-            id="terminos"
-            className="mt-1 w-4 h-4 rounded border-gray-300 text-[#FFC300] focus:ring-[#FFC300]"
-            required
-          />
-          <label htmlFor="terminos" className="text-xs text-gray-500">
-            Acepto los{' '}
-            <Link href="/terminos" className="text-[#FFC300] hover:text-[#0A3D62] transition-colors">
-              Términos y Condiciones
-            </Link>{' '}
-            y la{' '}
-            <Link href="/privacidad" className="text-[#FFC300] hover:text-[#0A3D62] transition-colors">
-              Política de Privacidad
-            </Link>
-          </label>
+        <div className="space-y-1">
+          <div className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              id="terminos"
+              checked={aceptaTerminos}
+              onChange={(e) => setAceptaTerminos(e.target.checked)}
+              className="mt-1 w-4 h-4 rounded border-gray-300 text-[#FFC300] focus:ring-[#FFC300]"
+            />
+            <label htmlFor="terminos" className="text-xs text-gray-500">
+              Acepto los{' '}
+              <Link href="/terminos" className="text-[#FFC300] hover:text-[#0A3D62] transition-colors">
+                Términos y Condiciones
+              </Link>{' '}
+              y la{' '}
+              <Link href="/privacidad" className="text-[#FFC300] hover:text-[#0A3D62] transition-colors">
+                Política de Privacidad
+              </Link>
+            </label>
+          </div>
+          {errores.terminos && (
+            <p className="text-xs text-red-500 flex items-center gap-1">
+              <span className="w-1 h-1 bg-red-500 rounded-full"></span>
+              {errores.terminos}
+            </p>
+          )}
         </div>
 
         {/* Botón submit */}

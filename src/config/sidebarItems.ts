@@ -93,14 +93,14 @@ export const adminSidebarItems: SidebarItem[] = [
   },
   {
     label: "Cursos",
-    href: adminRoutes.cursos,
+    href: adminRoutes.cursosadm,
     icon: GraduationCap,
     description: "Cursos y talleres",
     category: "CONTENIDO MÉDICO"
   },
   {
     label: "Quiénes Somos",
-    href: "/admin/quienes-somos", // Si no existe en adminRoutes, agrégala
+    href: adminRoutes.quienesSomos, // Si no existe en adminRoutes, agrégala
     icon: Info,
     description: "Editar información institucional",
     category: "CONTENIDO MÉDICO"
@@ -140,15 +140,8 @@ export const adminSidebarItems: SidebarItem[] = [
   {
     label: "Usuarios",
     href: adminRoutes.usuarios,
-    icon: Users,
+    icon: Users, 
     description: "Lista de usuarios",
-    category: "USUARIOS"
-  },
-  {
-    label: "Roles",
-    href: "/admin/roles",
-    icon: Shield,
-    description: "Administrar roles",
     category: "USUARIOS"
   },
   {
@@ -162,7 +155,7 @@ export const adminSidebarItems: SidebarItem[] = [
   // SISTEMA
   {
     label: "Backups",
-    href: "/admin/backups",
+    href: adminRoutes.backups,
     icon: Database,
     description: "Respaldo de base de datos",
     category: "SISTEMA"
