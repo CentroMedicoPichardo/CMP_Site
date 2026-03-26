@@ -1,4 +1,4 @@
-import { pgTable, pgSchema, foreignKey, serial, varchar, text, integer, date, numeric, boolean, unique, timestamp, index } from "drizzle-orm/pg-core"
+import { pgTable, pgSchema, foreignKey, serial, varchar, text, integer, date, numeric, boolean, jsonb, unique, timestamp, index, inet } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 export const clinica = pgSchema("clinica");
@@ -31,6 +31,18 @@ export const cursosInAcademia = academia.table("cursos", {
 			name: "cursos_id_instructor_fkey"
 		}),
 ]);
+
+export const estadisticasConsumoInSeguridad = seguridad.table("estadisticas_consumo", {
+	idEstadistica: serial("id_estadistica").primaryKey().notNull(),
+	fecha: date().default(sql`CURRENT_DATE`),
+	hora: integer(),
+	totalConsultas: integer("total_consultas"),
+	consultasLentas: integer("consultas_lentas"),
+	erroresSql: integer("errores_sql"),
+	usuariosActivos: integer("usuarios_activos"),
+	anchoBandaMb: numeric("ancho_banda_mb", { precision: 10, scale:  2 }),
+	operacionesCrud: jsonb("operaciones_crud"),
+});
 
 export const academiaInfantilInAcademia = academia.table("academia_infantil", {
 	idGuia: serial("id_guia").primaryKey().notNull(),
@@ -123,6 +135,19 @@ export const intentosRecuperacionInAuditoria = auditoria.table("intentos_recuper
 	bloqueadoHasta: timestamp("bloqueado_hasta", { mode: 'string' }),
 });
 
+export const monitoreoRendimientoInSeguridad = seguridad.table("monitoreo_rendimiento", {
+	idMonitoreo: serial("id_monitoreo").primaryKey().notNull(),
+	fechaHora: timestamp("fecha_hora", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+	queryText: text("query_text"),
+	tiempoEjecucionMs: integer("tiempo_ejecucion_ms"),
+	cpuUsagePercent: numeric("cpu_usage_percent", { precision: 5, scale:  2 }),
+	memoriaUsageMb: integer("memoria_usage_mb"),
+	conexionesActivas: integer("conexiones_activas"),
+	deadlocksDetectados: integer("deadlocks_detectados"),
+	cacheHitRatio: numeric("cache_hit_ratio", { precision: 5, scale:  2 }),
+	tablaConsultada: varchar("tabla_consultada", { length: 100 }),
+});
+
 export const nosotrosInClinica = clinica.table("nosotros", {
 	id: serial().primaryKey().notNull(),
 	mision: text().notNull(),
@@ -131,6 +156,42 @@ export const nosotrosInClinica = clinica.table("nosotros", {
 	nuestraHistoria: text("nuestra_historia").notNull(),
 	compromiso: text().notNull(),
 	urlImagen: text("url_imagen").default('/pediatric-illustration.png'),
+});
+
+export const auditoriaAccionesInSeguridad = seguridad.table("auditoria_acciones", {
+	idAuditoria: serial("id_auditoria").primaryKey().notNull(),
+	usuario: varchar({ length: 100 }),
+	ipAddress: inet("ip_address"),
+	accion: varchar({ length: 50 }),
+	tablaAfectada: varchar("tabla_afectada", { length: 100 }),
+	registroId: integer("registro_id"),
+	datosAnteriores: jsonb("datos_anteriores"),
+	datosNuevos: jsonb("datos_nuevos"),
+	fechaHora: timestamp("fecha_hora", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+	aplicacionOrigen: varchar("aplicacion_origen", { length: 100 }),
+	sessionId: varchar("session_id", { length: 100 }),
+});
+
+export const alertasSeguridadInSeguridad = seguridad.table("alertas_seguridad", {
+	idAlerta: serial("id_alerta").primaryKey().notNull(),
+	tipoAlerta: varchar("tipo_alerta", { length: 50 }),
+	nivelCritico: varchar("nivel_critico", { length: 20 }),
+	mensaje: text(),
+	detalle: jsonb(),
+	fechaDeteccion: timestamp("fecha_deteccion", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+	fechaResolucion: timestamp("fecha_resolucion", { mode: 'string' }),
+	estado: varchar({ length: 20 }).default('PENDIENTE'),
+	usuarioAsignado: varchar("usuario_asignado", { length: 100 }),
+});
+
+export const cambiosEstructuraInSeguridad = seguridad.table("cambios_estructura", {
+	idCambio: serial("id_cambio").primaryKey().notNull(),
+	usuario: varchar({ length: 100 }),
+	fechaCambio: timestamp("fecha_cambio", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+	tipoObjeto: varchar("tipo_objeto", { length: 20 }),
+	nombreObjeto: varchar("nombre_objeto", { length: 100 }),
+	sentenciaDdl: text("sentencia_ddl"),
+	cambioDetalle: jsonb("cambio_detalle"),
 });
 
 export const medicosInClinica = clinica.table("medicos", {

@@ -35,7 +35,7 @@ export const adminRoutes = {
   articulos: "/articulos",        // ← Agregado
   multimedia: "/multimedia",      // ← Agregado
   roles: "/roles",                // ← Agregado
-  auditoria: "/auditoria",        // ← Agregado
+  auditoria: "/monitoreo/auditoria",        // ← Agregado        // ← Agregado
   backups: "/backups",            // ← Agregado
   configuracion: "/configuracion",
   bitacora: "/bitacora",          // ← Agregado
