@@ -1,7 +1,9 @@
+// src/app/api/cursos/route.ts
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { cursos, medicos } from "@/lib/schema/index";
-import { desc, eq, and, sql } from "drizzle-orm"; // Importamos 'sql' para concatenar
+import { desc, eq, and, sql } from "drizzle-orm";
+import { withAudit, getClientIp, getCurrentUserEmail } from "@/lib/db-audit";
 
 export async function GET(request: Request) {
   try {
@@ -26,7 +28,7 @@ export async function GET(request: Request) {
         modalidad: cursos.modalidad,
         dirigidoA: cursos.dirigidoA,
         cupoMaximo: cursos.cupoMaximo,
-        cuposOcupados: cursos.cuposOcupados, // 👈 ¡No olvides el campo que agregamos con ALTER TABLE!
+        cuposOcupados: cursos.cuposOcupados,
         ubicacion: cursos.ubicacion,
         costo: cursos.costo,
         urlImagenPortada: cursos.urlImagenPortada,
@@ -47,30 +49,39 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    const clientIp = getClientIp(request);
+    const userEmail = await getCurrentUserEmail();
 
     // Limpieza de IDs de instructor
     const idInstructor = body.idInstructor && Number(body.idInstructor) !== 0 
       ? Number(body.idInstructor) 
       : null;
 
-    const nuevo = await db.insert(cursos).values({
-      tituloCurso: body.tituloCurso,
-      descripcion: body.descripcion || null,
-      idInstructor: idInstructor,
-      categoria: body.categoria || "General",
-      fechaInicio: body.fechaInicio || null,
-      fechaFin: body.fechaFin || null,
-      horario: body.horario || null,
-      modalidad: body.modalidad || "Presencial",
-      dirigidoA: body.dirigidoA || "Padres",
-      cupoMaximo: body.cupoMaximo ? Number(body.cupoMaximo) : 20,
-      cuposOcupados: 0, // 👈 Inicializamos en 0
-      ubicacion: body.ubicacion || null,
-      costo: body.costo ? body.costo.toString() : "0.00",
-      urlImagenPortada: body.urlImagenPortada || "/logo.png",
-      activo: true,
-    }).returning();
+    console.log("🔵 POST CURSO - Usuario:", userEmail);
+    console.log("🔵 POST CURSO - IP:", clientIp);
+    console.log("🔵 POST CURSO - Datos:", body);
 
+    const nuevo = await withAudit(userEmail, clientIp, async () => {
+      return await db.insert(cursos).values({
+        tituloCurso: body.tituloCurso,
+        descripcion: body.descripcion || null,
+        idInstructor: idInstructor,
+        categoria: body.categoria || "General",
+        fechaInicio: body.fechaInicio || null,
+        fechaFin: body.fechaFin || null,
+        horario: body.horario || null,
+        modalidad: body.modalidad || "Presencial",
+        dirigidoA: body.dirigidoA || "Padres",
+        cupoMaximo: body.cupoMaximo ? Number(body.cupoMaximo) : 20,
+        cuposOcupados: 0,
+        ubicacion: body.ubicacion || null,
+        costo: body.costo ? body.costo.toString() : "0.00",
+        urlImagenPortada: body.urlImagenPortada || "/logo.png",
+        activo: true,
+      }).returning();
+    });
+
+    console.log("🟢 POST CURSO - Curso creado ID:", nuevo[0]?.idCurso);
     return NextResponse.json(nuevo[0], { status: 201 });
   } catch (error: any) {
     console.error("🔥 Error en POST Cursos:", error);

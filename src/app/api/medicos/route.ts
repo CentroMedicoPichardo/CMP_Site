@@ -1,7 +1,9 @@
+// src/app/api/medicos/route.ts
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { medicos } from "@/lib/schema/index";
 import { asc, eq } from "drizzle-orm";
+import { withAudit, getClientIp, getCurrentUserEmail } from "@/lib/db-audit";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -13,8 +15,6 @@ export async function GET(request: Request) {
 
     // Si NO es admin, aplicamos el filtro de activos
     if (!isAdmin) {
-      // Nota: En Drizzle, para encadenar .where() después de la query base, 
-      // a veces es necesario re-asignar o usar la estructura condicional directamente.
       const data = await db.select()
         .from(medicos)
         .where(eq(medicos.activo, true))
@@ -33,19 +33,28 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    
-    // Insertamos usando los nuevos campos
-    const nuevoMedico = await db.insert(medicos).values({
-      nombres: body.nombres,
-      apellidoPaterno: body.apellidoPaterno,
-      apellidoMaterno: body.apellidoMaterno, // Puede ser opcional
-      especialidad: body.especialidad,
-      hospitalClinica: body.hospitalClinica || "Centro Médico Pichardo",
-      direccion: body.direccion,
-      urlFoto: body.urlFoto || "/default-doctor.jpg", // ¡Aquí puedes usar la imagen por defecto que creamos!
-      activo: body.activo !== undefined ? body.activo : true,
-    }).returning();
+    const clientIp = getClientIp(request);
+    const userEmail = await getCurrentUserEmail();
 
+    console.log("🔵 POST MEDICO - Usuario:", userEmail);
+    console.log("🔵 POST MEDICO - IP:", clientIp);
+    console.log("🔵 POST MEDICO - Datos:", body);
+
+    // Insertamos usando los nuevos campos con contexto de auditoría
+    const nuevoMedico = await withAudit(userEmail, clientIp, async () => {
+      return await db.insert(medicos).values({
+        nombres: body.nombres,
+        apellidoPaterno: body.apellidoPaterno,
+        apellidoMaterno: body.apellidoMaterno,
+        especialidad: body.especialidad,
+        hospitalClinica: body.hospitalClinica || "Centro Médico Pichardo",
+        direccion: body.direccion,
+        urlFoto: body.urlFoto || "/default-doctor.jpg",
+        activo: body.activo !== undefined ? body.activo : true,
+      }).returning();
+    });
+
+    console.log("🟢 POST MEDICO - Médico creado ID:", nuevoMedico[0]?.idMedico);
     return NextResponse.json(nuevoMedico[0], { status: 201 });
   } catch (error: any) {
     console.error("🔥 ERROR POST MEDICOS:", error);

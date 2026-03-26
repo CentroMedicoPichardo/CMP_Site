@@ -1,13 +1,14 @@
+// src/app/api/medicos/[id]/route.ts
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { medicos } from "@/lib/schema/index";
 import { eq } from "drizzle-orm";
+import { withAudit, getClientIp, getCurrentUserEmail } from "@/lib/db-audit";
 
 // --- GET POR ID ---
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    // Buscamos por el nuevo campo idMedico (mapeado a id_medico)
     const data = await db.select().from(medicos).where(eq(medicos.idMedico, Number(id)));
     
     if (!data.length) return NextResponse.json({ error: "Médico no encontrado" }, { status: 404 });
@@ -23,21 +24,24 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   try {
     const { id } = await params;
     const body = await request.json();
+    const clientIp = getClientIp(request);
+    const userEmail = await getCurrentUserEmail();
 
-    const actualizado = await db.update(medicos)
-      .set({
-        // 🔄 Cambio clave: mapeo a los nuevos campos de nombre
-        nombres: body.nombres,
-        apellidoPaterno: body.apellidoPaterno,
-        apellidoMaterno: body.apellidoMaterno,
-        especialidad: body.especialidad,
-        hospitalClinica: body.hospitalClinica,
-        direccion: body.direccion,
-        urlFoto: body.urlFoto,
-        activo: body.activo ?? true,
-      })
-      .where(eq(medicos.idMedico, Number(id)))
-      .returning();
+    const actualizado = await withAudit(userEmail, clientIp, async () => {
+      return await db.update(medicos)
+        .set({
+          nombres: body.nombres,
+          apellidoPaterno: body.apellidoPaterno,
+          apellidoMaterno: body.apellidoMaterno,
+          especialidad: body.especialidad,
+          hospitalClinica: body.hospitalClinica,
+          direccion: body.direccion,
+          urlFoto: body.urlFoto,
+          activo: body.activo ?? true,
+        })
+        .where(eq(medicos.idMedico, Number(id)))
+        .returning();
+    });
 
     if (!actualizado.length) return NextResponse.json({ error: "No se pudo encontrar el médico para actualizar" }, { status: 404 });
 
@@ -52,12 +56,15 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    const clientIp = getClientIp(request);
+    const userEmail = await getCurrentUserEmail();
     
-    // Mantenemos la eliminación lógica (solo cambiar el estado a inactivo)
-    const resultado = await db.update(medicos)
-      .set({ activo: false })
-      .where(eq(medicos.idMedico, Number(id)))
-      .returning();
+    const resultado = await withAudit(userEmail, clientIp, async () => {
+      return await db.update(medicos)
+        .set({ activo: false })
+        .where(eq(medicos.idMedico, Number(id)))
+        .returning();
+    });
 
     if (!resultado.length) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
 
