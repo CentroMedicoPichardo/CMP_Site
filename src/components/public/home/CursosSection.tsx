@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { Container } from '@/components/ui/Container';
-import { CursoCard } from '@/components/public';
+import { CursoCard } from '@/components/public/cursos/CursoCard';
 import { publicRoutes } from '@/config/routes';
 
 interface CursosSectionProps {
@@ -29,9 +29,34 @@ export function CursosSection({ cursos }: CursosSectionProps) {
           </Link>
         </div>
         <div className="grid md:grid-cols-2 gap-8">
-          {cursos.map((curso: any) => (
-            <CursoCard key={`curso-${curso.id}`} {...curso} />
-          ))}
+          {cursos.map((curso: any) => {
+            // Usar idCurso como key
+            const cursoId = curso.idCurso;
+            
+            return (
+              <CursoCard 
+                key={cursoId}
+                id={cursoId}
+                titulo={curso.tituloCurso}
+                descripcion={curso.descripcion}
+                fechaInicio={curso.fechaInicio || "Próximamente"}
+                fechaFin={curso.fechaFin || ""}
+                fechaPublicacion={new Date().toISOString().split('T')[0]}
+                inscripcionesAbiertas={curso.inscripcionesAbiertas ?? true}
+                cupoMaximo={curso.cupoMaximo || 20}
+                cupoInscrito={curso.cuposOcupados || 0}
+                instructor={curso.instructorNombre || "Instructor por asignar"}
+                horario={curso.horario || "Por definir"}
+                modalidad={curso.modalidad || "Presencial"}
+                dirigidoA={curso.dirigidoA || "Padres"}
+                estado={curso.activo ? 'Activo' : 'Finalizado'}
+                imagenSrc={curso.urlImagenPortada}
+                costo={curso.costo ? (isNaN(Number(curso.costo)) ? 'Gratuito' : Number(curso.costo)) : 'Gratuito'}
+                ubicacion={curso.ubicacion}
+                linkDetalle={`/cursos/${cursoId}`}
+              />
+            );
+          })}
         </div>
       </Container>
     </section>

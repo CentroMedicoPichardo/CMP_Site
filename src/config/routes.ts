@@ -35,10 +35,10 @@ export const adminRoutes = {
   articulos: "/articulos",        // ← Agregado
   multimedia: "/multimedia",      // ← Agregado
   roles: "/roles",                // ← Agregado
-  auditoria: "/monitoreo/auditoria",        // ← Agregado        // ← Agregado
+  auditoria: "/monitoreo/auditoria",        // ← Agregado  
+  rendimiento: "/monitoreo/rendimiento",    // ← Agregado
   backups: "/backups",            // ← Agregado
-  configuracion: "/configuracion",
-  bitacora: "/bitacora",          // ← Agregado
+  configuracion: "/configuracion",        // ← Agregado
 };
 
 // Estructura para menús

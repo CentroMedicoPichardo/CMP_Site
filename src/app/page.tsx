@@ -39,12 +39,29 @@ export default function HomePublico() {
         setData({
           servicios: (Array.isArray(servs) ? servs : []).filter((s: any) => s.activo).slice(0, 3).map((s: any) => ({
             ...s,
-            id: s.id || `servicio-${Math.random()}`,
+            id: s.idServicio || `servicio-${Math.random()}`,
             titulo: s.tituloServicio || s.titulo,
             descripcion: s.descripcion || "Atención médica especializada",
             ubicacion: s.ubicacion || "Huejutla, Hidalgo"
           })),
-          cursos: (Array.isArray(curs) ? curs : []).filter((c: any) => c.activo).slice(0, 2),
+          // 👈 CORREGIR: Formatear los cursos correctamente
+          cursos: (Array.isArray(curs) ? curs : []).filter((c: any) => c.activo).slice(0, 2).map((c: any) => ({
+            idCurso: c.idCurso,  // 👈 USAR EL CAMPO CORRECTO
+            tituloCurso: c.tituloCurso,  // 👈 USAR EL CAMPO CORRECTO
+            descripcion: c.descripcion,
+            fechaInicio: c.fechaInicio,
+            fechaFin: c.fechaFin,
+            instructorNombre: c.instructorNombre,
+            horario: c.horario,
+            modalidad: c.modalidad,
+            dirigidoA: c.dirigidoA,
+            cupoMaximo: c.cupoMaximo,
+            cuposOcupados: c.cuposOcupados,
+            ubicacion: c.ubicacion,
+            costo: c.costo,
+            urlImagenPortada: c.urlImagenPortada,
+            activo: c.activo
+          })),
           medicoDestacado: (() => {
             const listaMeds = Array.isArray(meds) ? meds : [];
             const pichardo = listaMeds.find((m: any) => m.nombre?.toUpperCase().includes("PICHARDO")) || listaMeds[0];

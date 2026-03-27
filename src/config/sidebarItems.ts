@@ -102,22 +102,10 @@ export const adminSidebarItems: SidebarItem[] = [
         description: "Historial de cambios y eventos"
       },
       {
-        label: "Bitácora / Logs",
-        href: "/admin/monitoreo/logs",
-        icon: FileText,
-        description: "Registro de eventos del sistema"
-      },
-      {
         label: "Rendimiento",
-        href: "/admin/monitoreo/rendimiento",
+        href: adminRoutes.rendimiento,
         icon: BarChart3,
         description: "Análisis de consultas e índices"
-      },
-      {
-        label: "Alertas",
-        href: "/admin/monitoreo/alertas",
-        icon: Bell,
-        description: "Configuración de umbrales"
       },
       {
         label: "Backups",
