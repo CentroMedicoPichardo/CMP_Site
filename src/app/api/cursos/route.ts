@@ -3,14 +3,13 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { cursos, medicos } from "@/lib/schema/index";
 import { desc, eq, and, sql } from "drizzle-orm";
-import { withAudit, getClientIp, getCurrentUserEmail } from "@/lib/db-audit";
+import { withUserEmail, getUserEmailFromRequest } from "@/lib/db-with-user";
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const isAdmin = searchParams.get("admin") === "true";
 
-    // Filtro: Si no es admin, solo traemos lo que tenga activo = true
     const filtroActivo = isAdmin ? [] : [eq(cursos.activo, true)];
 
     const data = await db
@@ -19,7 +18,6 @@ export async function GET(request: Request) {
         tituloCurso: cursos.tituloCurso,
         descripcion: cursos.descripcion,
         idInstructor: cursos.idInstructor,
-        // 🔄 Concatenamos nombres y apellidos en un solo campo para el instructor
         instructorNombre: sql<string>`CONCAT(${medicos.nombres}, ' ', ${medicos.apellidoPaterno}, ' ', COALESCE(${medicos.apellidoMaterno}, ''))`.as('instructor_nombre'),
         categoria: cursos.categoria,
         fechaInicio: cursos.fechaInicio,
@@ -49,19 +47,17 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const clientIp = getClientIp(request);
-    const userEmail = await getCurrentUserEmail();
+    const userEmail = getUserEmailFromRequest(request);
 
-    // Limpieza de IDs de instructor
+    console.log("========== POST CURSO ==========");
+    console.log("📧 Email usuario:", userEmail);
+    console.log("📦 Datos:", body);
+
     const idInstructor = body.idInstructor && Number(body.idInstructor) !== 0 
       ? Number(body.idInstructor) 
       : null;
 
-    console.log("🔵 POST CURSO - Usuario:", userEmail);
-    console.log("🔵 POST CURSO - IP:", clientIp);
-    console.log("🔵 POST CURSO - Datos:", body);
-
-    const nuevo = await withAudit(userEmail, clientIp, async () => {
+    const nuevo = await withUserEmail(userEmail, async () => {
       return await db.insert(cursos).values({
         tituloCurso: body.tituloCurso,
         descripcion: body.descripcion || null,

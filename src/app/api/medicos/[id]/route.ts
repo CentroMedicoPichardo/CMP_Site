@@ -3,9 +3,8 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { medicos } from "@/lib/schema/index";
 import { eq } from "drizzle-orm";
-import { withAudit, getClientIp, getCurrentUserEmail } from "@/lib/db-audit";
+import { withUserEmail, getUserEmailFromRequest } from "@/lib/db-with-user";
 
-// --- GET POR ID ---
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -19,15 +18,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
 }
 
-// --- ACTUALIZAR (PUT) ---
-export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const clientIp = getClientIp(request);
-    const userEmail = await getCurrentUserEmail();
+    const userEmail = getUserEmailFromRequest(request);
 
-    const actualizado = await withAudit(userEmail, clientIp, async () => {
+    console.log("========== PUT MEDICO ==========");
+    console.log("📧 Email usuario:", userEmail);
+    console.log("📦 Datos:", body);
+
+    const actualizado = await withUserEmail(userEmail, async () => {
       return await db.update(medicos)
         .set({
           nombres: body.nombres,
@@ -43,30 +47,38 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         .returning();
     });
 
-    if (!actualizado.length) return NextResponse.json({ error: "No se pudo encontrar el médico para actualizar" }, { status: 404 });
+    if (!actualizado.length) {
+      return NextResponse.json({ error: "Médico no encontrado" }, { status: 404 });
+    }
 
     return NextResponse.json(actualizado[0]);
   } catch (error: any) {
-    console.error("🔥 ERROR PUT MEDICOS:", error);
-    return NextResponse.json({ error: "Error al actualizar", detalle: error.message }, { status: 500 });
+    console.error("🔥 ERROR PUT MEDICO:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
-// --- ELIMINACIÓN LÓGICA (DELETE) ---
-export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const { id } = await params;
-    const clientIp = getClientIp(request);
-    const userEmail = await getCurrentUserEmail();
-    
-    const resultado = await withAudit(userEmail, clientIp, async () => {
+    const userEmail = getUserEmailFromRequest(request);
+
+    console.log("========== DELETE MEDICO ==========");
+    console.log("📧 Email usuario:", userEmail);
+
+    const resultado = await withUserEmail(userEmail, async () => {
       return await db.update(medicos)
         .set({ activo: false })
         .where(eq(medicos.idMedico, Number(id)))
         .returning();
     });
 
-    if (!resultado.length) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+    if (!resultado.length) {
+      return NextResponse.json({ error: "Médico no encontrado" }, { status: 404 });
+    }
 
     return NextResponse.json({ message: "Médico desactivado correctamente" });
   } catch (error: any) {

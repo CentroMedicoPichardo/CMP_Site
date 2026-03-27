@@ -3,17 +3,13 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { medicos } from "@/lib/schema/index";
 import { asc, eq } from "drizzle-orm";
-import { withAudit, getClientIp, getCurrentUserEmail } from "@/lib/db-audit";
+import { withUserEmail, getUserEmailFromRequest } from "@/lib/db-with-user";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const isAdmin = searchParams.get("admin") === "true";
 
   try {
-    // 🛡️ Consulta base ordenada por apellido paterno
-    let query = db.select().from(medicos).orderBy(asc(medicos.apellidoPaterno));
-
-    // Si NO es admin, aplicamos el filtro de activos
     if (!isAdmin) {
       const data = await db.select()
         .from(medicos)
@@ -22,7 +18,9 @@ export async function GET(request: Request) {
       return NextResponse.json(data);
     }
 
-    const data = await query;
+    const data = await db.select()
+      .from(medicos)
+      .orderBy(asc(medicos.apellidoPaterno));
     return NextResponse.json(data);
   } catch (error: any) {
     console.error("🔥 ERROR GET MEDICOS:", error);
@@ -33,15 +31,13 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const clientIp = getClientIp(request);
-    const userEmail = await getCurrentUserEmail();
+    const userEmail = getUserEmailFromRequest(request);
 
-    console.log("🔵 POST MEDICO - Usuario:", userEmail);
-    console.log("🔵 POST MEDICO - IP:", clientIp);
-    console.log("🔵 POST MEDICO - Datos:", body);
+    console.log("========== POST MEDICO ==========");
+    console.log("📧 Email usuario:", userEmail);
+    console.log("📦 Datos:", body);
 
-    // Insertamos usando los nuevos campos con contexto de auditoría
-    const nuevoMedico = await withAudit(userEmail, clientIp, async () => {
+    const nuevoMedico = await withUserEmail(userEmail, async () => {
       return await db.insert(medicos).values({
         nombres: body.nombres,
         apellidoPaterno: body.apellidoPaterno,

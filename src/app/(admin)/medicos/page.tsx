@@ -1,8 +1,8 @@
 // src/app/(admin)/medicos/page.tsx
 'use client';
 
-import { useState, useCallback } from 'react';
-import useSWR, { mutate as swrMutate } from 'swr';
+import { useState, useCallback, useEffect } from 'react';
+import useSWR from 'swr';
 import { Plus } from 'lucide-react';
 import { MedicosHeader } from '@/components/admin/medicos/MedicosHeader';
 import { MedicosSearchBar } from '@/components/admin/medicos/MedicosSearchBar';
@@ -19,6 +19,14 @@ export default function AdminMedicosPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterActivo, setFilterActivo] = useState<boolean | 'todos'>('todos');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  // Obtener el email del usuario desde localStorage al cargar la página
+  useEffect(() => {
+    const email = localStorage.getItem('userEmail');
+    console.log("📧 Email desde localStorage:", email);
+    setUserEmail(email);
+  }, []);
 
   // 👇 SWR para cargar médicos
   const { data: medicos = [], error, isLoading, mutate: refreshData } = useSWR(
@@ -51,7 +59,7 @@ export default function AdminMedicosPage() {
   // Formatear médicos con propiedades computadas y asegurar IDs únicos
   const medicosFormateados = medicos.map((m: any, index: number) => ({
     ...m,
-    idMedico: m.idMedico || `temp-${index}-${Date.now()}`, // 👈 Garantizar ID único
+    idMedico: m.idMedico || `temp-${index}-${Date.now()}`,
     nombreCompleto: getNombreCompleto(m),
     imagenSrc: getValidImageUrl(m.urlFoto),
   }));
@@ -96,14 +104,11 @@ export default function AdminMedicosPage() {
   // 👇 Función para forzar recarga completa
   const forceRefresh = useCallback(async () => {
     console.log('🔄 Forzando recarga de médicos...');
-    
-    // Invalidar la caché y forzar recarga
     await refreshData();
-    
-    // También actualizar la clave de refresco para componentes hijos
     setRefreshKey(prev => prev + 1);
   }, [refreshData]);
 
+  // 👇 HANDLE SAVE CON EMAIL EN HEADER
   const handleSave = async (medicoData: Partial<Medico>) => {
     try {
       const url = selectedMedico 
@@ -112,15 +117,27 @@ export default function AdminMedicosPage() {
       
       const method = selectedMedico ? 'PUT' : 'POST';
       
+      console.log("📤 Enviando a API:", url);
+      console.log("📧 Email en header:", userEmail);
+      
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-email': userEmail || '' // 👈 ENVIAR EMAIL EN HEADER
+        },
         body: JSON.stringify(medicoData)
       });
 
-      if (!res.ok) throw new Error('Error al guardar');
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("❌ Error response:", errorText);
+        throw new Error('Error al guardar');
+      }
 
-      // 👇 Primero cerrar el modal, luego refrescar
+      const data = await res.json();
+      console.log("✅ Respuesta:", data);
+      
       setModalOpen(false);
       await forceRefresh();
       
@@ -129,11 +146,18 @@ export default function AdminMedicosPage() {
     }
   };
 
+  // 👇 HANDLE TOGGLE ACTIVO CON EMAIL EN HEADER
   const handleToggleActivo = async (medico: Medico) => {
     try {
+      console.log("🔄 Toggle activo para médico:", medico.idMedico);
+      console.log("📧 Email en header:", userEmail);
+      
       const res = await fetch(`/api/medicos/${medico.idMedico}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-email': userEmail || '' // 👈 ENVIAR EMAIL EN HEADER
+        },
         body: JSON.stringify({ ...medico, activo: !medico.activo })
       });
 

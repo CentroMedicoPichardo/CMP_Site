@@ -36,6 +36,7 @@ export function LoginMfaForm({ email, onCancel }: LoginMfaFormProps) {
 
       localStorage.setItem('rol', rol);
       localStorage.setItem('usuario', JSON.stringify(usuario));
+      localStorage.setItem('userEmail', usuario.correo);
       
       toast.success('Autenticación exitosa');
 

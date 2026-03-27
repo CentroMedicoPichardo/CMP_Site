@@ -3,9 +3,8 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { nosotros } from "@/lib/schema/index";
 import { eq } from "drizzle-orm";
-import { withAudit, getClientIp, getCurrentUserEmail } from "@/lib/db-audit";
+import { withUserEmail, getUserEmailFromRequest } from "@/lib/db-with-user";
 
-// GET - Obtener la información
 export async function GET() {
   try {
     const resultado = await db.select().from(nosotros).limit(1);
@@ -24,23 +23,19 @@ export async function GET() {
   }
 }
 
-// PUT - Actualizar la información
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const clientIp = getClientIp(request);
-    const userEmail = await getCurrentUserEmail();
+    const userEmail = getUserEmailFromRequest(request);
 
-    console.log("🔵 PUT - Datos recibidos:", body);
-    console.log("🔵 Usuario:", userEmail);
-    console.log("🔵 IP:", clientIp);
+    console.log("========== PUT NOSOTROS ==========");
+    console.log("📧 Email usuario:", userEmail);
+    console.log("📦 Datos:", body);
 
-    // Obtener el registro existente
     const existing = await db.select().from(nosotros).limit(1);
 
-    const actualizado = await withAudit(userEmail, clientIp, async () => {
+    const resultado = await withUserEmail(userEmail, async () => {
       if (existing.length === 0) {
-        // Si no existe, crear uno nuevo
         const nuevo = await db.insert(nosotros).values({
           mision: body.mision || "",
           vision: body.vision || "",
@@ -54,7 +49,6 @@ export async function PUT(request: Request) {
         return nuevo[0];
       }
 
-      // Actualizar el existente
       const actualizado = await db.update(nosotros)
         .set({
           mision: body.mision,
@@ -71,7 +65,7 @@ export async function PUT(request: Request) {
       return actualizado[0];
     });
 
-    return NextResponse.json(actualizado);
+    return NextResponse.json(resultado);
   } catch (error: any) {
     console.error("🔴 Error en PUT nosotros:", error);
     return NextResponse.json(

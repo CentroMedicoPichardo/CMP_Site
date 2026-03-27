@@ -3,9 +3,8 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { cursos } from "@/lib/schema/index";
 import { eq } from "drizzle-orm";
-import { withAudit, getClientIp, getCurrentUserEmail } from "@/lib/db-audit";
+import { withUserEmail, getUserEmailFromRequest } from "@/lib/db-with-user";
 
-// PUT: Actualizar curso (Incluye activar/desactivar)
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -14,18 +13,19 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
     const idCurso = Number(id);
-    const clientIp = getClientIp(request);
-    const userEmail = await getCurrentUserEmail();
+    const userEmail = getUserEmailFromRequest(request);
+
+    console.log("========== PUT CURSO ==========");
+    console.log("📧 Email usuario:", userEmail);
+    console.log("📦 Datos:", body);
 
     if (isNaN(idCurso)) return NextResponse.json({ error: "ID inválido" }, { status: 400 });
 
-    // Limpieza de IDs de instructor
     const idInstructor = body.idInstructor && Number(body.idInstructor) !== 0 
       ? Number(body.idInstructor) 
       : null;
 
-    // Ejecutar la actualización con contexto de auditoría
-    const actualizado = await withAudit(userEmail, clientIp, async () => {
+    const actualizado = await withUserEmail(userEmail, async () => {
       return await db
         .update(cursos)
         .set({
@@ -60,7 +60,6 @@ export async function PUT(
   }
 }
 
-// DELETE: Borrado Lógico (Ocultar)
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -68,13 +67,14 @@ export async function DELETE(
   try {
     const { id } = await params;
     const idNum = Number(id);
-    const clientIp = getClientIp(request);
-    const userEmail = await getCurrentUserEmail();
+    const userEmail = getUserEmailFromRequest(request);
+
+    console.log("========== DELETE CURSO ==========");
+    console.log("📧 Email usuario:", userEmail);
 
     if (isNaN(idNum)) return NextResponse.json({ error: "ID inválido" }, { status: 400 });
 
-    // Ejecutar el ocultado con contexto de auditoría
-    const ocultado = await withAudit(userEmail, clientIp, async () => {
+    const ocultado = await withUserEmail(userEmail, async () => {
       return await db
         .update(cursos)
         .set({ activo: false })

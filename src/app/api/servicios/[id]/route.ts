@@ -3,16 +3,22 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { servicios } from "@/lib/schema/index";
 import { eq } from "drizzle-orm";
-import { withAudit, getClientIp, getCurrentUserEmail } from "@/lib/db-audit";
+import { withUserEmail, getUserEmailFromRequest } from "@/lib/db-with-user";
 
-export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const clientIp = getClientIp(request);
-    const userEmail = await getCurrentUserEmail();
+    const userEmail = getUserEmailFromRequest(request);
 
-    const actualizado = await withAudit(userEmail, clientIp, async () => {
+    console.log("========== PUT SERVICIO ==========");
+    console.log("📧 Email usuario:", userEmail);
+    console.log("📦 Datos:", body);
+
+    const actualizado = await withUserEmail(userEmail, async () => {
       return await db.update(servicios)
         .set({
           tituloServicio: body.tituloServicio,
@@ -27,6 +33,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         .returning();
     });
 
+    if (!actualizado.length) {
+      return NextResponse.json({ error: "Servicio no encontrado" }, { status: 404 });
+    }
+
     return NextResponse.json(actualizado[0]);
   } catch (error: any) {
     console.error("🔥 ERROR PUT SERVICIO:", error);
@@ -34,20 +44,29 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const { id } = await params;
-    const clientIp = getClientIp(request);
-    const userEmail = await getCurrentUserEmail();
+    const userEmail = getUserEmailFromRequest(request);
 
-    await withAudit(userEmail, clientIp, async () => {
-      await db.update(servicios)
+    console.log("========== DELETE SERVICIO ==========");
+    console.log("📧 Email usuario:", userEmail);
+
+    const resultado = await withUserEmail(userEmail, async () => {
+      return await db.update(servicios)
         .set({ activo: false })
-        .where(eq(servicios.idServicio, Number(id)));
-      return true;
+        .where(eq(servicios.idServicio, Number(id)))
+        .returning();
     });
-    
-    return NextResponse.json({ message: "Servicio desactivado" });
+
+    if (!resultado.length) {
+      return NextResponse.json({ error: "Servicio no encontrado" }, { status: 404 });
+    }
+
+    return NextResponse.json({ message: "Servicio desactivado correctamente" });
   } catch (error: any) {
     console.error("🔥 ERROR DELETE SERVICIO:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
