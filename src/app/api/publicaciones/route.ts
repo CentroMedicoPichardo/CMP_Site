@@ -32,7 +32,7 @@ export async function GET(request: Request) {
         etiquetas: publicaciones.etiquetas,
         activo: publicaciones.activo,
         idAutor: publicaciones.idAutor, // 👈 CRÍTICO: Traer el ID numérico
-        nombreAutor: medicos.nombreCompleto,
+        nombreAutor: medicos.nombres,
       })
       .from(publicaciones)
       .leftJoin(medicos, eq(publicaciones.idAutor, medicos.idMedico))
