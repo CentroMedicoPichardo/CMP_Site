@@ -122,22 +122,24 @@ export function ContenidoFormModal({ isOpen, onClose, onSave, item, tipo, saving
           </div>
 
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
-            {/* Imagen */}
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-[#0A3D62]">Imagen de portada</label>
-              <CloudinaryUploader
-                onUpload={handleImageUpload}
-                preset="saber_pediatrico_img"
-                folder="centro-medico/saber-pediatrico"
-                resourceType="image"
-                maxFiles={1}
-              />
-              {formData.imagenUrl && (
-                <div className="mt-2">
-                  <img src={formData.imagenUrl} alt="Vista previa" className="h-20 w-auto border rounded-lg p-1" />
-                </div>
-              )}
-            </div>
+            {/* Imagen - Solo para artículos */}
+            {tipo === 'articulo' && (
+              <div className="space-y-2">
+                <label className="block text-sm font-semibold text-[#0A3D62]">Imagen de portada</label>
+                <CloudinaryUploader
+                  onUpload={handleImageUpload}
+                  preset="saber_pediatrico_img"
+                  folder="centro-medico/saber-pediatrico"
+                  resourceType="image"
+                  maxFiles={1}
+                />
+                {formData.imagenUrl && (
+                  <div className="mt-2">
+                    <img src={formData.imagenUrl} alt="Vista previa" className="h-20 w-auto border rounded-lg p-1" />
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Título */}
             <div>
@@ -169,13 +171,13 @@ export function ContenidoFormModal({ isOpen, onClose, onSave, item, tipo, saving
             {/* Campos específicos según tipo */}
             {tipo === 'articulo' && (
               <div>
-                <label className="block text-sm font-semibold text-[#0A3D62] mb-1">Contenido (HTML)</label>
+                <label className="block text-sm font-semibold text-[#0A3D62] mb-1">Contenido</label>
                 <textarea
                   name="contenido"
                   value={formData.contenido}
                   onChange={handleChange}
                   rows={10}
-                  className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-[#FFC300] focus:ring-4 focus:ring-[#FFC300]/20 transition-all duration-300 font-mono text-sm"
+                  className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-[#FFC300] focus:ring-4 focus:ring-[#FFC300]/20 transition-all duration-300 font-mono text-gray-800 resize-none"
                   placeholder="<p>Contenido del artículo en HTML...</p>"
                 />
               </div>
