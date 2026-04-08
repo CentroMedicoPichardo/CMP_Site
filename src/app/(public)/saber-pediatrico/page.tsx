@@ -56,7 +56,7 @@ export default function SaberPediatricoPage() {
     cargarContenido();
   }, []);
 
-  const tabs = [
+  const tabs: { id: TipoContenido; label: string; count: number }[] = [
     { id: 'todos', label: 'Todo', count: contenido.articulos.length + contenido.videos.length + contenido.documentos.length + contenido.encuestas.length },
     { id: 'articulos', label: 'Artículos', count: contenido.articulos.length },
     { id: 'videos', label: 'Videos', count: contenido.videos.length },
