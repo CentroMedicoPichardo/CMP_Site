@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react';
 import { X, Save, Upload, Image as ImageIcon, Link as LinkIcon, Calendar, Star, Eye, EyeOff } from 'lucide-react';
 import { CloudinaryUploader } from '@/components/admin/cloudinary/CloudinaryUploader';
+import { RichTextEditor } from './RichTextEditor';
 
 interface ContenidoFormData {
   id?: number;
@@ -172,13 +173,10 @@ export function ContenidoFormModal({ isOpen, onClose, onSave, item, tipo, saving
             {tipo === 'articulo' && (
               <div>
                 <label className="block text-sm font-semibold text-[#0A3D62] mb-1">Contenido</label>
-                <textarea
-                  name="contenido"
-                  value={formData.contenido}
-                  onChange={handleChange}
-                  rows={10}
-                  className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-[#FFC300] focus:ring-4 focus:ring-[#FFC300]/20 transition-all duration-300 font-mono text-gray-800 resize-none"
-                  placeholder="<p>Contenido del artículo en HTML...</p>"
+                <RichTextEditor
+                  value={formData.contenido || ''}
+                  onChange={(html) => setFormData(prev => ({ ...prev, contenido: html }))}
+                  placeholder="Escribe el contenido del artículo aquí..."
                 />
               </div>
             )}
