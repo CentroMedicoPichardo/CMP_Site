@@ -26,6 +26,19 @@ import {
 
 import { Container } from "../ui/Container";
 
+interface EmpresaInfo {
+  id: number;
+  nombre: string;
+  direccion: string;
+  telefono: string;
+  correo: string;
+  facebook: string | null;
+  instagram: string | null;
+  horario: string;
+  logoUrl: string | null;
+  correoSoporte: string | null;
+}
+
 const useAuth = () => {
   const pathname = usePathname();
   const [rol, setRol] = useState<string | null>(null);
@@ -68,6 +81,23 @@ export function Header() {
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { isAuthenticated, isAdmin, isCliente, user, rol } = useAuth();
+  const [empresaInfo, setEmpresaInfo] = useState<EmpresaInfo | null>(null);
+
+  // Cargar información de la empresa para el logo, nombre y datos de contacto
+  useEffect(() => {
+    const cargarEmpresaInfo = async () => {
+      try {
+        const res = await fetch('/api/empresa-info');
+        if (res.ok) {
+          const data = await res.json();
+          setEmpresaInfo(data);
+        }
+      } catch (error) {
+        console.error('Error cargando información de la empresa:', error);
+      }
+    };
+    cargarEmpresaInfo();
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -88,6 +118,31 @@ export function Header() {
     router.refresh();
   };
 
+  const logoUrl = empresaInfo?.logoUrl || '/logo.png';
+  const empresaNombre = empresaInfo?.nombre || 'Centro Médico';
+  const empresaSubnombre = 'Pichardo';
+  
+  // Datos para la barra superior desde la tabla empresa_info
+  const telefonoEmpresa = empresaInfo?.telefono || topBarInfo.phone;
+  const direccionEmpresa = empresaInfo?.direccion || topBarInfo.location;
+  const horarioEmpresa = empresaInfo?.horario || topBarInfo.schedule;
+
+  // Función para manejar el clic en Contacto - redirige a Quiénes Somos y hace scroll
+  const handleContactClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    
+    // Si ya estamos en la página de Quiénes Somos, solo hacemos scroll
+    if (pathname === '/quienes-somos') {
+      const element = document.getElementById('info-contacto');
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth' });
+      }
+    } else {
+      // Si no estamos, navegamos y luego hacemos scroll
+      router.push('/quienes-somos#info-contacto');
+    }
+  };
+
   // Header para ADMIN
   if (isAdmin) {
     return (
@@ -105,14 +160,14 @@ export function Header() {
         </div>
 
         <header
-          className={`sticky top-0 left-0 right-0 z-50 transition-all duration-500 ${
+          className={`sticky top-0 left-0 right-0 z-[9999] transition-all duration-500 ${
             scrolled ? "bg-white/95 backdrop-blur-md shadow-lg py-2" : "bg-white py-3"
           }`}
         >
           <Container>
             <div className="flex items-center justify-between">
               <Link href="/admin/dashboard" className="flex items-center gap-2">
-                <Image src="/logo.png" alt="Logo" width={32} height={32} />
+                <Image src={logoUrl} alt="Logo" width={32} height={32} />
                 <span className="text-lg font-semibold text-[#0A3D62]">Admin</span>
               </Link>
 
@@ -144,49 +199,55 @@ export function Header() {
   // Header para PÚBLICO y CLIENTE
   return (
     <>
+      {/* TOP BAR - Información dinámica desde la tabla empresa_info */}
       <div className="bg-[#0A3D62] text-white/90 py-2.5 text-sm border-b border-white/5">
         <Container>
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-5">
               <div className="flex items-center gap-2">
                 <Phone size={14} className="text-[#FFC300]" />
-                <span className="text-white/80">{topBarInfo.phone}</span>
-              </div>
-              <div className="hidden md:flex items-center gap-2">
-                <MapPin size={14} className="text-[#FFC300]" />
-                <span className="text-white/80">{topBarInfo.location}</span>
+                <span className="text-white/80">{telefonoEmpresa}</span>
               </div>
               <div className="hidden lg:flex items-center gap-2">
                 <Clock size={14} className="text-[#FFC300]" />
-                <span className="text-white/80">{topBarInfo.schedule}</span>
+                <span className="text-white/80 line-clamp-1">{horarioEmpresa}</span>
               </div>
             </div>
 
             <div className="flex items-center gap-4">
-              <Link href={publicRoutes.ayuda} className="text-white/70 hover:text-[#FFC300]">
-                Ayuda
-              </Link>
-              <span className="text-white/20">/</span>
-              <Link href={publicRoutes.contacto} className="text-white/70 hover:text-[#FFC300]">
+              {/* Link de Contacto que redirige a la sección de contacto en Quiénes Somos */}
+              <a 
+                href="/quienes-somos#info-contacto"
+                onClick={handleContactClick}
+                className="text-white/70 hover:text-[#FFC300] transition-colors cursor-pointer"
+              >
                 Contacto
-              </Link>
+              </a>
             </div>
           </div>
         </Container>
       </div>
 
       <header
-        className={`sticky top-0 left-0 right-0 z-50 transition-all duration-500 ${
+        className={`sticky top-0 left-0 right-0 z-[9999] transition-all duration-500 ${
           scrolled ? "bg-white/95 backdrop-blur-md shadow-lg py-3" : "bg-white py-6"
         }`}
       >
         <Container>
           <div className="flex items-center justify-between">
             <Link href={publicRoutes.home} className="flex items-center gap-3">
-              <Image src="/logo.png" alt="Centro Médico Pichardo" width={44} height={44} />
+              <div className="relative w-12 h-12 flex items-center justify-center">
+                <Image 
+                  src={logoUrl}
+                  alt={empresaNombre}
+                  width={44}
+                  height={44}
+                  className="object-contain"
+                />
+              </div>
               <div className="flex flex-col">
-                <span className="text-xl font-semibold text-[#0A3D62]">Centro Médico</span>
-                <span className="text-xs text-[#FFC300] uppercase">Pichardo</span>
+                <span className="text-xl font-semibold text-[#0A3D62]">{empresaNombre}</span>
+                <span className="text-xs text-[#FFC300] uppercase">{empresaSubnombre}</span>
               </div>
             </Link>
 
@@ -231,7 +292,7 @@ export function Header() {
         </Container>
 
         <div
-          className={`md:hidden fixed inset-x-0 top-[110px] bg-white shadow-xl transition-all duration-500 ${
+          className={`md:hidden fixed inset-x-0 top-[110px] z-[9998] bg-white shadow-xl transition-all duration-500 ${
             menuAbierto
               ? "opacity-100 visible translate-y-0"
               : "opacity-0 invisible -translate-y-8"
@@ -293,9 +354,9 @@ export function Header() {
         </div>
       </header>
 
-      {menuAbierto && (
-        <div className="md:hidden fixed inset-0 bg-black/30 z-40" onClick={toggleMenu} />
-      )}
+    {menuAbierto && (
+      <div className="md:hidden fixed inset-0 bg-black/30 z-[9997]" onClick={toggleMenu} />
+    )}
     </>
   );
 }

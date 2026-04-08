@@ -96,4 +96,15 @@ body {
 .animate-slide {
   animation: slide 2s infinite;
 }
+.leaflet-container {
+  z-index: 0 !important;
+}
 
+.leaflet-pane {
+  z-index: 0 !important;
+}
+
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 10 !important;
+}

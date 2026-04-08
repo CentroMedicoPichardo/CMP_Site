@@ -148,16 +148,6 @@ export const monitoreoRendimientoInSeguridad = seguridad.table("monitoreo_rendim
 	tablaConsultada: varchar("tabla_consultada", { length: 100 }),
 });
 
-export const nosotrosInClinica = clinica.table("nosotros", {
-	id: serial().primaryKey().notNull(),
-	mision: text().notNull(),
-	vision: text().notNull(),
-	valores: text().array().notNull(),
-	nuestraHistoria: text("nuestra_historia").notNull(),
-	compromiso: text().notNull(),
-	urlImagen: text("url_imagen").default('/pediatric-illustration.png'),
-});
-
 export const auditoriaAccionesInSeguridad = seguridad.table("auditoria_acciones", {
 	idAuditoria: serial("id_auditoria").primaryKey().notNull(),
 	usuario: varchar({ length: 100 }),
@@ -194,6 +184,16 @@ export const cambiosEstructuraInSeguridad = seguridad.table("cambios_estructura"
 	cambioDetalle: jsonb("cambio_detalle"),
 });
 
+export const nosotrosInClinica = clinica.table("nosotros", {
+	id: serial().primaryKey().notNull(),
+	mision: text().notNull(),
+	vision: text().notNull(),
+	valores: text().array().notNull(),
+	nuestraHistoria: text("nuestra_historia").notNull(),
+	compromiso: text().notNull(),
+	urlImagen: text("url_imagen").default('/pediatric-illustration.png'),
+});
+
 export const medicosInClinica = clinica.table("medicos", {
 	idMedico: serial("id_medico").primaryKey().notNull(),
 	nombres: varchar({ length: 100 }).notNull(),
@@ -216,3 +216,75 @@ export const serviciosInClinica = clinica.table("servicios", {
 	disenoTipo: varchar("diseno_tipo", { length: 20 }).default('vertical'),
 	activo: boolean().default(true),
 });
+
+export const empresaInfoInClinica = clinica.table("empresa_info", {
+	id: serial().primaryKey().notNull(),
+	nombre: varchar({ length: 150 }).notNull(),
+	direccion: text().notNull(),
+	telefono: varchar({ length: 20 }).notNull(),
+	correo: varchar({ length: 150 }).notNull(),
+	facebook: varchar({ length: 150 }),
+	instagram: varchar({ length: 150 }),
+	horario: text().notNull(),
+	logoUrl: text("logo_url"),
+	correoSoporte: varchar("correo_soporte", { length: 150 }),
+	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const contenidoSaberPediatricoInAcademia = academia.table("contenido_saber_pediatrico", {
+	id: serial().primaryKey().notNull(),
+	tipo: varchar({ length: 20 }).notNull(),
+	titulo: varchar({ length: 255 }).notNull(),
+	descripcion: text(),
+	contenido: text(),
+	urlExterno: text("url_externo"),
+	imagenUrl: text("imagen_url"),
+	videoUrl: text("video_url"),
+	archivoUrl: text("archivo_url"),
+	categoria: varchar({ length: 50 }),
+	etiquetas: text().array(),
+	duracion: varchar({ length: 20 }),
+	fechaPublicacion: date("fecha_publicacion").default(sql`CURRENT_DATE`),
+	destacado: boolean().default(false),
+	orden: integer().default(0),
+	activo: boolean().default(true),
+	visualizaciones: integer().default(0),
+	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const encuestasInAcademia = academia.table("encuestas", {
+	id: serial().primaryKey().notNull(),
+	contenidoId: integer("contenido_id"),
+	preguntas: jsonb(),
+	fechaInicio: date("fecha_inicio"),
+	fechaFin: date("fecha_fin"),
+	totalParticipantes: integer("total_participantes").default(0),
+	activo: boolean().default(true),
+}, (table) => [
+	foreignKey({
+			columns: [table.contenidoId],
+			foreignColumns: [contenidoSaberPediatricoInAcademia.id],
+			name: "encuestas_contenido_id_fkey"
+		}),
+]);
+
+export const respuestasEncuestasInAcademia = academia.table("respuestas_encuestas", {
+	id: serial().primaryKey().notNull(),
+	encuestaId: integer("encuesta_id"),
+	usuarioId: integer("usuario_id"),
+	respuestas: jsonb(),
+	fechaRespuesta: timestamp("fecha_respuesta", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+	foreignKey({
+			columns: [table.encuestaId],
+			foreignColumns: [encuestasInAcademia.id],
+			name: "respuestas_encuestas_encuesta_id_fkey"
+		}),
+	foreignKey({
+			columns: [table.usuarioId],
+			foreignColumns: [usuariosInSeguridad.id],
+			name: "respuestas_encuestas_usuario_id_fkey"
+		}),
+]);

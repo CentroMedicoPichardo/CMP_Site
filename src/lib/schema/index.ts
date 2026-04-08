@@ -8,16 +8,20 @@ import * as generatedRelations from './relations';
 export const medicos = generatedSchema.medicosInClinica;
 export const servicios = generatedSchema.serviciosInClinica;
 export const nosotros = generatedSchema.nosotrosInClinica;
+export const empresaInfo = generatedSchema.empresaInfoInClinica;
 
 // ========== ACADEMIA ==========
 export const cursos = generatedSchema.cursosInAcademia;
 export const publicaciones = generatedSchema.publicacionesInAcademia;
 export const academiaInfantil = generatedSchema.academiaInfantilInAcademia;
+export const contenidoSaberPediatrico = generatedSchema.contenidoSaberPediatricoInAcademia;
+export const encuestas = generatedSchema.encuestasInAcademia;
+export const respuestasEncuestas = generatedSchema.respuestasEncuestasInAcademia;
 
 // ========== SEGURIDAD ==========
 export const usuarios = generatedSchema.usuariosInSeguridad;
 export const roles = generatedSchema.rolesInSeguridad;
-export const auditoriaAcciones = generatedSchema.auditoriaAccionesInSeguridad; // 👈 Renombrado
+export const auditoriaAcciones = generatedSchema.auditoriaAccionesInSeguridad;
 export const monitoreoRendimiento = generatedSchema.monitoreoRendimientoInSeguridad;
 export const alertasSeguridad = generatedSchema.alertasSeguridadInSeguridad;
 export const cambiosEstructura = generatedSchema.cambiosEstructuraInSeguridad;

@@ -1,4 +1,4 @@
-// src/config/sidebarItems.ts - Versión optimizada
+// src/config/sidebarItems.ts (actualizado con las rutas)
 
 import {
   LayoutDashboard,
@@ -26,6 +26,9 @@ import {
   History,
   Server,
   Bell,
+  Youtube,
+  FileQuestion,
+  FileArchive,
 } from "lucide-react";
 import { SidebarItem } from '@/types/sidebar.types';
 import { adminRoutes, clienteRoutes, publicRoutes } from './routes';
@@ -70,7 +73,7 @@ export const clientSidebarItems: SidebarItem[] = [
   },
 ];
 
-// Items para administradores (optimizado sin duplicidades)
+// Items para administradores (con rutas actualizadas)
 export const adminSidebarItems: SidebarItem[] = [
   // DASHBOARD PRINCIPAL
   {
@@ -82,7 +85,6 @@ export const adminSidebarItems: SidebarItem[] = [
   },
   
   // ========== MONITOREO Y SEGURIDAD ==========
-  // TODO lo relacionado con monitoreo, auditoría, logs, backups y alertas
   {
     label: "Monitoreo",
     icon: Activity,
@@ -91,7 +93,7 @@ export const adminSidebarItems: SidebarItem[] = [
     children: [
       {
         label: "Dashboard",
-        href: "/admin/monitoreo/dashboard",
+        href: adminRoutes.dashboard,
         icon: Gauge,
         description: "Estado general del sistema"
       },
@@ -150,36 +152,36 @@ export const adminSidebarItems: SidebarItem[] = [
     ]
   },
   
-  // ========== PUBLICACIONES ==========
+  // ========== SABER PEDIÁTRICO ==========
   {
-    label: "Publicaciones",
-    icon: Newspaper,
-    description: "Gestión de contenido digital",
+    label: "Saber Pediátrico",
+    icon: GraduationCap,
+    description: "Gestión de contenido educativo",
     category: "GESTIÓN",
     children: [
       {
-        label: "Noticias",
-        href: "/admin/noticias",
-        icon: Newspaper,
-        description: "Gestionar noticias"
+        label: "Artículos",
+        href: adminRoutes.saberPediatricoArticulos,
+        icon: FileText,
+        description: "Gestionar artículos"
       },
       {
         label: "Videos",
-        href: "/admin/videos",
-        icon: Video,
-        description: "Galería de videos"
+        href: adminRoutes.saberPediatricoVideos,
+        icon: Youtube,
+        description: "Gestionar videos"
       },
       {
-        label: "Artículos",
-        href: "/admin/articulos",
-        icon: FileText,
-        description: "Publicaciones informativas"
+        label: "Documentos",
+        href: adminRoutes.saberPediatricoDocumentos,
+        icon: FileArchive,
+        description: "Gestionar documentos"
       },
       {
-        label: "Multimedia",
-        href: "/admin/multimedia",
-        icon: Image,
-        description: "Imágenes y recursos"
+        label: "Encuestas",
+        href: adminRoutes.saberPediatricoEncuestas,
+        icon: FileQuestion,
+        description: "Gestionar encuestas"
       }
     ]
   },
@@ -199,7 +201,7 @@ export const adminSidebarItems: SidebarItem[] = [
       },
       {
         label: "Roles y Permisos",
-        href: "/admin/roles",
+        href: adminRoutes.roles,
         icon: Shield,
         description: "Configuración de roles y permisos"
       }

@@ -39,6 +39,11 @@ export const adminRoutes = {
   rendimiento: "/monitoreo/rendimiento",    // ← Agregado
   backups: "/backups",            // ← Agregado
   configuracion: "/configuracion",        // ← Agregado
+    // ========== SABER PEDIÁTRICO ==========
+  saberPediatricoArticulos: "/saber-pediatrico/articulos",
+  saberPediatricoVideos: "/saber-pediatrico/videos",
+  saberPediatricoDocumentos: "/saber-pediatrico/documentos",
+  saberPediatricoEncuestas: "/saber-pediatrico/encuestas",
 };
 
 // Estructura para menús

@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react';
 import { QuienesSomosHeader } from '@/components/admin/quienes-somos/QuienesSomosHeader';
 import { QuienesSomosForm } from '@/components/admin/quienes-somos/QuienesSomosForm';
 import { QuienesSomosPreview } from '@/components/admin/quienes-somos/QuienesSomosPreview';
+import { EmpresaInfoForm } from '@/components/admin/quienes-somos/EmpresaInfoForm';
 import type { QuienesSomosData } from '@/types/quienes-somos';
 
 export default function AdminQuienesSomosPage() {
@@ -83,17 +84,21 @@ export default function AdminQuienesSomosPage() {
       <QuienesSomosHeader />
 
       <div className="grid lg:grid-cols-2 gap-8">
-        {/* Formulario de edición */}
-        <div>
+        {/* Columna izquierda - Formularios */}
+        <div className="space-y-8">
+          {/* Formulario de Quiénes Somos */}
           <QuienesSomosForm 
             data={data}
             onSave={handleSave}
             saving={saving}
           />
+
+          {/* Formulario de Información de la Empresa */}
+          <EmpresaInfoForm />
         </div>
 
-        {/* Vista previa en vivo */}
-        <div className="sticky top-24">
+        {/* Columna derecha - Vista previa */}
+        <div className="sticky top-24 space-y-8">
           <QuienesSomosPreview data={data} />
         </div>
       </div>
