@@ -11,7 +11,15 @@ export const nosotros = generatedSchema.nosotrosInClinica;
 export const empresaInfo = generatedSchema.empresaInfoInClinica;
 
 // ========== ACADEMIA ==========
+// Tablas principales
 export const cursos = generatedSchema.cursosInAcademia;
+export const instructores = generatedSchema.instructoresInAcademia;
+export const categoriasCursos = generatedSchema.categoriasCursosInAcademia;
+export const ubicacionesCursos = generatedSchema.ubicacionesCursosInAcademia;
+export const modalidades = generatedSchema.modalidadesInAcademia;
+export const inscripcionesCursos = generatedSchema.inscripcionesCursosInAcademia;
+
+// Contenido educativo
 export const publicaciones = generatedSchema.publicacionesInAcademia;
 export const academiaInfantil = generatedSchema.academiaInfantilInAcademia;
 export const contenidoSaberPediatrico = generatedSchema.contenidoSaberPediatricoInAcademia;
@@ -36,6 +44,11 @@ export const usuariosRelations = generatedRelations.usuariosInSeguridadRelations
 export const rolesRelations = generatedRelations.rolesInSeguridadRelations;
 export const medicosRelations = generatedRelations.medicosInClinicaRelations;
 export const cursosRelations = generatedRelations.cursosInAcademiaRelations;
+export const instructoresRelations = generatedRelations.instructoresInAcademiaRelations;
+export const categoriasCursosRelations = generatedRelations.categoriasCursosInAcademiaRelations;
+export const ubicacionesCursosRelations = generatedRelations.ubicacionesCursosInAcademiaRelations;
+export const modalidadesRelations = generatedRelations.modalidadesInAcademiaRelations;
+export const inscripcionesCursosRelations = generatedRelations.inscripcionesCursosInAcademiaRelations;
 export const publicacionesRelations = generatedRelations.publicacionesInAcademiaRelations;
 export const academiaInfantilRelations = generatedRelations.academiaInfantilInAcademiaRelations;
 

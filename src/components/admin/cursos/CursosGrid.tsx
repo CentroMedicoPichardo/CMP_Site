@@ -1,11 +1,13 @@
 // src/components/admin/cursos/CursosGrid.tsx
 'use client';
-// Necesitamos importar GraduationCap
-import { GraduationCap } from 'lucide-react';
+
+import { useRouter } from 'next/navigation';
+import { GraduationCap, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
 import { Loader2, Edit2, Eye, EyeOff, Calendar, Users, Clock } from 'lucide-react';
 import Image from 'next/image';
 import type { Curso } from '@/types/cursos';
+import { adminRoutes } from '@/config/routes';
 
 interface CursosGridProps {
   cursos: Curso[];
@@ -15,6 +17,7 @@ interface CursosGridProps {
 }
 
 export function CursosGrid({ cursos, loading, onEdit, onToggleActivo }: CursosGridProps) {
+  const router = useRouter();
   const [imageErrors, setImageErrors] = useState<Record<number, boolean>>({});
 
   const handleImageError = (id: number) => {
@@ -38,11 +41,58 @@ export function CursosGrid({ cursos, loading, onEdit, onToggleActivo }: CursosGr
     );
   }
 
+  const handleViewDashboard = (cursoId: number) => {
+    router.push(adminRoutes.cursosDashboard(cursoId));
+  };
+
+  // Función para obtener la URL de la imagen
+  const getImageUrl = (curso: Curso) => {
+    if (curso.urlImagenPortada) return curso.urlImagenPortada;
+    if (curso.imagenSrc) return curso.imagenSrc;
+    return null;
+  };
+
+  // Función para obtener el nombre de la modalidad
+  const getModalidadNombre = (curso: Curso) => {
+    return curso.modalidadNombre || 'Presencial';
+  };
+
+  // Función para obtener el nombre de la categoría
+  const getCategoriaNombre = (curso: Curso) => {
+    return curso.categoriaNombre || 'General';
+  };
+
+  // Función para obtener el nombre completo del instructor
+  const getInstructorNombre = (curso: Curso) => {
+    return curso.instructorNombre || 'Instructor no asignado';
+  };
+
+  // Función para formatear fecha
+  const formatFecha = (fecha: string | null) => {
+    if (!fecha) return 'Fecha por definir';
+    try {
+      return new Date(fecha).toLocaleDateString('es-MX', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    } catch {
+      return fecha;
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {cursos.map((curso) => {
         const uniqueKey = curso.idCurso || `curso-${Math.random()}`;
-        const lugaresDisponibles = (curso.cupoMaximo || 0) - (curso.cuposOcupados || 0);
+        const cuposOcupados = typeof curso.cuposOcupados === 'number' 
+          ? curso.cuposOcupados 
+          : Number(curso.cuposOcupados) || 0;
+        const cupoMaximo = typeof curso.cupoMaximo === 'number' 
+          ? curso.cupoMaximo 
+          : Number(curso.cupoMaximo) || 0;
+        const lugaresDisponibles = cupoMaximo - cuposOcupados;
+        const imageUrl = getImageUrl(curso);
         
         return (
           <div
@@ -54,9 +104,9 @@ export function CursosGrid({ cursos, loading, onEdit, onToggleActivo }: CursosGr
           >
             {/* Imagen */}
             <div className="relative h-48 overflow-hidden">
-              {!imageErrors[curso.idCurso] && curso.imagenSrc ? (
+              {!imageErrors[curso.idCurso] && imageUrl ? (
                 <Image
-                  src={curso.imagenSrc}
+                  src={imageUrl}
                   alt={curso.tituloCurso}
                   fill
                   className="object-cover group-hover:scale-110 transition-transform duration-500"
@@ -68,6 +118,11 @@ export function CursosGrid({ cursos, loading, onEdit, onToggleActivo }: CursosGr
                 </div>
               )}
               
+              {/* Badge de categoría */}
+              <div className="absolute top-4 left-4 px-2 py-1 rounded-full text-xs font-semibold bg-[#FFC300] text-[#0A3D62]">
+                {getCategoriaNombre(curso)}
+              </div>
+
               {/* Badge de estado */}
               <div className={`absolute top-4 right-4 px-2 py-1 rounded-full text-xs font-semibold ${
                 curso.activo 
@@ -84,35 +139,50 @@ export function CursosGrid({ cursos, loading, onEdit, onToggleActivo }: CursosGr
                 {curso.tituloCurso}
               </h3>
               
-              {/* Instructor */}
-              {curso.instructorNombre && (
-                <p className="text-sm text-gray-500 mb-2">
-                  <span className="font-medium">Instructor:</span> {curso.instructorNombre}
+              {/* Descripción corta */}
+              {curso.descripcion && (
+                <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                  {curso.descripcion}
                 </p>
               )}
+              
+              {/* Instructor */}
+              <p className="text-sm text-gray-500 mb-2">
+                <span className="font-medium">Instructor:</span> {getInstructorNombre(curso)}
+              </p>
               
               {/* Fechas */}
               <div className="flex items-center gap-2 mb-2 text-xs text-gray-500">
                 <Calendar size={14} className="text-[#FFC300]" />
-                <span>{curso.fechaInicio || 'Fecha por definir'} - {curso.fechaFin || ''}</span>
+                <span>{formatFecha(curso.fechaInicio)} - {formatFecha(curso.fechaFin)}</span>
               </div>
 
               {/* Horario y modalidad */}
               <div className="flex items-center gap-2 mb-3 text-xs text-gray-500">
                 <Clock size={14} className="text-[#FFC300]" />
-                <span>{curso.horario || 'Horario por definir'} • {curso.modalidad || 'Presencial'}</span>
+                <span>{curso.horario || 'Horario por definir'} • {getModalidadNombre(curso)}</span>
               </div>
 
               {/* Cupos */}
               <div className="flex items-center gap-2 mb-4 text-xs text-gray-500">
                 <Users size={14} className="text-[#FFC300]" />
                 <span>
-                  Cupo: {curso.cuposOcupados || 0}/{curso.cupoMaximo || 0}
-                  {lugaresDisponibles < 5 && lugaresDisponibles > 0 && (
+                  Cupo: {cuposOcupados}/{cupoMaximo}
+                  {lugaresDisponibles > 0 && lugaresDisponibles < 5 && (
                     <span className="ml-1 text-orange-500">(¡Últimos lugares!)</span>
+                  )}
+                  {lugaresDisponibles === 0 && (
+                    <span className="ml-1 text-red-500">(Completo)</span>
                   )}
                 </span>
               </div>
+
+              {/* Costo */}
+              {curso.costo && Number(curso.costo) > 0 && (
+                <p className="text-sm font-semibold text-[#0A3D62] mb-3">
+                  Costo: ${Number(curso.costo).toLocaleString('es-MX')} MXN
+                </p>
+              )}
 
               {/* Acciones */}
               <div className="flex gap-2 pt-4 border-t border-gray-100">
@@ -134,6 +204,14 @@ export function CursosGrid({ cursos, loading, onEdit, onToggleActivo }: CursosGr
                 >
                   {curso.activo ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
+                <button
+                  onClick={() => handleViewDashboard(curso.idCurso)}
+                  className="flex items-center justify-center gap-2 px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-300 text-sm"
+                  title="Ver dashboard"
+                >
+                  <TrendingUp size={16} />
+                  <span>Analytics</span>
+                </button>
               </div>
             </div>
           </div>
@@ -142,4 +220,3 @@ export function CursosGrid({ cursos, loading, onEdit, onToggleActivo }: CursosGr
     </div>
   );
 }
-

@@ -26,24 +26,26 @@ export const clienteRoutes = {
 export const adminRoutes = {
   dashboard: "/dashboard",
   usuarios: "/usuarios",
-  medicos: "/medicos",           // ← Agregado
-  servicios: "/adminservicios",        // ← Agregado
+  medicos: "/medicos",
+  servicios: "/adminservicios",
   cursosadm: "/cursos-admin",
-  quienesSomos: "/quienes-somos-admin", // ← Agregado
-  noticias: "/noticias",          // ← Agregado
-  videos: "/videos",              // ← Agregado
-  articulos: "/articulos",        // ← Agregado
-  multimedia: "/multimedia",      // ← Agregado
-  roles: "/roles",                // ← Agregado
-  auditoria: "/monitoreo/auditoria",        // ← Agregado  
-  rendimiento: "/monitoreo/rendimiento",    // ← Agregado
-  backups: "/backups",            // ← Agregado
-  configuracion: "/configuracion",        // ← Agregado
-    // ========== SABER PEDIÁTRICO ==========
+  quienesSomos: "/quienes-somos-admin",
+  noticias: "/noticias",
+  videos: "/videos",
+  articulos: "/articulos",
+  multimedia: "/multimedia",
+  roles: "/roles",
+  auditoria: "/monitoreo/auditoria",
+  rendimiento: "/monitoreo/rendimiento",
+  backups: "/backups",
+  configuracion: "/configuracion",
+  // ========== SABER PEDIÁTRICO ==========
   saberPediatricoArticulos: "/saber-pediatrico/articulos",
   saberPediatricoVideos: "/saber-pediatrico/videos",
   saberPediatricoDocumentos: "/saber-pediatrico/documentos",
   saberPediatricoEncuestas: "/saber-pediatrico/encuestas",
+  // ========== CURSOS DASHBOARD ==========
+  cursosDashboard: (id: number) => `/cursos-admin/${id}/dashboard`,
 };
 
 // Estructura para menús

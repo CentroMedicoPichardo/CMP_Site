@@ -1,4 +1,4 @@
-import { pgTable, pgSchema, foreignKey, serial, varchar, text, integer, date, numeric, boolean, jsonb, unique, timestamp, index, inet } from "drizzle-orm/pg-core"
+import { pgTable, pgSchema, serial, date, integer, numeric, jsonb, foreignKey, varchar, text, boolean, unique, timestamp, index, inet, check } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 export const clinica = pgSchema("clinica");
@@ -6,31 +6,6 @@ export const seguridad = pgSchema("seguridad");
 export const academia = pgSchema("academia");
 export const auditoria = pgSchema("auditoria");
 
-
-export const cursosInAcademia = academia.table("cursos", {
-	idCurso: serial("id_curso").primaryKey().notNull(),
-	tituloCurso: varchar("titulo_curso", { length: 200 }).notNull(),
-	descripcion: text(),
-	idInstructor: integer("id_instructor"),
-	categoria: varchar({ length: 50 }),
-	fechaInicio: date("fecha_inicio"),
-	fechaFin: date("fecha_fin"),
-	horario: varchar({ length: 50 }),
-	modalidad: varchar({ length: 20 }),
-	dirigidoA: varchar("dirigido_a", { length: 50 }),
-	cupoMaximo: integer("cupo_maximo"),
-	ubicacion: varchar({ length: 150 }),
-	costo: numeric({ precision: 10, scale:  2 }).default('0.00'),
-	urlImagenPortada: text("url_imagen_portada"),
-	activo: boolean().default(true),
-	cuposOcupados: integer("cupos_ocupados").default(0),
-}, (table) => [
-	foreignKey({
-			columns: [table.idInstructor],
-			foreignColumns: [medicosInClinica.idMedico],
-			name: "cursos_id_instructor_fkey"
-		}),
-]);
 
 export const estadisticasConsumoInSeguridad = seguridad.table("estadisticas_consumo", {
 	idEstadistica: serial("id_estadistica").primaryKey().notNull(),
@@ -193,6 +168,131 @@ export const nosotrosInClinica = clinica.table("nosotros", {
 	compromiso: text().notNull(),
 	urlImagen: text("url_imagen").default('/pediatric-illustration.png'),
 });
+
+export const instructoresInAcademia = academia.table("instructores", {
+	idInstructor: serial("id_instructor").primaryKey().notNull(),
+	nombre: varchar({ length: 100 }).notNull(),
+	apellidoPaterno: varchar("apellido_paterno", { length: 100 }).notNull(),
+	apellidoMaterno: varchar("apellido_materno", { length: 100 }),
+	especialidad: varchar({ length: 100 }).notNull(),
+	edad: integer().notNull(),
+	telefono: varchar({ length: 20 }),
+	correo: varchar({ length: 150 }).notNull(),
+	direccion: text(),
+	activo: boolean().default(true),
+	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+	index("idx_instructores_activo").using("btree", table.activo.asc().nullsLast().op("bool_ops")),
+	index("idx_instructores_especialidad").using("btree", table.especialidad.asc().nullsLast().op("text_ops")),
+	unique("instructores_correo_key").on(table.correo),
+]);
+
+export const cursosInAcademia = academia.table("cursos", {
+	idCurso: serial("id_curso").primaryKey().notNull(),
+	tituloCurso: varchar("titulo_curso", { length: 200 }).notNull(),
+	descripcion: text(),
+	idInstructor: integer("id_instructor").notNull(),
+	idCategoria: integer("id_categoria").notNull(),
+	idUbicacion: integer("id_ubicacion"),
+	idModalidad: integer("id_modalidad").notNull(),
+	fechaInicio: date("fecha_inicio").notNull(),
+	fechaFin: date("fecha_fin").notNull(),
+	horario: varchar({ length: 50 }),
+	dirigidoA: varchar("dirigido_a", { length: 50 }),
+	cupoMaximo: integer("cupo_maximo").notNull(),
+	costo: numeric({ precision: 10, scale:  2 }).default('0.00'),
+	urlImagenPortada: text("url_imagen_portada"),
+	activo: boolean().default(true),
+	cuposOcupados: integer("cupos_ocupados").default(0),
+	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+	index("idx_cursos_activo").using("btree", table.activo.asc().nullsLast().op("bool_ops")),
+	index("idx_cursos_categoria").using("btree", table.idCategoria.asc().nullsLast().op("int4_ops")),
+	index("idx_cursos_dirigido_a").using("btree", table.dirigidoA.asc().nullsLast().op("text_ops")),
+	index("idx_cursos_fechas").using("btree", table.fechaInicio.asc().nullsLast().op("date_ops"), table.fechaFin.asc().nullsLast().op("date_ops")),
+	index("idx_cursos_instructor").using("btree", table.idInstructor.asc().nullsLast().op("int4_ops")),
+	index("idx_cursos_modalidad").using("btree", table.idModalidad.asc().nullsLast().op("int4_ops")),
+	foreignKey({
+			columns: [table.idInstructor],
+			foreignColumns: [instructoresInAcademia.idInstructor],
+			name: "fk_cursos_instructor"
+		}),
+	foreignKey({
+			columns: [table.idCategoria],
+			foreignColumns: [categoriasCursosInAcademia.idCategoria],
+			name: "fk_cursos_categoria"
+		}),
+	foreignKey({
+			columns: [table.idUbicacion],
+			foreignColumns: [ubicacionesCursosInAcademia.idUbicacion],
+			name: "fk_cursos_ubicacion"
+		}),
+	foreignKey({
+			columns: [table.idModalidad],
+			foreignColumns: [modalidadesInAcademia.idModalidad],
+			name: "fk_cursos_modalidad"
+		}),
+	check("cursos_cupo_maximo_check", sql`cupo_maximo > 0`),
+	check("cursos_costo_check", sql`costo >= (0)::numeric`),
+	check("cursos_cupos_ocupados_check", sql`cupos_ocupados >= 0`),
+	check("check_fechas", sql`fecha_fin >= fecha_inicio`),
+	check("check_cupos", sql`cupos_ocupados <= cupo_maximo`),
+]);
+
+export const categoriasCursosInAcademia = academia.table("categorias_cursos", {
+	idCategoria: serial("id_categoria").primaryKey().notNull(),
+	nombreCategoria: varchar("nombre_categoria", { length: 50 }).notNull(),
+	descripcion: text(),
+	activo: boolean().default(true),
+}, (table) => [
+	unique("categorias_cursos_nombre_categoria_key").on(table.nombreCategoria),
+]);
+
+export const ubicacionesCursosInAcademia = academia.table("ubicaciones_cursos", {
+	idUbicacion: serial("id_ubicacion").primaryKey().notNull(),
+	nombreUbicacion: varchar("nombre_ubicacion", { length: 150 }).notNull(),
+	direccionCompleta: text("direccion_completa"),
+	capacidadMaxima: integer("capacidad_maxima"),
+	activo: boolean().default(true),
+}, (table) => [
+	unique("ubicaciones_cursos_nombre_ubicacion_key").on(table.nombreUbicacion),
+]);
+
+export const modalidadesInAcademia = academia.table("modalidades", {
+	idModalidad: serial("id_modalidad").primaryKey().notNull(),
+	nombreModalidad: varchar("nombre_modalidad", { length: 20 }).notNull(),
+	descripcion: text(),
+}, (table) => [
+	unique("modalidades_nombre_modalidad_key").on(table.nombreModalidad),
+]);
+
+export const inscripcionesCursosInAcademia = academia.table("inscripciones_cursos", {
+	idInscripcion: serial("id_inscripcion").primaryKey().notNull(),
+	cursoId: integer("curso_id").notNull(),
+	usuarioId: integer("usuario_id").notNull(),
+	fechaInscripcion: timestamp("fecha_inscripcion", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+	estado: varchar({ length: 20 }).default('activo'),
+	montoPagado: numeric("monto_pagado", { precision: 10, scale:  2 }),
+	metodoPago: varchar("metodo_pago", { length: 50 }),
+}, (table) => [
+	index("idx_inscripciones_curso").using("btree", table.cursoId.asc().nullsLast().op("int4_ops")),
+	index("idx_inscripciones_estado").using("btree", table.estado.asc().nullsLast().op("text_ops")),
+	index("idx_inscripciones_fecha").using("btree", table.fechaInscripcion.desc().nullsFirst().op("timestamp_ops")),
+	index("idx_inscripciones_usuario").using("btree", table.usuarioId.asc().nullsLast().op("int4_ops")),
+	foreignKey({
+			columns: [table.cursoId],
+			foreignColumns: [cursosInAcademia.idCurso],
+			name: "fk_inscripcion_curso"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.usuarioId],
+			foreignColumns: [usuariosInSeguridad.id],
+			name: "fk_inscripcion_usuario"
+		}).onDelete("cascade"),
+	unique("unique_inscripcion_curso_usuario").on(table.cursoId, table.usuarioId),
+]);
 
 export const medicosInClinica = clinica.table("medicos", {
 	idMedico: serial("id_medico").primaryKey().notNull(),

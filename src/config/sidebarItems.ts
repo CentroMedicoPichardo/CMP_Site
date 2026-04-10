@@ -92,22 +92,10 @@ export const adminSidebarItems: SidebarItem[] = [
     category: "MONITOREO",
     children: [
       {
-        label: "Dashboard",
-        href: adminRoutes.dashboard,
-        icon: Gauge,
-        description: "Estado general del sistema"
-      },
-      {
         label: "Auditoría",
         href: adminRoutes.auditoria,
         icon: History,
         description: "Historial de cambios y eventos"
-      },
-      {
-        label: "Rendimiento",
-        href: adminRoutes.rendimiento,
-        icon: BarChart3,
-        description: "Análisis de consultas e índices"
       },
       {
         label: "Backups",
@@ -198,12 +186,6 @@ export const adminSidebarItems: SidebarItem[] = [
         href: adminRoutes.usuarios,
         icon: Users,
         description: "Lista y administración de usuarios"
-      },
-      {
-        label: "Roles y Permisos",
-        href: adminRoutes.roles,
-        icon: Shield,
-        description: "Configuración de roles y permisos"
       }
     ]
   },

@@ -58,6 +58,17 @@ export function RichTextEditor({ value, onChange, placeholder = 'Escribe el cont
     },
   });
 
+  // Actualizar el contenido del editor cuando cambie el valor prop
+  useEffect(() => {
+    if (editor && mounted) {
+      const currentContent = editor.getHTML();
+      // Solo actualizar si el contenido es diferente para evitar loops
+      if (currentContent !== value) {
+        editor.commands.setContent(value || '');
+      }
+    }
+  }, [editor, value, mounted]);
+
   if (!mounted) {
     return (
       <div className="border-2 border-gray-200 rounded-xl overflow-hidden bg-gray-50 min-h-[350px] flex items-center justify-center">

@@ -1,7 +1,6 @@
-// src/lib/email.ts
 import nodemailer from 'nodemailer';
 
-// Configurar el transporter
+// ✅ Configurar transporter
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -10,20 +9,56 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Verificar conexión al iniciar
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('❌ Error de configuración SMTP:', error.message);
-    console.error('   Detalles:', error);
-  } else {
-    console.log('✅ Configuración SMTP correcta, listo para enviar correos');
-  }
-});
+// ✅ Verificar conexión (solo log)
+transporter.verify()
+  .then(() => {
+    console.log('✅ SMTP listo para enviar correos');
+  })
+  .catch((error) => {
+    console.error('❌ Error SMTP:', error.message);
+  });
 
-export async function sendVerificationEmail(email: string, nombre: string, codigo: string) {
-  console.log(`📧 Intentando enviar email a: ${email}`);
-  console.log(`📧 Usando cuenta: ${process.env.GMAIL_USER}`);
-  
+// ✅ FUNCIÓN BASE (LA IMPORTANTE)
+export async function sendEmail(
+  to: string,
+  subject: string,
+  html: string
+) {
+  try {
+    if (!to) {
+      throw new Error('Email vacío');
+    }
+
+    const mailOptions = {
+      from: `"Centro Médico Pichardo" <${process.env.GMAIL_USER}>`,
+      to,
+      subject,
+      html,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+
+    console.log(`✅ Email enviado a ${to}`);
+    return {
+      success: true,
+      messageId: info.messageId
+    };
+
+  } catch (error: any) {
+    console.error(`❌ Error enviando a ${to}:`, error.message);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+// ✅ EMAIL DE VERIFICACIÓN (usa la base)
+export async function sendVerificationEmail(
+  email: string,
+  nombre: string,
+  codigo: string
+) {
   try {
     const htmlContent = `
       <!DOCTYPE html>
@@ -71,28 +106,14 @@ export async function sendVerificationEmail(email: string, nombre: string, codig
       </html>
     `;
 
-    const mailOptions = {
-      from: `"Centro Médico Pichardo" <${process.env.GMAIL_USER}>`,
-      to: email,
-      subject: 'Verifica tu cuenta - Centro Médico Pichardo',
-      html: htmlContent,
-    };
+    return await sendEmail(
+      email,
+      'Verifica tu cuenta',
+      htmlContent
+    );
 
-    console.log("📧 Enviando correo con opciones:", {
-      from: mailOptions.from,
-      to: mailOptions.to,
-      subject: mailOptions.subject
-    });
-
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`✅ Email enviado a ${email}, ID: ${info.messageId}`);
-    return { success: true, messageId: info.messageId };
-    
   } catch (error: any) {
-    console.error('❌ Error detallado enviando email:', error);
-    console.error('   Mensaje:', error.message);
-    console.error('   Código:', error.code);
-    console.error('   Respuesta:', error.response);
-    return { success: false, error };
+    console.error('❌ Error verificación:', error.message);
+    return { success: false, error: error.message };
   }
 }
