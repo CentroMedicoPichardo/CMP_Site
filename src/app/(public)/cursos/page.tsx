@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation'; // ✅ Agregado para detectar cambios en la URL
 import { Loader2 } from 'lucide-react';
 import { CursosHeader } from '@/components/public/cursos/CursosHeader';
 import { CursosLayout } from '@/components/public/cursos/CursosLayout';
@@ -9,7 +10,6 @@ import { CursosLayout } from '@/components/public/cursos/CursosLayout';
 // Tipos específicos
 type ModalidadValor = 'Online' | 'Presencial' | 'Híbrido';
 type DirigidoAValor = 'Padres' | 'Niños' | 'Familia' | 'Adolescentes';
-type PrecioValor = 'Gratuito' | 'Pago';
 
 // Interfaz para Curso (basada en la nueva API)
 interface Curso {
@@ -37,26 +37,31 @@ export default function CursosPage() {
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
+  
+  // ✅ Obtenemos los parámetros de búsqueda actuales de la URL
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     const cargarCursos = async () => {
       try {
         setLoading(true);
-        const res = await fetch('/api/cursos');
+        
+        // ✅ Construimos la URL de la API incluyendo los parámetros de filtro actuales
+        const queryParams = searchParams.toString();
+        const url = queryParams ? `/api/cursos?${queryParams}` : '/api/cursos';
+        
+        const res = await fetch(url);
         const data = await res.json();
         
         console.log('📦 Datos de API (cursos):', data);
 
         // Formatear según la nueva estructura de la API
         const cursosFormateados: Curso[] = (Array.isArray(data) ? data : []).map((c: any) => {
-          // Determinar si el curso es gratuito o de pago
           const costoNumerico = parseFloat(c.costo);
           const esGratuito = costoNumerico <= 0 || c.costo === "0.00";
           
-          // Determinar si las inscripciones están abiertas (activo y cupos disponibles)
           const inscripcionesAbiertas = c.activo && (c.cuposOcupados < c.cupoMaximo);
           
-          // Manejar la imagen
           let imagenSrc = "/default-curso.jpg";
           if (c.urlImagenPortada && c.urlImagenPortada !== "no_imagen_uwvduy") {
             if (c.urlImagenPortada.startsWith('http')) {
@@ -80,17 +85,17 @@ export default function CursosPage() {
             cupoInscrito: c.cuposOcupados || 0,
             instructor: c.instructorNombre || "Por asignar",
             horario: c.horario || "Por definir",
-            modalidad: (c.modalidad as ModalidadValor) || "Presencial",
+            // ✅ Usamos los nombres que vienen del JOIN en tu API
+            modalidad: (c.modalidadNombre as ModalidadValor) || "Presencial",
             dirigidoA: (c.dirigidoA as DirigidoAValor) || "Padres",
             estado: c.activo ? 'Activo' : 'Finalizado',
             imagenSrc: imagenSrc,
             costo: esGratuito ? 'Gratuito' : costoNumerico,
-            ubicacion: c.ubicacion || "Huejutla, Hidalgo",
+            ubicacion: c.ubicacionNombre || "Huejutla, Hidalgo",
             linkDetalle: `/cursos/${c.idCurso}`
           };
         });
         
-        console.log('✅ Cursos formateados:', cursosFormateados);
         setCursos(cursosFormateados);
       } catch (error) {
         console.error("Error al cargar cursos:", error);
@@ -100,9 +105,9 @@ export default function CursosPage() {
     };
 
     cargarCursos();
-  }, []);
+  }, [searchParams]); // ✅ Se vuelve a ejecutar cuando cambian los filtros en la URL
 
-  // Búsqueda simple (sin filtros)
+  // Búsqueda simple por texto (local)
   const cursosFiltrados = cursos.filter(curso => {
     if (!busqueda.trim()) return true;
     

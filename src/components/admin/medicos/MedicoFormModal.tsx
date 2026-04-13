@@ -111,7 +111,7 @@ export function MedicoFormModal({ isOpen, onClose, onSave, medico }: MedicoFormM
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="relative bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border-t-4 border-[#FFC300]">
           {/* Header - Ahora en blanco */}
-          <div className="sticky top-0 bg-white border-b border-[#FFC300]/20 px-6 py-5 flex items-center justify-between z-10">
+          <div className="sticky top-0 bg-white border-b border-[#FFC300]/20 px-6 py-5 flex items-center justify-between z-9999">
             <h2 className="text-2xl font-bold text-[#0A3D62]">
               {medico ? '✏️ Editar Médico' : '➕ Nuevo Médico'}
             </h2>

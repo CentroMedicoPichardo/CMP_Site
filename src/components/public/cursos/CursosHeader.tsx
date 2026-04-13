@@ -5,6 +5,7 @@ import React from 'react';
 import Image from 'next/image';
 import { Container } from '@/components/ui/Container';
 import { CursosSearchBar } from './CursosSearchBar';
+import { FiltroCursos } from './CursosFilters';
 
 interface CursosHeaderProps {
   busqueda: string;
@@ -37,9 +38,12 @@ export function CursosHeader({ busqueda, setBusqueda }: CursosHeaderProps) {
             </p>
           </div>
 
-          {/* Buscador integrado */}
-          <div className="pb-12">
+          {/* Buscador y Filtros integrados */}
+          <div className="pb-12 max-w-6xl mx-auto">
             <CursosSearchBar busqueda={busqueda} setBusqueda={setBusqueda} />
+            <div className="mt-4">
+              <FiltroCursos />
+            </div>
           </div>
         </div>
       </Container>

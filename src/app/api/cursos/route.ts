@@ -1,4 +1,4 @@
-// src/app/api/cursos/route.ts (corregido)
+// src/app/api/cursos/route.ts
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { cursos, instructores, categoriasCursos, ubicacionesCursos, modalidades } from "@/lib/schema/index";
@@ -9,13 +9,26 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const isAdmin = searchParams.get("admin") === "true";
-    const categoriaId = searchParams.get("categoriaId");
+    
+    // Parámetros de filtro actualizados
     const modalidadId = searchParams.get("modalidadId");
+    const dirigidoA = searchParams.get("dirigidoA");
 
     const filtros: any[] = [];
-    if (!isAdmin) filtros.push(eq(cursos.activo, true));
-    if (categoriaId && !isNaN(Number(categoriaId))) filtros.push(eq(cursos.idCategoria, Number(categoriaId)));
-    if (modalidadId && !isNaN(Number(modalidadId))) filtros.push(eq(cursos.idModalidad, Number(modalidadId)));
+    
+    if (!isAdmin) {
+      filtros.push(eq(cursos.activo, true));
+    }
+    
+    // Filtro por modalidad
+    if (modalidadId && !isNaN(Number(modalidadId))) {
+      filtros.push(eq(cursos.idModalidad, Number(modalidadId)));
+    }
+
+    // Filtro por Dirigido A (es un string exacto según tu schema)
+    if (dirigidoA) {
+      filtros.push(eq(cursos.dirigidoA, dirigidoA));
+    }
 
     const data = await db
       .select({
@@ -62,7 +75,6 @@ export async function POST(request: Request) {
     const body = await request.json();
     const userEmail = getUserEmailFromRequest(request);
 
-    // Validar campos requeridos
     if (!body.tituloCurso) {
       return NextResponse.json({ error: "El título del curso es requerido" }, { status: 400 });
     }
