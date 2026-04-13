@@ -3,11 +3,12 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, TrendingUp, Users, Clock, AlertTriangle, Mail, DollarSign, Target, Calendar } from 'lucide-react';
+import { ArrowLeft, TrendingUp, Users, Clock, AlertTriangle, Mail, DollarSign, Target, Calendar, BarChart3 } from 'lucide-react';
 import { CursoMetrics } from '@/components/admin/cursos/CursoMetrics';
 import { CursoAlerts } from '@/components/admin/cursos/CursoAlerts';
 import { GrowthModel } from '@/components/admin/cursos/GrowthModel';
 import { MarketingActions } from '@/components/admin/cursos/MarketingActions';
+import { InscripcionesAnalytics } from '@/components/admin/cursos/InscripcionesAnalytics';
 import type { Curso, CursoAnalytics } from '@/types/cursos';
 import { adminRoutes } from '@/config/routes';
 
@@ -139,6 +140,8 @@ export default function CursoDashboardPage() {
         {/* Modelo de crecimiento */}
         <GrowthModel curso={curso} analytics={analytics} />
 
+        {/* NUEVO: Análisis detallado de inscripciones */}
+        <InscripcionesAnalytics curso={curso} analytics={analytics} />
         {/* Acciones de marketing */}
         <MarketingActions curso={curso} analytics={analytics} />
       </div>
