@@ -42,7 +42,8 @@ export default function HomePublico() {
             id: s.idServicio || `servicio-${Math.random()}`,
             titulo: s.tituloServicio || s.titulo,
             descripcion: s.descripcion || "Atención médica especializada",
-            ubicacion: s.ubicacion || "Huejutla, Hidalgo"
+            ubicacion: s.ubicacion || "Huejutla, Hidalgo",
+            imagenSrc: s.urlImage || null
           })),
           // 👈 CORREGIR: Formatear los cursos correctamente
           cursos: (Array.isArray(curs) ? curs : []).filter((c: any) => c.activo).slice(0, 2).map((c: any) => ({

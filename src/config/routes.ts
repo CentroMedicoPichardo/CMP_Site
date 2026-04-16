@@ -24,7 +24,7 @@ export const clienteRoutes = {
 };
 
 export const adminRoutes = {
-  dashboard: "/dashboard",
+  dashboard: "/dashboard-admin",
   usuarios: "/usuarios",
   medicos: "/medicos",
   servicios: "/adminservicios",

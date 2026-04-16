@@ -1,8 +1,10 @@
 // src/components/public/home/ServiciosSection.tsx
 import Link from 'next/link';
+import Image from 'next/image';
 import { MapPin, ChevronRight, Heart, ArrowRight } from 'lucide-react';
 import { Container } from '@/components/ui/Container';
 import { publicRoutes } from '@/config/routes';
+import { useState } from 'react';
 
 interface ServiciosSectionProps {
   servicios: any[];
@@ -10,6 +12,38 @@ interface ServiciosSectionProps {
 
 export function ServiciosSection({ servicios }: ServiciosSectionProps) {
   if (!servicios.length) return null;
+
+  // Componente interno para manejar errores de imagen
+  const ServicioImagen = ({ imagenSrc, titulo }: { imagenSrc?: string; titulo: string }) => {
+    const [imageError, setImageError] = useState(false);
+    const showIcon = !imagenSrc || imagenSrc.trim() === "" || imageError;
+
+    if (showIcon) {
+      return (
+        <div className="relative w-64 h-64 lg:w-80 lg:h-80">
+          <div className="absolute inset-0 bg-gradient-to-br from-[#FFC300]/10 to-transparent rounded-3xl"></div>
+          <div className="absolute inset-4 bg-white rounded-2xl shadow-xl flex items-center justify-center">
+            <Heart size={80} className="text-[#0A3D62] opacity-20" />
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="relative w-64 h-64 lg:w-80 lg:h-80">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#FFC300]/10 to-transparent rounded-3xl"></div>
+        <div className="absolute inset-4 bg-white rounded-2xl shadow-xl overflow-hidden">
+          <Image
+            src={imagenSrc}
+            alt={titulo}
+            fill
+            className="object-cover rounded-2xl"
+            onError={() => setImageError(true)}
+          />
+        </div>
+      </div>
+    );
+  };
 
   return (
     <section className="py-24 bg-white">
@@ -65,12 +99,10 @@ export function ServiciosSection({ servicios }: ServiciosSectionProps) {
               </div>
               
               <div className="flex-1 flex justify-center">
-                <div className="relative w-64 h-64 lg:w-80 lg:h-80">
-                  <div className="absolute inset-0 bg-gradient-to-br from-[#FFC300]/10 to-transparent rounded-3xl"></div>
-                  <div className="absolute inset-4 bg-white rounded-2xl shadow-xl flex items-center justify-center">
-                    <Heart size={80} className="text-[#0A3D62] opacity-20" />
-                  </div>
-                </div>
+                <ServicioImagen 
+                  imagenSrc={servicio.imagenSrc} 
+                  titulo={servicio.titulo}
+                />
               </div>
             </div>
           ))}

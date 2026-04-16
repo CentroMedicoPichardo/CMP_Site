@@ -21,28 +21,33 @@ export function ServicioCardVertical({
 }: ServicioCardVerticalProps) {
   
   // 👇 AGREGAR CONSOLA PARA DEBUG
-  console.log('🎨 Renderizando ServicioCardVertical:', { id, titulo, descripcion });
+  console.log('🎨 Renderizando ServicioCardVertical:', { id, titulo, descripcion, imagenSrc });
   
   const descripcionCorta = descripcion && descripcion.length > 100 
     ? descripcion.substring(0, 100) + '...' 
     : descripcion || "Atención especializada con profesionales de excelencia.";
 
+  // Imagen por defecto (puedes cambiar la ruta según donde tengas tu imagen default)
+  const DEFAULT_IMAGE = "/images/default-servicio.jpg"; // 👈 Cambia esta ruta según tu proyecto
+
+  // Usar imagenSrc si existe, sino la imagen por defecto
+  const imageToShow = imagenSrc && imagenSrc.trim() !== "" ? imagenSrc : DEFAULT_IMAGE;
+
   return (
     <div className="group bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100 h-full flex flex-col">
       {/* Imagen */}
       <div className="relative h-48 overflow-hidden bg-gradient-to-br from-[#0A3D62] to-[#1A4F7A]">
-        {imagenSrc ? (
-          <Image 
-            src={imagenSrc}
-            alt={titulo || "Servicio"}
-            fill
-            className="object-cover group-hover:scale-110 transition-transform duration-500"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <span className="text-5xl text-white/30">🏥</span>
-          </div>
-        )}
+        <Image 
+          src={imageToShow}
+          alt={titulo || "Servicio"}
+          fill
+          className="object-cover group-hover:scale-110 transition-transform duration-500"
+          onError={(e) => {
+            // Si la imagen falla al cargar, mostrar la imagen por defecto
+            const target = e.target as HTMLImageElement;
+            target.src = DEFAULT_IMAGE;
+          }}
+        />
       </div>
 
       {/* Contenido */}

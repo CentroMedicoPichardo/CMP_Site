@@ -21,23 +21,29 @@ export function ServicioCardHorizontal({
 }: ServicioCardHorizontalProps) {
   
   // 👇 AGREGAR CONSOLA PARA DEBUG
-  console.log('🎨 Renderizando ServicioCardHorizontal:', { id, titulo, descripcion });
+  console.log('🎨 Renderizando ServicioCardHorizontal:', { id, titulo, descripcion, imagenSrc });
   
+  const [imageError, setImageError] = React.useState(false);
+
   const descripcionCorta = descripcion && descripcion.length > 120 
     ? descripcion.substring(0, 120) + '...' 
     : descripcion || "Atención especializada con profesionales de excelencia.";
+
+  // Si no hay imagenSrc en la BD o está vacío, o hubo error al cargar, mostrar icono
+  const showIcon = !imagenSrc || imagenSrc.trim() === "" || imageError;
 
   return (
     <div className="group bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100 h-full">
       <div className="flex flex-col md:flex-row h-full">
         {/* Imagen */}
         <div className="relative md:w-48 h-48 md:h-auto overflow-hidden bg-gradient-to-br from-[#0A3D62] to-[#1A4F7A]">
-          {imagenSrc ? (
+          {!showIcon ? (
             <Image 
               src={imagenSrc}
               alt={titulo || "Servicio"}
               fill
               className="object-cover group-hover:scale-110 transition-transform duration-500"
+              onError={() => setImageError(true)}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">

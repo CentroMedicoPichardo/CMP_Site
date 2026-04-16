@@ -17,13 +17,16 @@ export default function ServiciosPage() {
         const res = await fetch('/api/servicios');
         const data = await res.json();
         
+        console.log("📦 Datos recibidos de API:", data); // Debug: Ver qué datos llegan
+        
         const serviciosFormateados = (Array.isArray(data) ? data : []).map((s: any) => ({
-          id: s.id_servicio || `servicio-${Math.random()}`,
+          id: s.id_servicio || s.idServicio || `servicio-${Math.random()}`,
           titulo: s.tituloServicio || "Servicio",
           descripcion: s.descripcion || "Atención especializada con profesionales de excelencia.",
-          imagenSrc: s.imagen || "/pediatric-illustration.png"
+          imagenSrc: s.urlImage || null, // ✅ Cambiado de "imagen" a "urlImage"
         }));
         
+        console.log("✅ Servicios formateados:", serviciosFormateados); // Debug: Ver imágenes
         setServicios(serviciosFormateados);
       } catch (error) {
         console.error("Error al cargar servicios:", error);

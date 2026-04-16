@@ -67,9 +67,9 @@ export function LoginForm({ onMfaRequired }: LoginFormProps) {
       // Redirección según el rol
     setTimeout(() => {
       if (rol === 'admin') {
-        router.push('/admin/dashboard');
+        router.push('/dashboard-admin');
       } else if (rol === 'cliente') {
-        router.push('/dashboard');
+        router.push('/');
       } else {
         router.push('/');
       }
