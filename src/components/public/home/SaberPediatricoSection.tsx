@@ -2,7 +2,6 @@
 import Link from 'next/link';
 import { GraduationCap, ChevronRight, ArrowRight, Heart, BookOpen, Video } from 'lucide-react';
 import { Container } from '@/components/ui/Container';
-import { NoticiasCarrusel } from './NoticiasCarrusel';
 import { publicRoutes } from '@/config/routes';
 
 interface SaberPediatricoSectionProps {
@@ -49,14 +48,9 @@ export function SaberPediatricoSection({ noticias }: SaberPediatricoSectionProps
                 Información actualizada y consejos prácticos para el cuidado de tus pequeños, 
                 escritos por nuestro equipo de especialistas.
               </p>
-              
-              {noticias.length > 0 ? (
-                <NoticiasCarrusel noticias={noticias} />
-              ) : (
                 <div className="bg-gray-50 rounded-2xl p-8 text-center">
                   <p className="text-gray-500">Próximamente contenido educativo</p>
                 </div>
-              )}
             </div>
           </div>
 
