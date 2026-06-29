@@ -1,42 +1,79 @@
+// src/app/api/dashboard/stats/route.ts
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { usuarios, medicos, cursos, publicaciones, servicios } from "@/lib/schema/index";
+import {
+  usuarios,
+  medicos,
+  cursos,
+  publicaciones,
+  servicios,
+} from "@/lib/schema/index";
 import { sql, eq } from "drizzle-orm";
+import { requireApiRole } from "@/lib/auth";
+
+function obtenerConteo(resultado: { count: number }[] | undefined) {
+  const valor = Number(resultado?.[0]?.count ?? 0);
+  return Number.isFinite(valor) ? valor : 0;
+}
 
 export async function GET() {
-  try {
-    // 📊 Consultas paralelas filtrando por activo === true
-    const [uCount, mCount, cCount, bCount, sCount] = await Promise.all([
-      db.select({ count: sql<number>`cast(count(*) as integer)` })
-        .from(usuarios)
-        .where(eq(usuarios.activo, true)), // 👈 Filtro booleano corregido
+  const { error } = await requireApiRole("admin");
 
-      db.select({ count: sql<number>`cast(count(*) as integer)` })
+  if (error) {
+    return error;
+  }
+
+  try {
+    const [uCount, mCount, cCount, bCount, sCount] = await Promise.all([
+      db
+        .select({
+          count: sql<number>`cast(count(*) as integer)`,
+        })
+        .from(usuarios)
+        .where(eq(usuarios.activo, true)),
+
+      db
+        .select({
+          count: sql<number>`cast(count(*) as integer)`,
+        })
         .from(medicos)
         .where(eq(medicos.activo, true)),
 
-      db.select({ count: sql<number>`cast(count(*) as integer) `})
+      db
+        .select({
+          count: sql<number>`cast(count(*) as integer)`,
+        })
         .from(cursos)
         .where(eq(cursos.activo, true)),
 
-      db.select({ count: sql<number>`cast(count(*) as integer)` })
+      db
+        .select({
+          count: sql<number>`cast(count(*) as integer)`,
+        })
         .from(publicaciones)
         .where(eq(publicaciones.activo, true)),
 
-      db.select({ count: sql<number>`cast(count(*) as integer)` })
+      db
+        .select({
+          count: sql<number>`cast(count(*) as integer)`,
+        })
         .from(servicios)
         .where(eq(servicios.activo, true)),
     ]);
 
     return NextResponse.json({
-      usuarios: uCount[0]?.count ?? 0,
-      medicos: mCount[0]?.count ?? 0,
-      cursos: cCount[0]?.count ?? 0,
-      blog: bCount[0]?.count ?? 0,
-      servicios: sCount[0]?.count ?? 0,
+      usuarios: obtenerConteo(uCount),
+      medicos: obtenerConteo(mCount),
+      cursos: obtenerConteo(cCount),
+      blog: obtenerConteo(bCount),
+      servicios: obtenerConteo(sCount),
     });
-  } catch (error: any) {
-    console.error("🔥 Error en Dashboard API:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    console.error("Error en dashboard stats:", error);
+
+    return NextResponse.json(
+      { error: "Error al obtener estadísticas del dashboard" },
+      { status: 500 }
+    );
   }
 }

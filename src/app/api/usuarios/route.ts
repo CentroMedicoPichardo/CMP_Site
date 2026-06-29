@@ -3,11 +3,16 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { usuarios, roles } from "@/lib/schema/index";
 import { eq, asc } from "drizzle-orm";
+import { requireApiRole } from "@/lib/auth";
 
 export async function GET() {
+  const { error } = await requireApiRole("admin");
+
+  if (error) {
+    return error;
+  }
+
   try {
-    // Traemos usuarios con el nombre de su rol (Join)
-    // NO traemos la contraseña por seguridad
     const data = await db
       .select({
         id: usuarios.id,
@@ -25,8 +30,12 @@ export async function GET() {
       .orderBy(asc(usuarios.id));
 
     return NextResponse.json(data);
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error en GET usuarios:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+
+    return NextResponse.json(
+      { error: "Error interno al obtener usuarios" },
+      { status: 500 }
+    );
   }
 }

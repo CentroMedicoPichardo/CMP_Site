@@ -18,12 +18,7 @@ import {
   Shield,
 } from "lucide-react";
 
-import {
-  navigationItems,
-  topBarInfo,
-  publicRoutes,
-} from "@/config/routes";
-
+import { navigationItems, topBarInfo, publicRoutes } from "@/config/routes";
 import { Container } from "../ui/Container";
 
 interface EmpresaInfo {
@@ -39,63 +34,141 @@ interface EmpresaInfo {
   correoSoporte: string | null;
 }
 
-const useAuth = () => {
+interface AuthUser {
+  id: number;
+  nombre: string;
+  apellidoPaterno?: string | null;
+  apellidoMaterno?: string | null;
+  nombreCompleto?: string;
+  correo?: string;
+  email?: string;
+  rol: string;
+}
+
+interface HeaderProps {
+  initialUser?: AuthUser | null;
+  initialRol?: string | null;
+}
+
+const normalizarRol = (rol?: string | null) => {
+  const value = (rol ?? "").toLowerCase().trim();
+
+  if (
+    value === "admin" ||
+    value === "administrador" ||
+    value === "administrator"
+  ) {
+    return "admin";
+  }
+
+  return value;
+};
+
+const useAuth = (
+  initialUser: AuthUser | null = null,
+  initialRol: string | null = null
+) => {
   const pathname = usePathname();
-  const [rol, setRol] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
+  const [rol, setRol] = useState<string | null>(normalizarRol(initialRol));
+  const [user, setUser] = useState<AuthUser | null>(initialUser);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const cookieRol = document.cookie
-      .split("; ")
-      .find((row) => row.startsWith("rol="))
-      ?.split("=")[1];
+    let cancelado = false;
 
-    const cookieUser = document.cookie
-      .split("; ")
-      .find((row) => row.startsWith("user="))
-      ?.split("=")[1];
-
-    setRol(cookieRol ?? null);
-    
-    if (cookieUser) {
+    const verificarSesion = async () => {
       try {
-        setUser(JSON.parse(decodeURIComponent(cookieUser)));
+        setLoading(true);
+
+        const res = await fetch("/api/auth/verificar", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
+
+        const data = await res.json();
+
+        if (cancelado) return;
+
+        if (res.ok && data.loggedIn && data.usuario) {
+          const rolNormalizado = normalizarRol(data.usuario.rol);
+
+          setUser({
+            ...data.usuario,
+            rol: rolNormalizado,
+          });
+
+          setRol(rolNormalizado);
+        } else {
+          setUser(null);
+          setRol(null);
+        }
       } catch {
-        setUser(null);
+        if (!cancelado) {
+          setUser(null);
+          setRol(null);
+        }
+      } finally {
+        if (!cancelado) {
+          setLoading(false);
+        }
       }
-    }
+    };
+
+    verificarSesion();
+
+    return () => {
+      cancelado = true;
+    };
   }, [pathname]);
 
+  const limpiarSesion = () => {
+    setUser(null);
+    setRol(null);
+  };
+
   return {
+    loading,
     rol,
     user,
     isAuthenticated: !!rol,
-    isAdmin: rol === 'admin',
-    isCliente: rol === 'cliente',
+    isAdmin: rol === "admin",
+    limpiarSesion,
   };
 };
 
-export function Header() {
+export function Header({
+  initialUser = null,
+  initialRol = null,
+}: HeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
+
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const { isAuthenticated, isAdmin, isCliente, user, rol } = useAuth();
   const [empresaInfo, setEmpresaInfo] = useState<EmpresaInfo | null>(null);
 
-  // Cargar información de la empresa para el logo, nombre y datos de contacto
+  const { isAuthenticated, isAdmin, user, limpiarSesion } = useAuth(
+    initialUser,
+    initialRol
+  );
+
   useEffect(() => {
     const cargarEmpresaInfo = async () => {
       try {
-        const res = await fetch('/api/empresa-info');
+        const res = await fetch("/api/empresa-info", {
+          cache: "no-store",
+        });
+
         if (res.ok) {
           const data = await res.json();
           setEmpresaInfo(data);
         }
-      } catch (error) {
-        console.error('Error cargando información de la empresa:', error);
+      } catch {
+        setEmpresaInfo(null);
       }
     };
+
     cargarEmpresaInfo();
   }, []);
 
@@ -105,45 +178,63 @@ export function Header() {
     };
 
     window.addEventListener("scroll", handleScroll);
+    handleScroll();
+
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const toggleMenu = () => setMenuAbierto(!menuAbierto);
+  const toggleMenu = () => setMenuAbierto((prev) => !prev);
 
-  const handleLogout = () => {
-    document.cookie = "rol=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-    document.cookie = "user=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-    document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-    router.push("/");
-    router.refresh();
+  const cerrarMenu = () => setMenuAbierto(false);
+
+  const handleLogout = async () => {
+    limpiarSesion();
+    setMenuAbierto(false);
+
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {
+      // Si falla la petición, igual limpiamos la interfaz.
+    } finally {
+      limpiarSesion();
+      router.replace("/");
+      router.refresh();
+    }
   };
 
-  const logoUrl = empresaInfo?.logoUrl || '/logo.png';
-  const empresaNombre = empresaInfo?.nombre || 'Centro Médico';
-  const empresaSubnombre = 'Pichardo';
-  
-  // Datos para la barra superior desde la tabla empresa_info
+  const logoUrl = empresaInfo?.logoUrl || "/logo.png";
+  const empresaNombre = empresaInfo?.nombre || "Centro Médico";
+  const empresaSubnombre = "Pichardo";
+
   const telefonoEmpresa = empresaInfo?.telefono || topBarInfo.phone;
   const direccionEmpresa = empresaInfo?.direccion || topBarInfo.location;
   const horarioEmpresa = empresaInfo?.horario || topBarInfo.schedule;
 
-  // Función para manejar el clic en Contacto - redirige a Quiénes Somos y hace scroll
-  const handleContactClick = (e: React.MouseEvent) => {
+  const nombreUsuario =
+    user?.nombreCompleto || user?.nombre || (isAdmin ? "Admin" : "Usuario");
+
+  const inicialUsuario =
+    user?.nombre?.charAt(0)?.toUpperCase() ||
+    user?.nombreCompleto?.charAt(0)?.toUpperCase() ||
+    "U";
+
+  const handleContactClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
-    
-    // Si ya estamos en la página de Quiénes Somos, solo hacemos scroll
-    if (pathname === '/quienes-somos') {
-      const element = document.getElementById('info-contacto');
+
+    if (pathname === "/quienes-somos") {
+      const element = document.getElementById("info-contacto");
+
       if (element) {
-        element.scrollIntoView({ behavior: 'smooth' });
+        element.scrollIntoView({ behavior: "smooth" });
       }
     } else {
-      // Si no estamos, navegamos y luego hacemos scroll
-      router.push('/quienes-somos#info-contacto');
+      router.push("/quienes-somos#info-contacto");
     }
   };
 
-  // Header para ADMIN
   if (isAdmin) {
     return (
       <>
@@ -154,6 +245,7 @@ export function Header() {
                 <Shield size={16} className="text-[#FFC300]" />
                 <span className="font-medium">Panel de Administración</span>
               </div>
+
               <span className="text-white/60">Sistema de Gestión</span>
             </div>
           </Container>
@@ -161,23 +253,37 @@ export function Header() {
 
         <header
           className={`sticky top-0 left-0 right-0 z-[9999] transition-all duration-500 ${
-            scrolled ? "bg-white/95 backdrop-blur-md shadow-lg py-2" : "bg-white py-3"
+            scrolled
+              ? "bg-white/95 backdrop-blur-md shadow-lg py-2"
+              : "bg-white py-3"
           }`}
         >
           <Container>
             <div className="flex items-center justify-between">
               <Link href="/admin/dashboard" className="flex items-center gap-2">
-                <Image src={logoUrl} alt="Logo" width={32} height={32} />
-                <span className="text-lg font-semibold text-[#0A3D62]">Admin</span>
+                <Image
+                  src={logoUrl}
+                  alt="Logo"
+                  width={32}
+                  height={32}
+                  className="object-contain"
+                />
+
+                <span className="text-lg font-semibold text-[#0A3D62]">
+                  Admin
+                </span>
               </Link>
 
               <div className="flex items-center gap-4">
-                <div className="text-right">
-                  <p className="text-sm font-medium text-gray-700">{user?.nombre || 'Admin'}</p>
+                <div className="text-right hidden sm:block">
+                  <p className="text-sm font-medium text-gray-700">
+                    {nombreUsuario}
+                  </p>
                   <p className="text-xs text-[#FFC300]">Administrador</p>
                 </div>
-                
+
                 <button
+                  type="button"
                   onClick={handleLogout}
                   className="flex items-center gap-2 text-gray-600 hover:text-red-500 font-medium border-l border-gray-200 pl-4"
                 >
@@ -185,7 +291,12 @@ export function Header() {
                   <span className="hidden sm:inline">Cerrar Sesión</span>
                 </button>
 
-                <button className="md:hidden p-2" onClick={toggleMenu}>
+                <button
+                  type="button"
+                  className="md:hidden p-2"
+                  onClick={toggleMenu}
+                  aria-label="Abrir menú"
+                >
                   {menuAbierto ? <X size={20} /> : <Menu size={20} />}
                 </button>
               </div>
@@ -196,27 +307,34 @@ export function Header() {
     );
   }
 
-  // Header para PÚBLICO y CLIENTE
   return (
     <>
-      {/* TOP BAR - Información dinámica desde la tabla empresa_info */}
       <div className="bg-[#0A3D62] text-white/90 py-2.5 text-sm border-b border-white/5">
         <Container>
           <div className="flex justify-between items-center">
-            <div className="flex items-center gap-5">
+            <div className="flex items-center gap-5 min-w-0">
               <div className="flex items-center gap-2">
                 <Phone size={14} className="text-[#FFC300]" />
                 <span className="text-white/80">{telefonoEmpresa}</span>
               </div>
+
               <div className="hidden lg:flex items-center gap-2">
                 <Clock size={14} className="text-[#FFC300]" />
-                <span className="text-white/80 line-clamp-1">{horarioEmpresa}</span>
+                <span className="text-white/80 line-clamp-1">
+                  {horarioEmpresa}
+                </span>
+              </div>
+
+              <div className="hidden xl:flex items-center gap-2 min-w-0">
+                <MapPin size={14} className="text-[#FFC300] flex-shrink-0" />
+                <span className="text-white/80 truncate max-w-[280px]">
+                  {direccionEmpresa}
+                </span>
               </div>
             </div>
 
             <div className="flex items-center gap-4">
-              {/* Link de Contacto que redirige a la sección de contacto en Quiénes Somos */}
-              <a 
+              <a
                 href="/quienes-somos#info-contacto"
                 onClick={handleContactClick}
                 className="text-white/70 hover:text-[#FFC300] transition-colors cursor-pointer"
@@ -230,14 +348,16 @@ export function Header() {
 
       <header
         className={`sticky top-0 left-0 right-0 z-[9999] transition-all duration-500 ${
-          scrolled ? "bg-white/95 backdrop-blur-md shadow-lg py-3" : "bg-white py-6"
+          scrolled
+            ? "bg-white/95 backdrop-blur-md shadow-lg py-3"
+            : "bg-white py-6"
         }`}
       >
         <Container>
           <div className="flex items-center justify-between">
             <Link href={publicRoutes.home} className="flex items-center gap-3">
               <div className="relative w-12 h-12 flex items-center justify-center">
-                <Image 
+                <Image
                   src={logoUrl}
                   alt={empresaNombre}
                   width={44}
@@ -245,9 +365,14 @@ export function Header() {
                   className="object-contain"
                 />
               </div>
+
               <div className="flex flex-col">
-                <span className="text-xl font-semibold text-[#0A3D62]">{empresaNombre}</span>
-                <span className="text-xs text-[#FFC300] uppercase">{empresaSubnombre}</span>
+                <span className="text-xl font-semibold text-[#0A3D62]">
+                  {empresaNombre}
+                </span>
+                <span className="text-xs text-[#FFC300] uppercase">
+                  {empresaSubnombre}
+                </span>
               </div>
             </Link>
 
@@ -273,18 +398,22 @@ export function Header() {
                   <span className="hidden sm:inline">Acceder</span>
                 </Link>
               ) : (
-                <>                  
-                  <button
-                    onClick={handleLogout}
-                    className="flex items-center gap-2 text-gray-600 hover:text-red-500 font-medium"
-                  >
-                    <LogOut size={18} />
-                    <span className="hidden sm:inline">Cerrar Sesión</span>
-                  </button>
-                </>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 text-gray-600 hover:text-red-500 font-medium"
+                >
+                  <LogOut size={18} />
+                  <span className="hidden sm:inline">Cerrar Sesión</span>
+                </button>
               )}
 
-              <button className="md:hidden p-2" onClick={toggleMenu}>
+              <button
+                type="button"
+                className="md:hidden p-2"
+                onClick={toggleMenu}
+                aria-label="Abrir menú"
+              >
                 {menuAbierto ? <X size={22} /> : <Menu size={22} />}
               </button>
             </div>
@@ -304,7 +433,7 @@ export function Header() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  onClick={toggleMenu}
+                  onClick={cerrarMenu}
                   className="px-4 py-5 flex justify-between"
                 >
                   {item.label}
@@ -316,10 +445,13 @@ export function Header() {
                 <div className="px-4 py-4 bg-gray-50 rounded-lg my-2">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-[#0A3D62] rounded-full flex items-center justify-center text-white font-bold">
-                      {user?.nombre?.charAt(0)?.toUpperCase() || 'U'}
+                      {inicialUsuario}
                     </div>
+
                     <div>
-                      <p className="font-medium text-gray-800">{user?.nombre}</p>
+                      <p className="font-medium text-gray-800">
+                        {nombreUsuario}
+                      </p>
                       <p className="text-xs text-[#FFC300]">Cliente</p>
                     </div>
                   </div>
@@ -330,7 +462,7 @@ export function Header() {
                 {!isAuthenticated ? (
                   <Link
                     href={publicRoutes.acceder}
-                    onClick={toggleMenu}
+                    onClick={cerrarMenu}
                     className="flex items-center justify-center gap-3 px-4 py-4 bg-[#0A3D62] text-white rounded-xl"
                   >
                     <LogIn size={20} />
@@ -338,10 +470,8 @@ export function Header() {
                   </Link>
                 ) : (
                   <button
-                    onClick={() => {
-                      handleLogout();
-                      toggleMenu();
-                    }}
+                    type="button"
+                    onClick={handleLogout}
                     className="flex items-center justify-center gap-3 w-full px-4 py-4 bg-red-500 text-white rounded-xl"
                   >
                     <LogOut size={20} />
@@ -354,9 +484,12 @@ export function Header() {
         </div>
       </header>
 
-    {menuAbierto && (
-      <div className="md:hidden fixed inset-0 bg-black/30 z-[9997]" onClick={toggleMenu} />
-    )}
+      {menuAbierto && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/30 z-[9997]"
+          onClick={cerrarMenu}
+        />
+      )}
     </>
   );
 }

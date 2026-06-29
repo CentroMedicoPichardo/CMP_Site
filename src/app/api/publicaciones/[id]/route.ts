@@ -1,101 +1,315 @@
+// src/app/api/publicaciones/[id]/route.ts
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { publicaciones } from "@/lib/schema/index";
-import { eq } from "drizzle-orm";
+import { publicaciones, medicos } from "@/lib/schema/index";
+import { and, eq } from "drizzle-orm";
+import { requireApiRole } from "@/lib/auth";
+import { withUserEmail } from "@/lib/db-with-user";
+
+function normalizarTexto(valor: unknown) {
+  return typeof valor === "string" ? valor.trim() : "";
+}
+
+function normalizarActivo(valor: unknown) {
+  if (typeof valor === "boolean") {
+    return valor;
+  }
+
+  if (valor === "false") {
+    return false;
+  }
+
+  if (valor === "true") {
+    return true;
+  }
+
+  return true;
+}
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
+    const idPublicacion = Number(id);
+
+    if (!Number.isFinite(idPublicacion) || idPublicacion <= 0) {
+      return NextResponse.json(
+        { error: "ID de publicación inválido" },
+        { status: 400 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const isAdminRequest = searchParams.get("admin") === "true";
+
+    if (isAdminRequest) {
+      const { error } = await requireApiRole("admin");
+
+      if (error) {
+        return error;
+      }
+    }
+
+    const condicion = isAdminRequest
+      ? eq(publicaciones.idPublicacion, idPublicacion)
+      : and(
+          eq(publicaciones.idPublicacion, idPublicacion),
+          eq(publicaciones.activo, true)
+        );
+
     const data = await db
-      .select()
+      .select({
+        idPublicacion: publicaciones.idPublicacion,
+        tituloNoticia: publicaciones.tituloNoticia,
+        resumenBajada: publicaciones.resumenBajada,
+        contenidoCompleto: publicaciones.contenidoCompleto,
+        fechaPublicacion: publicaciones.fechaPublicacion,
+        urlImagen: publicaciones.urlImagen,
+        etiquetas: publicaciones.etiquetas,
+        activo: publicaciones.activo,
+        idAutor: publicaciones.idAutor,
+        nombreAutor: medicos.nombres,
+        apellidoAutor: medicos.apellidoPaterno,
+      })
       .from(publicaciones)
-      .where(eq(publicaciones.idPublicacion, Number(id)));
-    if (!data.length)
-      return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+      .leftJoin(medicos, eq(publicaciones.idAutor, medicos.idMedico))
+      .where(condicion)
+      .limit(1);
+
+    if (!data.length) {
+      return NextResponse.json(
+        { error: "Publicación no encontrada" },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json(data[0]);
   } catch (error) {
-    return NextResponse.json({ error: "Error GET ID" }, { status: 500 });
+    console.error("Error en GET publicación:", error);
+
+    return NextResponse.json(
+      { error: "Error al obtener publicación" },
+      { status: 500 }
+    );
   }
 }
 
 export async function PUT(
   request: Request,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { session, error } = await requireApiRole("admin");
+
+  if (error) {
+    return error;
+  }
+
+  if (!session) {
+    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  }
+
   try {
     const { id } = await params;
-    const body = await request.json();
-    const idNum = Number(id);
+    const idPublicacion = Number(id);
 
-    // 🕵️ DEBUG: Mira tu terminal de VS Code al presionar "Guardar"
-    console.log(">>> INTENTO DE UPDATE ID:", idNum);
-    console.log(">>> DATOS RECIBIDOS:", body);
-
-    // 🛡️ VALIDACIÓN DE DATOS OBLIGATORIOS (notNull en tu Schema)
-    // Extraemos los valores buscando ambos formatos (el de la DB y el del Modal)
-    const updateData = {
-      tituloNoticia: body.tituloNoticia || body.titulo,
-      resumenBajada: body.resumenBajada || body.bajada,
-      contenidoCompleto: body.contenidoCompleto || body.contenido,
-      idAutor: Number(body.idAutor),
-      urlImagen: body.urlImagen || body.imagenSrc || "/logo.png",
-      etiquetas: body.etiquetas || "",
-      activo: body.activo !== undefined ? body.activo : true,
-      // Mantenemos la fecha original o la del body para no violar el notNull
-      fechaPublicacion:
-        body.fechaPublicacion || new Date().toISOString().split("T")[0],
-    };
-
-    // Verificamos si algún campo obligatorio quedó como NaN o undefined
-    if (isNaN(updateData.idAutor)) {
-      console.error("❌ ERROR: idAutor no es un número válido");
-      return NextResponse.json({ error: "idAutor inválido" }, { status: 400 });
-    }
-
-    const actualizada = await db
-      .update(publicaciones)
-      .set(updateData) // Enviamos el objeto mapeado
-      .where(eq(publicaciones.idPublicacion, idNum))
-      .returning();
-
-    if (!actualizada.length) {
-      console.error("❌ ERROR: No se encontró la fila con ID", idNum);
+    if (!Number.isFinite(idPublicacion) || idPublicacion <= 0) {
       return NextResponse.json(
-        { error: "No se encontró el registro" },
-        { status: 404 },
+        { error: "ID de publicación inválido" },
+        { status: 400 }
       );
     }
 
-    console.log("✅ EXITOSO: Registro actualizado");
+    const body = await request.json();
+
+    const publicacionExistente = await db
+      .select({
+        idPublicacion: publicaciones.idPublicacion,
+        fechaPublicacion: publicaciones.fechaPublicacion,
+      })
+      .from(publicaciones)
+      .where(eq(publicaciones.idPublicacion, idPublicacion))
+      .limit(1);
+
+    if (!publicacionExistente.length) {
+      return NextResponse.json(
+        { error: "Publicación no encontrada" },
+        { status: 404 }
+      );
+    }
+
+    const titulo =
+      normalizarTexto(body.tituloNoticia) || normalizarTexto(body.titulo);
+
+    const bajada =
+      normalizarTexto(body.resumenBajada) || normalizarTexto(body.bajada);
+
+    const contenido =
+      normalizarTexto(body.contenidoCompleto) ||
+      normalizarTexto(body.contenido);
+
+    const urlImagen =
+      normalizarTexto(body.urlImagen) ||
+      normalizarTexto(body.imagenSrc) ||
+      "/logo.png";
+
+    const etiquetas = normalizarTexto(body.etiquetas);
+
+    const idAutor = Number(body.idAutor);
+
+    const fechaPublicacion =
+      normalizarTexto(body.fechaPublicacion) ||
+      String(publicacionExistente[0].fechaPublicacion);
+
+    if (!titulo) {
+      return NextResponse.json(
+        { error: "El título de la publicación es requerido" },
+        { status: 400 }
+      );
+    }
+
+    if (!bajada) {
+      return NextResponse.json(
+        { error: "La bajada o resumen de la publicación es requerida" },
+        { status: 400 }
+      );
+    }
+
+    if (!contenido) {
+      return NextResponse.json(
+        { error: "El contenido de la publicación es requerido" },
+        { status: 400 }
+      );
+    }
+
+    if (!Number.isFinite(idAutor) || idAutor <= 0) {
+      return NextResponse.json(
+        { error: "El autor de la publicación es requerido" },
+        { status: 400 }
+      );
+    }
+
+    const autorExiste = await db
+      .select({
+        idMedico: medicos.idMedico,
+      })
+      .from(medicos)
+      .where(eq(medicos.idMedico, idAutor))
+      .limit(1);
+
+    if (!autorExiste.length) {
+      return NextResponse.json(
+        { error: "El autor seleccionado no existe" },
+        { status: 400 }
+      );
+    }
+
+    const userEmail = session.user.correo;
+
+    const actualizada = await withUserEmail(userEmail, async () => {
+      return await db
+        .update(publicaciones)
+        .set({
+          tituloNoticia: titulo,
+          resumenBajada: bajada,
+          contenidoCompleto: contenido,
+          idAutor,
+          fechaPublicacion,
+          urlImagen,
+          etiquetas,
+          activo: normalizarActivo(body.activo),
+        })
+        .where(eq(publicaciones.idPublicacion, idPublicacion))
+        .returning({
+          idPublicacion: publicaciones.idPublicacion,
+          tituloNoticia: publicaciones.tituloNoticia,
+          resumenBajada: publicaciones.resumenBajada,
+          contenidoCompleto: publicaciones.contenidoCompleto,
+          fechaPublicacion: publicaciones.fechaPublicacion,
+          urlImagen: publicaciones.urlImagen,
+          etiquetas: publicaciones.etiquetas,
+          activo: publicaciones.activo,
+          idAutor: publicaciones.idAutor,
+        });
+    });
+
+    if (!actualizada.length) {
+      return NextResponse.json(
+        { error: "Publicación no encontrada" },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json(actualizada[0]);
-  } catch (error: any) {
-    console.error("❌ ERROR CRÍTICO EN API:", error.message);
+  } catch (error) {
+    console.error("Error en PUT publicación:", error);
+
     return NextResponse.json(
-      {
-        error: "Error interno",
-        message: error.message,
-      },
-      { status: 500 },
+      { error: "Error al actualizar publicación" },
+      { status: 500 }
     );
   }
 }
 
 export async function DELETE(
   request: Request,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { session, error } = await requireApiRole("admin");
+
+  if (error) {
+    return error;
+  }
+
+  if (!session) {
+    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  }
+
   try {
     const { id } = await params;
-    // Borrado lógico: Cambiar activo a false
-    await db
-      .update(publicaciones)
-      .set({ activo: false })
-      .where(eq(publicaciones.idPublicacion, Number(id)));
-    return NextResponse.json({ message: "Ocultado correctamente" });
+    const idPublicacion = Number(id);
+
+    if (!Number.isFinite(idPublicacion) || idPublicacion <= 0) {
+      return NextResponse.json(
+        { error: "ID de publicación inválido" },
+        { status: 400 }
+      );
+    }
+
+    const userEmail = session.user.correo;
+
+    const resultado = await withUserEmail(userEmail, async () => {
+      return await db
+        .update(publicaciones)
+        .set({
+          activo: false,
+        })
+        .where(eq(publicaciones.idPublicacion, idPublicacion))
+        .returning({
+          idPublicacion: publicaciones.idPublicacion,
+          tituloNoticia: publicaciones.tituloNoticia,
+          activo: publicaciones.activo,
+        });
+    });
+
+    if (!resultado.length) {
+      return NextResponse.json(
+        { error: "Publicación no encontrada" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      message: "Publicación ocultada correctamente",
+      publicacion: resultado[0],
+    });
   } catch (error) {
-    return NextResponse.json({ error: "Error en DELETE" }, { status: 500 });
+    console.error("Error en DELETE publicación:", error);
+
+    return NextResponse.json(
+      { error: "Error al ocultar publicación" },
+      { status: 500 }
+    );
   }
 }

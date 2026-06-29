@@ -1,143 +1,225 @@
 // src/app/api/monitoreo/auditoria/export/route.ts
-import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { sql } from 'drizzle-orm';
+import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { auditoriaAccionesInSeguridad } from "@/lib/schema/index";
+import { and, desc, eq, gte, lte, sql, SQL } from "drizzle-orm";
+import { requireApiRole } from "@/lib/auth";
+
+const CAMPOS_PERMITIDOS = [
+  "fecha_hora",
+  "usuario",
+  "ip_address",
+  "accion",
+  "tabla_afectada",
+  "registro_id",
+  "datos_anteriores",
+  "datos_nuevos",
+] as const;
+
+type CampoPermitido = (typeof CAMPOS_PERMITIDOS)[number];
+
+const headerMap: Record<CampoPermitido, string> = {
+  fecha_hora: "Fecha y Hora",
+  usuario: "Usuario",
+  ip_address: "Dirección IP",
+  accion: "Acción",
+  tabla_afectada: "Tabla Afectada",
+  registro_id: "ID del Registro",
+  datos_anteriores: "Datos Anteriores",
+  datos_nuevos: "Datos Nuevos",
+};
+
+function esCampoPermitido(campo: string): campo is CampoPermitido {
+  return CAMPOS_PERMITIDOS.includes(campo as CampoPermitido);
+}
+
+function normalizarTexto(valor: string | null, maxLength = 100) {
+  if (!valor) return null;
+
+  const texto = valor.trim();
+
+  if (!texto) return null;
+
+  return texto.slice(0, maxLength);
+}
+
+function fechaValida(valor: string | null) {
+  if (!valor) return null;
+
+  const fecha = valor.trim();
+
+  if (!fecha) return null;
+
+  const parsed = new Date(fecha);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return fecha;
+}
+
+function escaparCSV(valor: unknown, campo: CampoPermitido) {
+  if (valor === null || valor === undefined) {
+    return "";
+  }
+
+  let valorFinal = valor;
+
+  if (campo === "fecha_hora" && valorFinal) {
+    const fecha = new Date(String(valorFinal));
+
+    if (!Number.isNaN(fecha.getTime())) {
+      valorFinal = fecha.toLocaleString("es-MX");
+    }
+  }
+
+  if (
+    (campo === "datos_anteriores" || campo === "datos_nuevos") &&
+    typeof valorFinal === "object"
+  ) {
+    valorFinal = JSON.stringify(valorFinal);
+  }
+
+  let texto = String(valorFinal);
+
+  texto = texto.replace(/"/g, '""');
+
+  if (
+    texto.includes(",") ||
+    texto.includes('"') ||
+    texto.includes("\n") ||
+    texto.includes("\r")
+  ) {
+    texto = `"${texto}"`;
+  }
+
+  return texto;
+}
+
+function crearNombreArchivo() {
+  const fecha = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  return `auditoria_${fecha}.csv`;
+}
 
 export async function GET(request: Request) {
+  const { error } = await requireApiRole("admin");
+
+  if (error) {
+    return error;
+  }
+
   try {
     const { searchParams } = new URL(request.url);
-    const fields = searchParams.get('fields')?.split(',') || [];
-    const tabla = searchParams.get('tabla');
-    const accion = searchParams.get('accion');
-    const fechaInicio = searchParams.get('fecha_inicio');
-    const fechaFin = searchParams.get('fecha_fin');
 
-    if (fields.length === 0) {
-      return NextResponse.json({ error: 'No se seleccionaron campos' }, { status: 400 });
+    const fieldsRaw =
+      searchParams
+        .get("fields")
+        ?.split(",")
+        .map((campo) => campo.trim())
+        .filter(Boolean) || [];
+
+    if (!fieldsRaw.length) {
+      return NextResponse.json(
+        { error: "No se seleccionaron campos" },
+        { status: 400 }
+      );
     }
 
-    // Mapeo de campos a nombres en la base de datos
-    const fieldMap: Record<string, string> = {
-      fecha_hora: 'fecha_hora',
-      usuario: 'usuario',
-      ip_address: 'ip_address',
-      accion: 'accion',
-      tabla_afectada: 'tabla_afectada',
-      registro_id: 'registro_id',
-      datos_anteriores: 'datos_anteriores',
-      datos_nuevos: 'datos_nuevos',
-    };
+    const camposInvalidos = fieldsRaw.filter(
+      (campo) => !esCampoPermitido(campo)
+    );
 
-    // Construir SELECT con casting para JSON
-    const selectParts = fields.map(f => {
-      const dbField = fieldMap[f] || f;
-      if (f === 'datos_anteriores' || f === 'datos_nuevos') {
-        return `${dbField}::text as ${dbField}`;
-      }
-      return dbField;
-    });
-    const selectClause = selectParts.join(', ');
-
-    // Construir condiciones WHERE
-    const whereParts: string[] = [];
-    if (tabla && tabla !== '') {
-      whereParts.push(`tabla_afectada = '${tabla.replace(/'/g, "''")}'`);
-    }
-    if (accion && accion !== '') {
-      whereParts.push(`accion = '${accion.replace(/'/g, "''")}'`);
-    }
-    if (fechaInicio && fechaInicio !== '') {
-      whereParts.push(`fecha_hora >= '${fechaInicio}'`);
-    }
-    if (fechaFin && fechaFin !== '') {
-      whereParts.push(`fecha_hora <= '${fechaFin}'`);
+    if (camposInvalidos.length > 0) {
+      return NextResponse.json(
+        { error: "Uno o más campos no son válidos" },
+        { status: 400 }
+      );
     }
 
-    const whereClause = whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : '';
+    const fields = Array.from(new Set(fieldsRaw)) as CampoPermitido[];
 
-    const query = `
-      SELECT ${selectClause}
-      FROM seguridad.auditoria_acciones
-      ${whereClause}
-      ORDER BY fecha_hora DESC
-      LIMIT 10000
-    `;
+    const tabla = normalizarTexto(searchParams.get("tabla"));
+    const accion = normalizarTexto(searchParams.get("accion"));
+    const fechaInicio = fechaValida(searchParams.get("fecha_inicio"));
+    const fechaFin = fechaValida(searchParams.get("fecha_fin"));
 
-    console.log('🔍 Ejecutando consulta:', query);
+    const filters: SQL[] = [];
 
-    // Ejecutar la consulta con SQL puro
-    const result = await db.execute(sql.raw(query));
-
-    // Drizzle devuelve un array directamente, no tiene propiedad rows
-    const rows = Array.isArray(result) ? result : (result as any).rows || [];
-
-    if (rows.length === 0) {
-      return NextResponse.json({ error: 'No hay datos para exportar' }, { status: 404 });
+    if (tabla) {
+      filters.push(eq(auditoriaAccionesInSeguridad.tablaAfectada, tabla));
     }
 
-    // Generar CSV
-    const headerMap: Record<string, string> = {
-      fecha_hora: 'Fecha y Hora',
-      usuario: 'Usuario',
-      ip_address: 'Dirección IP',
-      accion: 'Acción',
-      tabla_afectada: 'Tabla Afectada',
-      registro_id: 'ID del Registro',
-      datos_anteriores: 'Datos Anteriores',
-      datos_nuevos: 'Datos Nuevos',
-    };
+    if (accion) {
+      filters.push(eq(auditoriaAccionesInSeguridad.accion, accion));
+    }
 
-    const headers = fields.map(f => headerMap[f] || f);
+    if (fechaInicio) {
+      filters.push(
+        gte(
+          auditoriaAccionesInSeguridad.fechaHora,
+          sql`${fechaInicio}::timestamp`
+        )
+      );
+    }
 
-    // Formatear filas CSV
-    const csvRows = rows.map((row: any) => {
-      return fields.map(field => {
-        const dbField = fieldMap[field] || field;
-        let value = row[dbField];
-        
-        // Formatear JSON para datos_anteriores y datos_nuevos
-        if ((field === 'datos_anteriores' || field === 'datos_nuevos') && value) {
-          if (typeof value === 'object') {
-            value = JSON.stringify(value);
-          }
-        }
-        
-        // Formatear fecha
-        if (field === 'fecha_hora' && value) {
-          const date = new Date(value);
-          value = date.toLocaleString('es-MX');
-        }
-        
-        // Manejar null/undefined
-        if (value === null || value === undefined) {
-          return '';
-        }
-        
-        // Convertir a string y escapar
-        let strValue = String(value);
-        strValue = strValue.replace(/"/g, '""');
-        if (strValue.includes(',') || strValue.includes('"') || strValue.includes('\n')) {
-          strValue = `"${strValue}"`;
-        }
-        
-        return strValue;
-      }).join(',');
+    if (fechaFin) {
+      filters.push(
+        lte(
+          auditoriaAccionesInSeguridad.fechaHora,
+          sql`${fechaFin}::timestamp`
+        )
+      );
+    }
+
+    const whereCondition = filters.length ? and(...filters) : undefined;
+
+    const rows = await db
+      .select({
+        fecha_hora: auditoriaAccionesInSeguridad.fechaHora,
+        usuario: auditoriaAccionesInSeguridad.usuario,
+        ip_address: auditoriaAccionesInSeguridad.ipAddress,
+        accion: auditoriaAccionesInSeguridad.accion,
+        tabla_afectada: auditoriaAccionesInSeguridad.tablaAfectada,
+        registro_id: auditoriaAccionesInSeguridad.registroId,
+        datos_anteriores: auditoriaAccionesInSeguridad.datosAnteriores,
+        datos_nuevos: auditoriaAccionesInSeguridad.datosNuevos,
+      })
+      .from(auditoriaAccionesInSeguridad)
+      .where(whereCondition)
+      .orderBy(desc(auditoriaAccionesInSeguridad.fechaHora))
+      .limit(10000);
+
+    if (!rows.length) {
+      return NextResponse.json(
+        { error: "No hay datos para exportar" },
+        { status: 404 }
+      );
+    }
+
+    const headers = fields.map((field) => headerMap[field]);
+
+    const csvRows = rows.map((row) => {
+      return fields
+        .map((field) => escaparCSV(row[field], field))
+        .join(",");
     });
 
-    const csvContent = [headers.join(','), ...csvRows].join('\n');
-    const bom = '\uFEFF';
-    const csvWithBom = bom + csvContent;
+    const csvContent = [headers.join(","), ...csvRows].join("\n");
+    const csvWithBom = `\uFEFF${csvContent}`;
 
     return new NextResponse(csvWithBom, {
       headers: {
-        'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="auditoria_${new Date().toISOString().slice(0, 19)}.csv"`,
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${crearNombreArchivo()}"`,
+        "Cache-Control": "no-store",
       },
     });
-  } catch (error: any) {
-    console.error('Error exportando auditoría:', error);
+  } catch (error) {
+    console.error("Error exportando auditoría:", error);
+
     return NextResponse.json(
-      { error: 'Error al exportar datos', details: error.message },
+      { error: "Error al exportar datos" },
       { status: 500 }
     );
   }

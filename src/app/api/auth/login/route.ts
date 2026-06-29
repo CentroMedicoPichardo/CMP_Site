@@ -1,18 +1,27 @@
 // src/app/api/auth/login/route.ts
-
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { usuarios, roles } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import { SignJWT } from "jose";
+import { AUTH_COOKIE_NAME, normalizeRole } from "@/lib/auth";
 
 const MAX_INTENTOS_FALLIDOS = 5;
 const TIEMPO_BLOQUEO_MINUTOS = 15;
 
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET;
+
+  if (!secret) {
+    throw new Error("JWT_SECRET no está configurado");
+  }
+
+  return new TextEncoder().encode(secret);
+}
+
 export async function POST(request: NextRequest) {
   try {
-
     const body = await request.json();
     const { correo, contrasena } = body;
 
@@ -22,8 +31,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    /* BUSCAR USUARIO */
 
     const usuario = await db.query.usuarios.findFirst({
       where: eq(usuarios.correo, correo),
@@ -36,23 +43,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    /* OBTENER ROL */
-
     const rolUsuario = await db.query.roles.findFirst({
       where: eq(roles.id, usuario.rolId),
     });
 
-    const nombreRol = rolUsuario?.nombre ?? "cliente";
-
-    /* VERIFICAR BLOQUEO */
+    const nombreRol = normalizeRole(rolUsuario?.nombre);
 
     if (usuario.bloqueadoHasta) {
-
       const fechaBloqueo = new Date(usuario.bloqueadoHasta);
       const ahora = new Date();
 
       if (fechaBloqueo > ahora) {
-
         const minutosRestantes = Math.ceil(
           (fechaBloqueo.getTime() - ahora.getTime()) / (1000 * 60)
         );
@@ -64,21 +65,16 @@ export async function POST(request: NextRequest) {
           },
           { status: 423 }
         );
-
-      } else {
-
-        await db
-          .update(usuarios)
-          .set({
-            intentosFallidos: 0,
-            bloqueadoHasta: null,
-          })
-          .where(eq(usuarios.id, usuario.id));
-
       }
-    }
 
-    /* USUARIO ACTIVO */
+      await db
+        .update(usuarios)
+        .set({
+          intentosFallidos: 0,
+          bloqueadoHasta: null,
+        })
+        .where(eq(usuarios.id, usuario.id));
+    }
 
     if (!usuario.activo) {
       return NextResponse.json(
@@ -87,19 +83,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    /* VALIDAR PASSWORD */
-
     const contrasenaValida = await bcrypt.compare(
       contrasena,
       usuario.contrasena
     );
 
     if (!contrasenaValida) {
-
-      const nuevosIntentos = (usuario.intentosFallidos || 0) + 1;
+      const nuevosIntentos = Number(usuario.intentosFallidos ?? 0) + 1;
 
       if (nuevosIntentos >= MAX_INTENTOS_FALLIDOS) {
-
         const fechaBloqueo = new Date();
         fechaBloqueo.setMinutes(
           fechaBloqueo.getMinutes() + TIEMPO_BLOQUEO_MINUTOS
@@ -120,29 +112,24 @@ export async function POST(request: NextRequest) {
           },
           { status: 423 }
         );
-
-      } else {
-
-        await db
-          .update(usuarios)
-          .set({
-            intentosFallidos: nuevosIntentos,
-          })
-          .where(eq(usuarios.id, usuario.id));
-
-        const intentosRestantes =
-          MAX_INTENTOS_FALLIDOS - nuevosIntentos;
-
-        return NextResponse.json(
-          {
-            message: `Credenciales incorrectas. Te quedan ${intentosRestantes} intentos`,
-          },
-          { status: 401 }
-        );
       }
-    }
 
-    /* LOGIN EXITOSO */
+      await db
+        .update(usuarios)
+        .set({
+          intentosFallidos: nuevosIntentos,
+        })
+        .where(eq(usuarios.id, usuario.id));
+
+      const intentosRestantes = MAX_INTENTOS_FALLIDOS - nuevosIntentos;
+
+      return NextResponse.json(
+        {
+          message: `Credenciales incorrectas. Te quedan ${intentosRestantes} intentos`,
+        },
+        { status: 401 }
+      );
+    }
 
     await db
       .update(usuarios)
@@ -151,8 +138,6 @@ export async function POST(request: NextRequest) {
         bloqueadoHasta: null,
       })
       .where(eq(usuarios.id, usuario.id));
-
-    /* MFA */
 
     if (usuario.mfaHabilitado) {
       return NextResponse.json(
@@ -165,27 +150,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    /* TOKEN JWT */
+    const versionToken = Number(usuario.versionToken ?? 1);
 
-    const token = jwt.sign(
-      {
-        userId: usuario.id,
-        email: usuario.correo,
-        rol: nombreRol,
-      },
-      process.env.JWT_SECRET!,
-      { expiresIn: "7d" }
-    );
-
-    /* OBJETO USUARIO */
+    const token = await new SignJWT({
+      id: usuario.id,
+      email: usuario.correo,
+      rol: nombreRol,
+      version: versionToken,
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("7d")
+      .sign(getJwtSecret());
 
     const usuarioResponse = {
       id: usuario.id,
       nombre: usuario.nombre,
       apellidoPaterno: usuario.apellidoPaterno,
       apellidoMaterno: usuario.apellidoMaterno,
-      nombreCompleto: `${usuario.nombre} ${usuario.apellidoPaterno ?? ""} ${usuario.apellidoMaterno ?? ""}`.trim(),
+      nombreCompleto: `${usuario.nombre} ${usuario.apellidoPaterno ?? ""} ${
+        usuario.apellidoMaterno ?? ""
+      }`.trim(),
       correo: usuario.correo,
+      email: usuario.correo,
       rol: nombreRol,
     };
 
@@ -197,9 +184,7 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
 
-    /* COOKIES */
-
-    response.cookies.set("token", token, {
+    response.cookies.set(AUTH_COOKIE_NAME, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
@@ -207,30 +192,24 @@ export async function POST(request: NextRequest) {
       maxAge: 60 * 60 * 24 * 7,
     });
 
-    response.cookies.set("rol", nombreRol, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+    // Limpieza de cookies antiguas inseguras.
+    response.cookies.set("token", "", {
       path: "/",
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: 0,
     });
 
-    response.cookies.set(
-      "user",
-      encodeURIComponent(JSON.stringify(usuarioResponse)),
-      {
-        httpOnly: false,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 7,
-      }
-    );
+    response.cookies.set("rol", "", {
+      path: "/",
+      maxAge: 0,
+    });
+
+    response.cookies.set("user", "", {
+      path: "/",
+      maxAge: 0,
+    });
 
     return response;
-
   } catch (error) {
-
     console.error("Error en login:", error);
 
     return NextResponse.json(

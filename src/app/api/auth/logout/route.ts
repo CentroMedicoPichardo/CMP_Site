@@ -1,15 +1,27 @@
-import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+// src/app/api/auth/logout/route.ts
+import { NextResponse } from "next/server";
+import { AUTH_COOKIE_NAME } from "@/lib/auth";
 
 export async function POST() {
-  const cookieStore = await cookies();
-  
-  // Borrar la cookie estableciendo expiración en 0
-  cookieStore.set('auth_token', '', {
-      httpOnly: true,
-      expires: new Date(0), 
-      path: '/',
+  const response = NextResponse.json({
+    message: "Sesión cerrada correctamente",
   });
 
-  return NextResponse.json({ message: "Sesión cerrada" });
+  const cookieOptions = {
+    path: "/",
+    maxAge: 0,
+  };
+
+  response.cookies.set(AUTH_COOKIE_NAME, "", {
+    ...cookieOptions,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+  });
+
+  response.cookies.set("token", "", cookieOptions);
+  response.cookies.set("rol", "", cookieOptions);
+  response.cookies.set("user", "", cookieOptions);
+
+  return response;
 }

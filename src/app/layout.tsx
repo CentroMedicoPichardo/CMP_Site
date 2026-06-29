@@ -1,16 +1,15 @@
 // src/app/layout.tsx
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { cookies } from "next/headers";
+import { auth } from "@/lib/auth";
 
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Footer } from "@/components/layout/Footer";
 import { SWRProvider } from "@/lib/swr-provider";
 
-// 👈 IMPORTAR ESTILOS DE REACT-TOASTIFY
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 import "./globals.css";
 
@@ -23,44 +22,39 @@ export const metadata: Metadata = {
   description: "Sistema de gestión médica",
 };
 
-export default async function RootLayout({
-  children,
-}: {
+type RootLayoutProps = Readonly<{
   children: React.ReactNode;
-}) {
-  const cookieStore = await cookies();
-  const rol = cookieStore.get("rol")?.value;
-  const userCookie = cookieStore.get("user")?.value;
+}>;
 
-  let user = null;
-  if (userCookie) {
-    try {
-      user = JSON.parse(decodeURIComponent(userCookie));
-    } catch {
-      user = null;
-    }
-  }
+export default async function RootLayout({ children }: RootLayoutProps) {
+  const session = await auth();
 
-  // Determinar si debe mostrar el sidebar (solo si está autenticado)
-  const showSidebar = !!rol && (rol === 'admin' || rol === 'cliente');
+  const user = session?.user ?? null;
+  const rol = session?.user.rol ?? null;
+
+  const showSidebar =
+    !!user && !!rol && (rol === "admin" || rol === "cliente");
 
   return (
     <html lang="es">
       <body className={inter.className}>
         <SWRProvider>
-          <Header />
+          <Header initialUser={user} initialRol={rol} />
+
           <div className="flex min-h-screen">
-            {/* Sidebar condicional - solo se muestra si está autenticado */}
             {showSidebar && <Sidebar user={user} rol={rol} />}
-            
-            {/* El main ocupa todo el ancho si no hay sidebar, o el espacio restante si lo hay */}
-            <main className={`flex-1 bg-gray-50 ${!showSidebar ? 'w-full' : ''}`}>
+
+            <main
+              className={`flex-1 bg-gray-50 ${
+                !showSidebar ? "w-full" : ""
+              }`}
+            >
               {children}
             </main>
           </div>
+
           <Footer />
-          
-          {/* 👈 AGREGAR EL ToastContainer AQUÍ */}
+
           <ToastContainer
             position="top-right"
             autoClose={5000}

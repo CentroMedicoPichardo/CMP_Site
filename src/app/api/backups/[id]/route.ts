@@ -1,112 +1,214 @@
 // src/app/api/backups/[id]/route.ts
-import { NextResponse } from 'next/server';
-import { Pool } from 'pg';
-import { readFileSync, unlinkSync } from 'fs';
-import path from 'path';
+import { NextResponse } from "next/server";
+import { Pool } from "pg";
+import { existsSync, readFileSync, unlinkSync } from "fs";
+import path from "path";
+import { requireApiRole } from "@/lib/auth";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+export const runtime = "nodejs";
 
-// GET /api/backups/[id] - Descargar archivo
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+function validarId(id: string) {
+  const idBackup = Number(id);
+  return Number.isInteger(idBackup) && idBackup > 0 ? idBackup : null;
+}
+
+function obtenerNombreArchivoSeguro(archivoUrl: unknown) {
+  if (typeof archivoUrl !== "string" || !archivoUrl.trim()) {
+    return null;
+  }
+
+  const nombreArchivo = path.basename(archivoUrl);
+
+  if (!nombreArchivo || nombreArchivo.includes("..")) {
+    return null;
+  }
+
+  if (!nombreArchivo.endsWith(".sql")) {
+    return null;
+  }
+
+  return nombreArchivo;
+}
+
+function obtenerRutaSegura(nombreArchivo: string) {
+  const backupDir = path.resolve(process.cwd(), "storage", "backups");
+  const fullPath = path.resolve(backupDir, nombreArchivo);
+
+  if (!fullPath.startsWith(backupDir)) {
+    return null;
+  }
+
+  return fullPath;
+}
+
+function obtenerRutaLegacy(nombreArchivo: string) {
+  const legacyDir = path.resolve(process.cwd(), "public", "backups");
+  const fullPath = path.resolve(legacyDir, nombreArchivo);
+
+  if (!fullPath.startsWith(legacyDir)) {
+    return null;
+  }
+
+  return fullPath;
+}
+
+async function obtenerBackupPorId(idBackup: number) {
+  const result = await pool.query(
+    `
+    SELECT id, archivo_url
+    FROM auditoria.backups
+    WHERE id = $1
+    LIMIT 1
+    `,
+    [idBackup]
+  );
+
+  return result.rows[0] ?? null;
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { error } = await requireApiRole("admin");
+
+  if (error) {
+    return error;
+  }
+
   try {
     const { id } = await params;
-    console.log(`GET /api/backups/${id} - Solicitando descarga`);
+    const idBackup = validarId(id);
 
-    // 👈 ESPECIFICAR EL ESQUEMA auditoria
-    const result = await pool.query(
-      'SELECT archivo_url FROM auditoria.backups WHERE id = $1',
-      [id]
-    );
-
-    if (result.rows.length === 0) {
-      console.log(`GET /api/backups/${id} - Backup no encontrado en BD`);
+    if (!idBackup) {
       return NextResponse.json(
-        { error: 'Backup no encontrado' },
+        { error: "ID de respaldo inválido" },
+        { status: 400 }
+      );
+    }
+
+    const backup = await obtenerBackupPorId(idBackup);
+
+    if (!backup) {
+      return NextResponse.json(
+        { error: "Respaldo no encontrado" },
         { status: 404 }
       );
     }
 
-    let archivoUrl = result.rows[0].archivo_url;
-    console.log(`GET /api/backups/${id} - archivo_url desde BD: "${archivoUrl}"`);
+    const nombreArchivo = obtenerNombreArchivoSeguro(backup.archivo_url);
 
-    // Eliminar barra inicial si existe
-    if (archivoUrl.startsWith('/')) {
-      archivoUrl = archivoUrl.substring(1);
+    if (!nombreArchivo) {
+      return NextResponse.json(
+        { error: "Archivo de respaldo inválido" },
+        { status: 400 }
+      );
     }
 
-    const fullPath = path.join(process.cwd(), 'public', archivoUrl);
-    console.log(`GET /api/backups/${id} - Ruta completa del archivo: ${fullPath}`);
+    const rutaPrincipal = obtenerRutaSegura(nombreArchivo);
+    const rutaLegacy = obtenerRutaLegacy(nombreArchivo);
 
-    const fileContent = readFileSync(fullPath);
-    console.log(`GET /api/backups/${id} - Archivo leído correctamente, tamaño: ${fileContent.length} bytes`);
+    const rutaArchivo =
+      rutaPrincipal && existsSync(rutaPrincipal)
+        ? rutaPrincipal
+        : rutaLegacy && existsSync(rutaLegacy)
+          ? rutaLegacy
+          : null;
 
-    return new NextResponse(fileContent, {
+    if (!rutaArchivo) {
+      return NextResponse.json(
+        { error: "Archivo de respaldo no encontrado" },
+        { status: 404 }
+      );
+    }
+
+    const fileContent = readFileSync(rutaArchivo);
+
+    return new NextResponse(new Uint8Array(fileContent), {
       headers: {
-        'Content-Disposition': `attachment; filename="backup-${id}.sql"`,
-        'Content-Type': 'application/sql',
+        "Content-Disposition": `attachment; filename="backup-${idBackup}.sql"`,
+        "Content-Type": "application/sql; charset=utf-8",
+        "Cache-Control": "no-store",
       },
     });
   } catch (error) {
-    console.error('Error en GET /api/backups/[id]:', error);
+    console.error("Error en GET backup:", error);
+
     return NextResponse.json(
-      { error: 'Error al descargar el archivo' },
+      { error: "Error al descargar el respaldo" },
       { status: 500 }
     );
   }
 }
 
-// DELETE /api/backups/[id] - Eliminar backup
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { error } = await requireApiRole("admin");
+
+  if (error) {
+    return error;
+  }
+
   try {
     const { id } = await params;
-    console.log(`DELETE /api/backups/${id} - Solicitando eliminación`);
+    const idBackup = validarId(id);
 
-    // 👈 ESPECIFICAR EL ESQUEMA auditoria
-    const result = await pool.query(
-      'SELECT archivo_url FROM auditoria.backups WHERE id = $1',
-      [id]
-    );
-
-    if (result.rows.length === 0) {
-      console.log(`DELETE /api/backups/${id} - Backup no encontrado en BD`);
+    if (!idBackup) {
       return NextResponse.json(
-        { error: 'Backup no encontrado' },
+        { error: "ID de respaldo inválido" },
+        { status: 400 }
+      );
+    }
+
+    const backup = await obtenerBackupPorId(idBackup);
+
+    if (!backup) {
+      return NextResponse.json(
+        { error: "Respaldo no encontrado" },
         { status: 404 }
       );
     }
 
-    let archivoUrl = result.rows[0].archivo_url;
-    console.log(`DELETE /api/backups/${id} - archivo_url desde BD: "${archivoUrl}"`);
+    const nombreArchivo = obtenerNombreArchivoSeguro(backup.archivo_url);
 
-    if (archivoUrl.startsWith('/')) {
-      archivoUrl = archivoUrl.substring(1);
+    if (nombreArchivo) {
+      const rutaPrincipal = obtenerRutaSegura(nombreArchivo);
+      const rutaLegacy = obtenerRutaLegacy(nombreArchivo);
+
+      for (const ruta of [rutaPrincipal, rutaLegacy]) {
+        if (ruta && existsSync(ruta)) {
+          try {
+            unlinkSync(ruta);
+          } catch {
+            console.warn("No se pudo eliminar físicamente un archivo de respaldo");
+          }
+        }
+      }
     }
 
-    const fullPath = path.join(process.cwd(), 'public', archivoUrl);
-    console.log(`DELETE /api/backups/${id} - Ruta completa del archivo: ${fullPath}`);
+    await pool.query(
+      `
+      DELETE FROM auditoria.backups
+      WHERE id = $1
+      `,
+      [idBackup]
+    );
 
-    try {
-      unlinkSync(fullPath);
-      console.log(`DELETE /api/backups/${id} - Archivo eliminado correctamente`);
-    } catch (e) {
-      console.warn(`DELETE /api/backups/${id} - No se pudo eliminar el archivo:`, (e as Error).message);
-    }
-
-    // 👈 ESPECIFICAR EL ESQUEMA auditoria
-    await pool.query('DELETE FROM auditoria.backups WHERE id = $1', [id]);
-    console.log(`DELETE /api/backups/${id} - Registro eliminado de la BD`);
-
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      message: "Respaldo eliminado correctamente",
+    });
   } catch (error) {
-    console.error('Error en DELETE /api/backups/[id]:', error);
+    console.error("Error en DELETE backup:", error);
+
     return NextResponse.json(
-      { error: 'Error al eliminar el backup' },
+      { error: "Error al eliminar el respaldo" },
       { status: 500 }
     );
   }
