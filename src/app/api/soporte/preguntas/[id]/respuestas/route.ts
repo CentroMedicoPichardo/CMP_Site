@@ -8,7 +8,7 @@ import { CrearRespuestaDTO } from "@/types/help";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // 👈 1. Corregido para Next.js 15+
 ) {
   try {
     const session = await auth();
@@ -16,11 +16,15 @@ export async function GET(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
+    // 👈 2. Extraer ID de forma asíncrona
+    const { id } = await params;
+    const idPregunta = parseInt(id);
+
     // Verificar que la pregunta existe
     const [pregunta] = await db
       .select()
       .from(preguntasUsuarios)
-      .where(eq(preguntasUsuarios.idPregunta, parseInt(params.id)));
+      .where(eq(preguntasUsuarios.idPregunta, idPregunta));
 
     if (!pregunta) {
       return NextResponse.json(
@@ -53,7 +57,7 @@ export async function GET(
       })
       .from(respuestasAyuda)
       .leftJoin(usuarios, eq(respuestasAyuda.idUsuario, usuarios.id))
-      .where(eq(respuestasAyuda.idPregunta, parseInt(params.id)))
+      .where(eq(respuestasAyuda.idPregunta, idPregunta))
       .orderBy(asc(respuestasAyuda.createdAt));
 
     return NextResponse.json(respuestas);
@@ -68,7 +72,7 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // 👈 1. Corregido para Next.js 15+
 ) {
   try {
     const session = await auth();
@@ -85,11 +89,15 @@ export async function POST(
       );
     }
 
+    // 👈 2. Extraer ID de forma asíncrona
+    const { id } = await params;
+    const idPregunta = parseInt(id);
+
     // Verificar que la pregunta existe
     const [pregunta] = await db
       .select()
       .from(preguntasUsuarios)
-      .where(eq(preguntasUsuarios.idPregunta, parseInt(params.id)));
+      .where(eq(preguntasUsuarios.idPregunta, idPregunta));
 
     if (!pregunta) {
       return NextResponse.json(
@@ -120,7 +128,7 @@ export async function POST(
     const [respuesta] = await db
       .insert(respuestasAyuda)
       .values({
-        idPregunta: parseInt(params.id),
+        idPregunta: idPregunta,
         idUsuario: Number(session.user.id),
         contenido: body.contenido.trim(),
         esRespuestaAdmin: esAdmin,
@@ -141,7 +149,7 @@ export async function POST(
         estado: nuevoEstado,
         updatedAt: new Date().toISOString(),
       })
-      .where(eq(preguntasUsuarios.idPregunta, parseInt(params.id)));
+      .where(eq(preguntasUsuarios.idPregunta, idPregunta));
 
     return NextResponse.json(respuesta, { status: 201 });
   } catch (error) {

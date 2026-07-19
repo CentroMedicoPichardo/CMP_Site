@@ -7,7 +7,7 @@ import { auth } from "@/lib/auth";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> } // 👈 1. Corregido: Ahora es Promise<>
 ) {
   try {
     const session = await auth();
@@ -21,7 +21,9 @@ export async function POST(
     const body = await request.json();
     const esUtil = body.esUtil === true;
 
-    const idPregunta = parseInt(params.id);
+    // 👈 2. Corregido: Se espera la promesa con await antes de leer 'id'
+    const { id } = await params;
+    const idPregunta = parseInt(id);
 
     // Verificar que la FAQ existe
     const [faq] = await db
@@ -42,7 +44,7 @@ export async function POST(
       .from(valoracionesFaq)
       .where(
         and(
-          eq(valoracionesFaq.idPreguntaFaq, idPregunta),  // 👈 idPreguntaFaq (sin A mayúscula)
+          eq(valoracionesFaq.idPreguntaFaq, idPregunta),
           eq(valoracionesFaq.idUsuario, Number(session.user.id))
         )
       );
@@ -56,7 +58,7 @@ export async function POST(
 
     // Insertar valoración
     await db.insert(valoracionesFaq).values({
-      idPreguntaFaq: idPregunta,  // 👈 idPreguntaFaq (sin A mayúscula)
+      idPreguntaFaq: idPregunta,
       idUsuario: Number(session.user.id),
       esUtil,
     });
