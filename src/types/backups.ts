@@ -1,10 +1,20 @@
 // src/types/backups.ts
+
+export type TipoBackup = "completo" | "parcial";
+
+export type EstadoBackup =
+  | "procesando"
+  | "exitoso"
+  | "fallido"
+  | "completado";
+
 export interface Backup {
   id: string;
   fecha: string;
-  tipo: 'completo' | 'parcial';
+  tipo: TipoBackup;
   tamaño: string;
-  estado: 'exitoso' | 'fallido';
+  estado: EstadoBackup;
+  disponible: boolean;
 }
 
 export interface BackupStats {

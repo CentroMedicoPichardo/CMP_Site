@@ -1,38 +1,57 @@
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
-import * as schema from './schema';
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+import * as schema from "./schema";
 
-// Solo para desarrollo local
+type PostgresClient = ReturnType<typeof postgres>;
+
+// Reutilización del cliente durante el desarrollo local
 declare global {
-  var postgresClient: ReturnType<typeof postgres> | undefined;
+  var postgresClient: PostgresClient | undefined;
 }
 
-function getClient() {
+function crearClientePostgres(): PostgresClient {
   const connectionString = process.env.DATABASE_URL;
-  
+
   if (!connectionString) {
-    throw new Error('DATABASE_URL no está definida');
+    throw new Error("DATABASE_URL no está definida");
   }
 
-  // Configuración para Vercel/Serverless
+  // Configuración para Vercel
   if (process.env.VERCEL_ENV) {
     return postgres(connectionString, {
       prepare: false,
-      ssl: 'require',
-      max: 10, // Límite de conexiones para serverless
-      idle_timeout: 20, // Tiempo de espera corto
+      ssl: "require",
+      max: 10,
+      idle_timeout: 20,
+      connect_timeout: 15,
     });
   }
 
-  // Configuración para desarrollo local (con reutilización de cliente)
-  if (!global.postgresClient) {
-    global.postgresClient = postgres(connectionString, {
+  // Reutilizar conexión durante desarrollo local
+  if (!globalThis.postgresClient) {
+    globalThis.postgresClient = postgres(connectionString, {
       prepare: false,
-      ssl: { rejectUnauthorized: false },
+      ssl: {
+        rejectUnauthorized: false,
+      },
+      max: 10,
+      idle_timeout: 20,
+      connect_timeout: 15,
     });
   }
-  
-  return global.postgresClient;
+
+  return globalThis.postgresClient;
 }
 
-export const db = drizzle(getClient(), { schema });
+/**
+ * Cliente postgres.js para consultas SQL directas,
+ * transacciones y generación de respaldos.
+ */
+export const postgresClient = crearClientePostgres();
+
+/**
+ * Instancia de Drizzle utilizada por el resto del sistema.
+ */
+export const db = drizzle(postgresClient, {
+  schema,
+});
