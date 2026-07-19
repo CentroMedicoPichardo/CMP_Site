@@ -1,17 +1,16 @@
 // src/lib/schema/index.ts
 
 // Importa todo desde el schema generado
-import * as generatedSchema from './schema';
-import * as generatedRelations from './relations';
+import * as generatedSchema from "./schema";
+import * as generatedRelations from "./relations";
 
-// ========== CLINICA ==========
+// ========== CLÍNICA ==========
 export const medicos = generatedSchema.medicosInClinica;
 export const servicios = generatedSchema.serviciosInClinica;
 export const nosotros = generatedSchema.nosotrosInClinica;
 export const empresaInfo = generatedSchema.empresaInfoInClinica;
 
 // ========== ACADEMIA ==========
-// Tablas principales
 export const cursos = generatedSchema.cursosInAcademia;
 export const instructores = generatedSchema.instructoresInAcademia;
 export const categoriasCursos = generatedSchema.categoriasCursosInAcademia;
@@ -19,7 +18,6 @@ export const ubicacionesCursos = generatedSchema.ubicacionesCursosInAcademia;
 export const modalidades = generatedSchema.modalidadesInAcademia;
 export const inscripcionesCursos = generatedSchema.inscripcionesCursosInAcademia;
 
-// Contenido educativo
 export const publicaciones = generatedSchema.publicacionesInAcademia;
 export const academiaInfantil = generatedSchema.academiaInfantilInAcademia;
 export const contenidoSaberPediatrico = generatedSchema.contenidoSaberPediatricoInAcademia;
@@ -39,6 +37,13 @@ export const estadisticasConsumo = generatedSchema.estadisticasConsumoInSegurida
 export const backups = generatedSchema.backupsInAuditoria;
 export const intentosRecuperacion = generatedSchema.intentosRecuperacionInAuditoria;
 
+// ========== SOPORTE ==========
+export const categoriasAyuda = generatedSchema.categoriasAyudaInSoporte;
+export const preguntasFrecuentes = generatedSchema.preguntasFrecuentesInSoporte;
+export const preguntasUsuarios = generatedSchema.preguntasUsuariosInSoporte;
+export const respuestasAyuda = generatedSchema.respuestasAyudaInSoporte;
+export const valoracionesFaq = generatedSchema.valoracionesFaqInSoporte;
+
 // ========== RELACIONES ==========
 export const usuariosRelations = generatedRelations.usuariosInSeguridadRelations;
 export const rolesRelations = generatedRelations.rolesInSeguridadRelations;
@@ -52,6 +57,13 @@ export const inscripcionesCursosRelations = generatedRelations.inscripcionesCurs
 export const publicacionesRelations = generatedRelations.publicacionesInAcademiaRelations;
 export const academiaInfantilRelations = generatedRelations.academiaInfantilInAcademiaRelations;
 
-// Exportar todo lo demás
-export * from './schema';
-export * from './relations';
+// ========== RELACIONES SOPORTE ==========
+export const categoriasAyudaRelations = generatedRelations.categoriasAyudaInSoporteRelations;
+export const preguntasFrecuentesRelations = generatedRelations.preguntasFrecuentesInSoporteRelations;
+export const preguntasUsuariosRelations = generatedRelations.preguntasUsuariosInSoporteRelations;
+export const respuestasAyudaRelations = generatedRelations.respuestasAyudaInSoporteRelations;
+export const valoracionesFaqRelations = generatedRelations.valoracionesFaqInSoporteRelations;
+
+// Exportar todo
+export * from "./schema";
+export * from "./relations";

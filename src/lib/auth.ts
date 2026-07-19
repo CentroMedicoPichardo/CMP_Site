@@ -1,4 +1,5 @@
 // src/lib/auth.ts
+
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
@@ -28,11 +29,12 @@ interface AuthPayload extends JWTPayload {
   id?: number | string;
   userId?: number | string;
   email?: string;
+  nombre?: string;
   rol?: string;
   version?: number;
 }
 
-function getJwtSecret() {
+function getJwtSecret(): Uint8Array {
   const secret = process.env.JWT_SECRET;
 
   if (!secret) {
@@ -42,7 +44,7 @@ function getJwtSecret() {
   return new TextEncoder().encode(secret);
 }
 
-export function normalizeRole(rol?: string | null) {
+export function normalizeRole(rol?: string | null): string {
   const value = (rol ?? "cliente").toLowerCase().trim();
 
   if (
@@ -65,18 +67,20 @@ export async function auth(): Promise<Session | null> {
       return null;
     }
 
-    const { payload } = await jwtVerify(token, getJwtSecret());
-    const decoded = payload as AuthPayload;
+    const { payload } = await jwtVerify(token, getJwtSecret(), {
+      algorithms: ["HS256"],
+    });
 
+    const decoded = payload as AuthPayload;
     const payloadId = decoded.id ?? decoded.userId;
 
-    if (!payloadId) {
+    if (payloadId === undefined || payloadId === null) {
       return null;
     }
 
     const userId = Number(payloadId);
 
-    if (!Number.isFinite(userId)) {
+    if (!Number.isInteger(userId) || userId <= 0) {
       return null;
     }
 
@@ -90,9 +94,11 @@ export async function auth(): Promise<Session | null> {
 
     if (usuario.bloqueadoHasta) {
       const fechaBloqueo = new Date(usuario.bloqueadoHasta);
-      const ahora = new Date();
 
-      if (fechaBloqueo > ahora) {
+      if (
+        !Number.isNaN(fechaBloqueo.getTime()) &&
+        fechaBloqueo > new Date()
+      ) {
         return null;
       }
     }
@@ -110,9 +116,13 @@ export async function auth(): Promise<Session | null> {
 
     const rol = normalizeRole(rolUsuario?.nombre);
 
-    const nombreCompleto = `${usuario.nombre} ${usuario.apellidoPaterno ?? ""} ${
-      usuario.apellidoMaterno ?? ""
-    }`.trim();
+    const nombreCompleto = [
+      usuario.nombre,
+      usuario.apellidoPaterno,
+      usuario.apellidoMaterno,
+    ]
+      .filter(Boolean)
+      .join(" ");
 
     return {
       user: {
@@ -126,12 +136,15 @@ export async function auth(): Promise<Session | null> {
         rol,
       },
     };
-  } catch {
+  } catch (error) {
+    console.error("Error validando sesión:", error);
     return null;
   }
 }
 
-export async function requireAuth(redirectTo: string = "/acceder") {
+export async function requireAuth(
+  redirectTo: string = "/acceder"
+): Promise<Session> {
   const session = await auth();
 
   if (!session) {
@@ -144,14 +157,14 @@ export async function requireAuth(redirectTo: string = "/acceder") {
 export async function requireRole(
   rolesPermitidos: string | string[],
   redirectTo: string = "/"
-) {
+): Promise<Session> {
   const session = await requireAuth();
 
   const allowedRoles = Array.isArray(rolesPermitidos)
     ? rolesPermitidos.map(normalizeRole)
     : [normalizeRole(rolesPermitidos)];
 
-  if (!allowedRoles.includes(session.user.rol)) {
+  if (!allowedRoles.includes(normalizeRole(session.user.rol))) {
     redirect(redirectTo);
   }
 
@@ -177,7 +190,9 @@ export async function requireApiAuth() {
   };
 }
 
-export async function requireApiRole(rolesPermitidos: string | string[]) {
+export async function requireApiRole(
+  rolesPermitidos: string | string[]
+) {
   const { session, error } = await requireApiAuth();
 
   if (error || !session) {
@@ -191,7 +206,7 @@ export async function requireApiRole(rolesPermitidos: string | string[]) {
     ? rolesPermitidos.map(normalizeRole)
     : [normalizeRole(rolesPermitidos)];
 
-  if (!allowedRoles.includes(session.user.rol)) {
+  if (!allowedRoles.includes(normalizeRole(session.user.rol))) {
     return {
       session: null,
       error: NextResponse.json(

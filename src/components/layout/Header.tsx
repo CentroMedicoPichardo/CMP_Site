@@ -1,10 +1,10 @@
 // src/components/layout/Header.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import {
   Menu,
@@ -50,7 +50,7 @@ interface HeaderProps {
   initialRol?: string | null;
 }
 
-const normalizarRol = (rol?: string | null) => {
+const normalizarRol = (rol?: string | null): string => {
   const value = (rol ?? "").toLowerCase().trim();
 
   if (
@@ -69,9 +69,13 @@ const useAuth = (
   initialRol: string | null = null
 ) => {
   const pathname = usePathname();
-  const [rol, setRol] = useState<string | null>(normalizarRol(initialRol));
+
+  const [rol, setRol] = useState<string | null>(
+    initialRol ? normalizarRol(initialRol) : null
+  );
+
   const [user, setUser] = useState<AuthUser | null>(initialUser);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelado = false;
@@ -86,11 +90,22 @@ const useAuth = (
           cache: "no-store",
         });
 
+        if (!res.ok) {
+          if (!cancelado) {
+            setUser(null);
+            setRol(null);
+          }
+
+          return;
+        }
+
         const data = await res.json();
 
-        if (cancelado) return;
+        if (cancelado) {
+          return;
+        }
 
-        if (res.ok && data.loggedIn && data.usuario) {
+        if (data.loggedIn && data.usuario) {
           const rolNormalizado = normalizarRol(data.usuario.rol);
 
           setUser({
@@ -103,7 +118,9 @@ const useAuth = (
           setUser(null);
           setRol(null);
         }
-      } catch {
+      } catch (error) {
+        console.error("Error verificando sesión:", error);
+
         if (!cancelado) {
           setUser(null);
           setRol(null);
@@ -131,7 +148,7 @@ const useAuth = (
     loading,
     rol,
     user,
-    isAuthenticated: !!rol,
+    isAuthenticated: Boolean(user && rol),
     isAdmin: rol === "admin",
     limpiarSesion,
   };
@@ -148,10 +165,30 @@ export function Header({
   const [scrolled, setScrolled] = useState(false);
   const [empresaInfo, setEmpresaInfo] = useState<EmpresaInfo | null>(null);
 
-  const { isAuthenticated, isAdmin, user, limpiarSesion } = useAuth(
-    initialUser,
-    initialRol
-  );
+  const {
+    loading: authLoading,
+    isAuthenticated,
+    isAdmin,
+    user,
+    limpiarSesion,
+  } = useAuth(initialUser, initialRol);
+
+  const nombreUsuario =
+    user?.nombreCompleto?.trim() ||
+    [
+      user?.nombre,
+      user?.apellidoPaterno,
+      user?.apellidoMaterno,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .trim() ||
+    "Usuario";
+
+  const inicialUsuario =
+    user?.nombre?.trim().charAt(0).toUpperCase() ||
+    nombreUsuario.charAt(0).toUpperCase() ||
+    "U";
 
   useEffect(() => {
     const cargarEmpresaInfo = async () => {
@@ -160,11 +197,14 @@ export function Header({
           cache: "no-store",
         });
 
-        if (res.ok) {
-          const data = await res.json();
-          setEmpresaInfo(data);
+        if (!res.ok) {
+          return;
         }
-      } catch {
+
+        const data = await res.json();
+        setEmpresaInfo(data);
+      } catch (error) {
+        console.error("Error cargando información de empresa:", error);
         setEmpresaInfo(null);
       }
     };
@@ -180,12 +220,22 @@ export function Header({
     window.addEventListener("scroll", handleScroll);
     handleScroll();
 
-    return () => window.removeEventListener("scroll", handleScroll);
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
   }, []);
 
-  const toggleMenu = () => setMenuAbierto((prev) => !prev);
+  useEffect(() => {
+    setMenuAbierto(false);
+  }, [pathname]);
 
-  const cerrarMenu = () => setMenuAbierto(false);
+  const toggleMenu = () => {
+    setMenuAbierto((prev) => !prev);
+  };
+
+  const cerrarMenu = () => {
+    setMenuAbierto(false);
+  };
 
   const handleLogout = async () => {
     limpiarSesion();
@@ -196,8 +246,8 @@ export function Header({
         method: "POST",
         credentials: "include",
       });
-    } catch {
-      // Si falla la petición, igual limpiamos la interfaz.
+    } catch (error) {
+      console.error("Error cerrando sesión:", error);
     } finally {
       limpiarSesion();
       router.replace("/");
@@ -205,65 +255,63 @@ export function Header({
     }
   };
 
+  const handleAyudaClick = (
+    event: React.MouseEvent<HTMLAnchorElement>
+  ) => {
+    event.preventDefault();
+    cerrarMenu();
+    router.push("/ayuda");
+  };
+
   const logoUrl = empresaInfo?.logoUrl || "/logo.png";
   const empresaNombre = empresaInfo?.nombre || "Centro Médico";
   const empresaSubnombre = "Pichardo";
 
-  const telefonoEmpresa = empresaInfo?.telefono || topBarInfo.phone;
-  const direccionEmpresa = empresaInfo?.direccion || topBarInfo.location;
-  const horarioEmpresa = empresaInfo?.horario || topBarInfo.schedule;
+  const telefonoEmpresa =
+    empresaInfo?.telefono || topBarInfo.phone;
 
-  const nombreUsuario =
-    user?.nombreCompleto || user?.nombre || (isAdmin ? "Admin" : "Usuario");
+  const direccionEmpresa =
+    empresaInfo?.direccion || topBarInfo.location;
 
-  const inicialUsuario =
-    user?.nombre?.charAt(0)?.toUpperCase() ||
-    user?.nombreCompleto?.charAt(0)?.toUpperCase() ||
-    "U";
-
-  const handleContactClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    e.preventDefault();
-
-    if (pathname === "/quienes-somos") {
-      const element = document.getElementById("info-contacto");
-
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth" });
-      }
-    } else {
-      router.push("/quienes-somos#info-contacto");
-    }
-  };
+  const horarioEmpresa =
+    empresaInfo?.horario || topBarInfo.schedule;
 
   if (isAdmin) {
     return (
       <>
-        <div className="bg-[#0A3D62] text-white/90 py-2 text-sm">
+        <div className="bg-[#0A3D62] py-2 text-sm text-white/90">
           <Container>
-            <div className="flex justify-between items-center">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Shield size={16} className="text-[#FFC300]" />
-                <span className="font-medium">Panel de Administración</span>
+                <span className="font-medium">
+                  Panel de Administración
+                </span>
               </div>
 
-              <span className="text-white/60">Sistema de Gestión</span>
+              <span className="text-white/60">
+                Sistema de Gestión
+              </span>
             </div>
           </Container>
         </div>
 
         <header
-          className={`sticky top-0 left-0 right-0 z-[9999] transition-all duration-500 ${
+          className={`sticky left-0 right-0 top-0 z-[9999] transition-all duration-500 ${
             scrolled
-              ? "bg-white/95 backdrop-blur-md shadow-lg py-2"
+              ? "bg-white/95 py-2 shadow-lg backdrop-blur-md"
               : "bg-white py-3"
           }`}
         >
           <Container>
             <div className="flex items-center justify-between">
-              <Link href="/admin/dashboard" className="flex items-center gap-2">
+              <Link
+                href="/admin/dashboard"
+                className="flex items-center gap-2"
+              >
                 <Image
                   src={logoUrl}
-                  alt="Logo"
+                  alt={empresaNombre}
                   width={32}
                   height={32}
                   className="object-contain"
@@ -275,29 +323,41 @@ export function Header({
               </Link>
 
               <div className="flex items-center gap-4">
-                <div className="text-right hidden sm:block">
+                <div className="hidden text-right sm:block">
                   <p className="text-sm font-medium text-gray-700">
                     {nombreUsuario}
                   </p>
-                  <p className="text-xs text-[#FFC300]">Administrador</p>
+
+                  <p className="text-xs text-[#FFC300]">
+                    Administrador
+                  </p>
                 </div>
 
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="flex items-center gap-2 text-gray-600 hover:text-red-500 font-medium border-l border-gray-200 pl-4"
+                  className="flex items-center gap-2 border-l border-gray-200 pl-4 font-medium text-gray-600 hover:text-red-500"
                 >
                   <LogOut size={18} />
-                  <span className="hidden sm:inline">Cerrar Sesión</span>
+
+                  <span className="hidden sm:inline">
+                    Cerrar sesión
+                  </span>
                 </button>
 
                 <button
                   type="button"
-                  className="md:hidden p-2"
+                  className="p-2 md:hidden"
                   onClick={toggleMenu}
-                  aria-label="Abrir menú"
+                  aria-label={
+                    menuAbierto ? "Cerrar menú" : "Abrir menú"
+                  }
                 >
-                  {menuAbierto ? <X size={20} /> : <Menu size={20} />}
+                  {menuAbierto ? (
+                    <X size={20} />
+                  ) : (
+                    <Menu size={20} />
+                  )}
                 </button>
               </div>
             </div>
@@ -309,54 +369,63 @@ export function Header({
 
   return (
     <>
-      <div className="bg-[#0A3D62] text-white/90 py-2.5 text-sm border-b border-white/5">
+      <div className="border-b border-white/5 bg-[#0A3D62] py-2.5 text-sm text-white/90">
         <Container>
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-5 min-w-0">
+          <div className="flex items-center justify-between">
+            <div className="flex min-w-0 items-center gap-5">
               <div className="flex items-center gap-2">
                 <Phone size={14} className="text-[#FFC300]" />
-                <span className="text-white/80">{telefonoEmpresa}</span>
+
+                <span className="text-white/80">
+                  {telefonoEmpresa}
+                </span>
               </div>
 
-              <div className="hidden lg:flex items-center gap-2">
+              <div className="hidden items-center gap-2 lg:flex">
                 <Clock size={14} className="text-[#FFC300]" />
-                <span className="text-white/80 line-clamp-1">
+
+                <span className="line-clamp-1 text-white/80">
                   {horarioEmpresa}
                 </span>
               </div>
 
-              <div className="hidden xl:flex items-center gap-2 min-w-0">
-                <MapPin size={14} className="text-[#FFC300] flex-shrink-0" />
-                <span className="text-white/80 truncate max-w-[280px]">
+              <div className="hidden min-w-0 items-center gap-2 xl:flex">
+                <MapPin
+                  size={14}
+                  className="flex-shrink-0 text-[#FFC300]"
+                />
+
+                <span className="max-w-[280px] truncate text-white/80">
                   {direccionEmpresa}
                 </span>
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
-              <a
-                href="/quienes-somos#info-contacto"
-                onClick={handleContactClick}
-                className="text-white/70 hover:text-[#FFC300] transition-colors cursor-pointer"
-              >
-                Contacto
-              </a>
-            </div>
+            <a
+              href="/ayuda"
+              onClick={handleAyudaClick}
+              className="cursor-pointer text-white/70 transition-colors hover:text-[#FFC300]"
+            >
+              Ayuda
+            </a>
           </div>
         </Container>
       </div>
 
       <header
-        className={`sticky top-0 left-0 right-0 z-[9999] transition-all duration-500 ${
+        className={`sticky left-0 right-0 top-0 z-[9999] transition-all duration-500 ${
           scrolled
-            ? "bg-white/95 backdrop-blur-md shadow-lg py-3"
+            ? "bg-white/95 py-3 shadow-lg backdrop-blur-md"
             : "bg-white py-6"
         }`}
       >
         <Container>
           <div className="flex items-center justify-between">
-            <Link href={publicRoutes.home} className="flex items-center gap-3">
-              <div className="relative w-12 h-12 flex items-center justify-center">
+            <Link
+              href={publicRoutes.home}
+              className="flex items-center gap-3"
+            >
+              <div className="relative flex h-12 w-12 items-center justify-center">
                 <Image
                   src={logoUrl}
                   alt={empresaNombre}
@@ -370,18 +439,19 @@ export function Header({
                 <span className="text-xl font-semibold text-[#0A3D62]">
                   {empresaNombre}
                 </span>
-                <span className="text-xs text-[#FFC300] uppercase">
+
+                <span className="text-xs uppercase text-[#FFC300]">
                   {empresaSubnombre}
                 </span>
               </div>
             </Link>
 
-            <nav className="hidden md:flex items-center gap-1">
+            <nav className="hidden items-center gap-1 md:flex">
               {navigationItems.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="px-4 py-2.5 text-gray-700 hover:text-[#0A3D62] font-medium rounded-lg hover:bg-[#FFF9E6]"
+                  className="rounded-lg px-4 py-2.5 font-medium text-gray-700 hover:bg-[#FFF9E6] hover:text-[#0A3D62]"
                 >
                   {item.label}
                 </Link>
@@ -389,42 +459,56 @@ export function Header({
             </nav>
 
             <div className="flex items-center gap-4">
-              {!isAuthenticated ? (
+              {!authLoading && !isAuthenticated ? (
                 <Link
                   href={publicRoutes.acceder}
-                  className="flex items-center gap-2 text-gray-600 hover:text-[#FFC300] font-medium border-r border-gray-200 pr-6"
+                  className="flex items-center gap-2 border-r border-gray-200 pr-6 font-medium text-gray-600 hover:text-[#FFC300]"
                 >
                   <LogIn size={18} />
-                  <span className="hidden sm:inline">Acceder</span>
+
+                  <span className="hidden sm:inline">
+                    Acceder
+                  </span>
                 </Link>
-              ) : (
+              ) : null}
+
+              {!authLoading && isAuthenticated ? (
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="flex items-center gap-2 text-gray-600 hover:text-red-500 font-medium"
+                  className="flex items-center gap-2 font-medium text-gray-600 hover:text-red-500"
                 >
                   <LogOut size={18} />
-                  <span className="hidden sm:inline">Cerrar Sesión</span>
+
+                  <span className="hidden sm:inline">
+                    Cerrar sesión
+                  </span>
                 </button>
-              )}
+              ) : null}
 
               <button
                 type="button"
-                className="md:hidden p-2"
+                className="p-2 md:hidden"
                 onClick={toggleMenu}
-                aria-label="Abrir menú"
+                aria-label={
+                  menuAbierto ? "Cerrar menú" : "Abrir menú"
+                }
               >
-                {menuAbierto ? <X size={22} /> : <Menu size={22} />}
+                {menuAbierto ? (
+                  <X size={22} />
+                ) : (
+                  <Menu size={22} />
+                )}
               </button>
             </div>
           </div>
         </Container>
 
         <div
-          className={`md:hidden fixed inset-x-0 top-[110px] z-[9998] bg-white shadow-xl transition-all duration-500 ${
+          className={`fixed inset-x-0 top-[110px] z-[9998] bg-white shadow-xl transition-all duration-500 md:hidden ${
             menuAbierto
-              ? "opacity-100 visible translate-y-0"
-              : "opacity-0 invisible -translate-y-8"
+              ? "visible translate-y-0 opacity-100"
+              : "invisible -translate-y-8 opacity-0"
           }`}
         >
           <Container className="py-4">
@@ -434,17 +518,17 @@ export function Header({
                   key={item.href}
                   href={item.href}
                   onClick={cerrarMenu}
-                  className="px-4 py-5 flex justify-between"
+                  className="flex justify-between px-4 py-5"
                 >
                   {item.label}
                   <ChevronRight size={18} />
                 </Link>
               ))}
 
-              {isAuthenticated && (
-                <div className="px-4 py-4 bg-gray-50 rounded-lg my-2">
+              {isAuthenticated && user ? (
+                <div className="my-2 rounded-lg bg-gray-50 px-4 py-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-[#0A3D62] rounded-full flex items-center justify-center text-white font-bold">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#0A3D62] font-bold text-white">
                       {inicialUsuario}
                     </div>
 
@@ -452,44 +536,49 @@ export function Header({
                       <p className="font-medium text-gray-800">
                         {nombreUsuario}
                       </p>
-                      <p className="text-xs text-[#FFC300]">Cliente</p>
+
+                      <p className="text-xs text-[#FFC300]">
+                        Cliente
+                      </p>
                     </div>
                   </div>
                 </div>
-              )}
+              ) : null}
 
               <div className="pt-4">
-                {!isAuthenticated ? (
+                {!authLoading && !isAuthenticated ? (
                   <Link
                     href={publicRoutes.acceder}
                     onClick={cerrarMenu}
-                    className="flex items-center justify-center gap-3 px-4 py-4 bg-[#0A3D62] text-white rounded-xl"
+                    className="flex items-center justify-center gap-3 rounded-xl bg-[#0A3D62] px-4 py-4 text-white"
                   >
                     <LogIn size={20} />
                     Acceder
                   </Link>
-                ) : (
+                ) : null}
+
+                {!authLoading && isAuthenticated ? (
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="flex items-center justify-center gap-3 w-full px-4 py-4 bg-red-500 text-white rounded-xl"
+                    className="flex w-full items-center justify-center gap-3 rounded-xl bg-red-500 px-4 py-4 text-white"
                   >
                     <LogOut size={20} />
-                    Cerrar Sesión
+                    Cerrar sesión
                   </button>
-                )}
+                ) : null}
               </div>
             </nav>
           </Container>
         </div>
       </header>
 
-      {menuAbierto && (
+      {menuAbierto ? (
         <div
-          className="md:hidden fixed inset-0 bg-black/30 z-[9997]"
+          className="fixed inset-0 z-[9997] bg-black/30 md:hidden"
           onClick={cerrarMenu}
         />
-      )}
+      ) : null}
     </>
   );
 }

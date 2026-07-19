@@ -1,16 +1,51 @@
 import { relations } from "drizzle-orm/relations";
-import { medicosInClinica, academiaInfantilInAcademia, publicacionesInAcademia, rolesInSeguridad, usuariosInSeguridad, instructoresInAcademia, cursosInAcademia, categoriasCursosInAcademia, ubicacionesCursosInAcademia, modalidadesInAcademia, inscripcionesCursosInAcademia, contenidoSaberPediatricoInAcademia, encuestasInAcademia, respuestasEncuestasInAcademia } from "./schema";
+import { usuariosInSeguridad, preguntasUsuariosInSoporte, categoriasAyudaInSoporte, preguntasFrecuentesInSoporte, medicosInClinica, publicacionesInAcademia, rolesInSeguridad, respuestasAyudaInSoporte, instructoresInAcademia, cursosInAcademia, categoriasCursosInAcademia, ubicacionesCursosInAcademia, modalidadesInAcademia, academiaInfantilInAcademia, encuestasInAcademia, respuestasEncuestasInAcademia, contenidoSaberPediatricoInAcademia, inscripcionesCursosInAcademia, valoracionesFaqInSoporte } from "./schema";
 
-export const academiaInfantilInAcademiaRelations = relations(academiaInfantilInAcademia, ({one}) => ({
-	medicosInClinica: one(medicosInClinica, {
-		fields: [academiaInfantilInAcademia.idAutor],
-		references: [medicosInClinica.idMedico]
+export const preguntasUsuariosInSoporteRelations = relations(preguntasUsuariosInSoporte, ({one, many}) => ({
+	usuariosInSeguridad: one(usuariosInSeguridad, {
+		fields: [preguntasUsuariosInSoporte.idUsuario],
+		references: [usuariosInSeguridad.id]
 	}),
+	categoriasAyudaInSoporte: one(categoriasAyudaInSoporte, {
+		fields: [preguntasUsuariosInSoporte.idCategoria],
+		references: [categoriasAyudaInSoporte.idCategoria]
+	}),
+	preguntasFrecuentesInSoporte: one(preguntasFrecuentesInSoporte, {
+		fields: [preguntasUsuariosInSoporte.idPreguntaFaq],
+		references: [preguntasFrecuentesInSoporte.idPregunta]
+	}),
+	respuestasAyudaInSoportes: many(respuestasAyudaInSoporte),
 }));
 
-export const medicosInClinicaRelations = relations(medicosInClinica, ({many}) => ({
-	academiaInfantilInAcademias: many(academiaInfantilInAcademia),
-	publicacionesInAcademias: many(publicacionesInAcademia),
+export const usuariosInSeguridadRelations = relations(usuariosInSeguridad, ({one, many}) => ({
+	preguntasUsuariosInSoportes: many(preguntasUsuariosInSoporte),
+	rolesInSeguridad: one(rolesInSeguridad, {
+		fields: [usuariosInSeguridad.rolId],
+		references: [rolesInSeguridad.id]
+	}),
+	respuestasAyudaInSoportes: many(respuestasAyudaInSoporte),
+	preguntasFrecuentesInSoportes: many(preguntasFrecuentesInSoporte),
+	respuestasEncuestasInAcademias: many(respuestasEncuestasInAcademia),
+	inscripcionesCursosInAcademias: many(inscripcionesCursosInAcademia),
+	valoracionesFaqInSoportes: many(valoracionesFaqInSoporte),
+}));
+
+export const categoriasAyudaInSoporteRelations = relations(categoriasAyudaInSoporte, ({many}) => ({
+	preguntasUsuariosInSoportes: many(preguntasUsuariosInSoporte),
+	preguntasFrecuentesInSoportes: many(preguntasFrecuentesInSoporte),
+}));
+
+export const preguntasFrecuentesInSoporteRelations = relations(preguntasFrecuentesInSoporte, ({one, many}) => ({
+	preguntasUsuariosInSoportes: many(preguntasUsuariosInSoporte),
+	categoriasAyudaInSoporte: one(categoriasAyudaInSoporte, {
+		fields: [preguntasFrecuentesInSoporte.idCategoria],
+		references: [categoriasAyudaInSoporte.idCategoria]
+	}),
+	usuariosInSeguridad: one(usuariosInSeguridad, {
+		fields: [preguntasFrecuentesInSoporte.creadoPor],
+		references: [usuariosInSeguridad.id]
+	}),
+	valoracionesFaqInSoportes: many(valoracionesFaqInSoporte),
 }));
 
 export const publicacionesInAcademiaRelations = relations(publicacionesInAcademia, ({one}) => ({
@@ -20,17 +55,24 @@ export const publicacionesInAcademiaRelations = relations(publicacionesInAcademi
 	}),
 }));
 
-export const usuariosInSeguridadRelations = relations(usuariosInSeguridad, ({one, many}) => ({
-	rolesInSeguridad: one(rolesInSeguridad, {
-		fields: [usuariosInSeguridad.rolId],
-		references: [rolesInSeguridad.id]
-	}),
-	inscripcionesCursosInAcademias: many(inscripcionesCursosInAcademia),
-	respuestasEncuestasInAcademias: many(respuestasEncuestasInAcademia),
+export const medicosInClinicaRelations = relations(medicosInClinica, ({many}) => ({
+	publicacionesInAcademias: many(publicacionesInAcademia),
+	academiaInfantilInAcademias: many(academiaInfantilInAcademia),
 }));
 
 export const rolesInSeguridadRelations = relations(rolesInSeguridad, ({many}) => ({
 	usuariosInSeguridads: many(usuariosInSeguridad),
+}));
+
+export const respuestasAyudaInSoporteRelations = relations(respuestasAyudaInSoporte, ({one}) => ({
+	preguntasUsuariosInSoporte: one(preguntasUsuariosInSoporte, {
+		fields: [respuestasAyudaInSoporte.idPregunta],
+		references: [preguntasUsuariosInSoporte.idPregunta]
+	}),
+	usuariosInSeguridad: one(usuariosInSeguridad, {
+		fields: [respuestasAyudaInSoporte.idUsuario],
+		references: [usuariosInSeguridad.id]
+	}),
 }));
 
 export const cursosInAcademiaRelations = relations(cursosInAcademia, ({one, many}) => ({
@@ -69,6 +111,36 @@ export const modalidadesInAcademiaRelations = relations(modalidadesInAcademia, (
 	cursosInAcademias: many(cursosInAcademia),
 }));
 
+export const academiaInfantilInAcademiaRelations = relations(academiaInfantilInAcademia, ({one}) => ({
+	medicosInClinica: one(medicosInClinica, {
+		fields: [academiaInfantilInAcademia.idAutor],
+		references: [medicosInClinica.idMedico]
+	}),
+}));
+
+export const respuestasEncuestasInAcademiaRelations = relations(respuestasEncuestasInAcademia, ({one}) => ({
+	encuestasInAcademia: one(encuestasInAcademia, {
+		fields: [respuestasEncuestasInAcademia.encuestaId],
+		references: [encuestasInAcademia.id]
+	}),
+	usuariosInSeguridad: one(usuariosInSeguridad, {
+		fields: [respuestasEncuestasInAcademia.usuarioId],
+		references: [usuariosInSeguridad.id]
+	}),
+}));
+
+export const encuestasInAcademiaRelations = relations(encuestasInAcademia, ({one, many}) => ({
+	respuestasEncuestasInAcademias: many(respuestasEncuestasInAcademia),
+	contenidoSaberPediatricoInAcademia: one(contenidoSaberPediatricoInAcademia, {
+		fields: [encuestasInAcademia.contenidoId],
+		references: [contenidoSaberPediatricoInAcademia.id]
+	}),
+}));
+
+export const contenidoSaberPediatricoInAcademiaRelations = relations(contenidoSaberPediatricoInAcademia, ({many}) => ({
+	encuestasInAcademias: many(encuestasInAcademia),
+}));
+
 export const inscripcionesCursosInAcademiaRelations = relations(inscripcionesCursosInAcademia, ({one}) => ({
 	cursosInAcademia: one(cursosInAcademia, {
 		fields: [inscripcionesCursosInAcademia.cursoId],
@@ -80,25 +152,13 @@ export const inscripcionesCursosInAcademiaRelations = relations(inscripcionesCur
 	}),
 }));
 
-export const encuestasInAcademiaRelations = relations(encuestasInAcademia, ({one, many}) => ({
-	contenidoSaberPediatricoInAcademia: one(contenidoSaberPediatricoInAcademia, {
-		fields: [encuestasInAcademia.contenidoId],
-		references: [contenidoSaberPediatricoInAcademia.id]
-	}),
-	respuestasEncuestasInAcademias: many(respuestasEncuestasInAcademia),
-}));
-
-export const contenidoSaberPediatricoInAcademiaRelations = relations(contenidoSaberPediatricoInAcademia, ({many}) => ({
-	encuestasInAcademias: many(encuestasInAcademia),
-}));
-
-export const respuestasEncuestasInAcademiaRelations = relations(respuestasEncuestasInAcademia, ({one}) => ({
-	encuestasInAcademia: one(encuestasInAcademia, {
-		fields: [respuestasEncuestasInAcademia.encuestaId],
-		references: [encuestasInAcademia.id]
+export const valoracionesFaqInSoporteRelations = relations(valoracionesFaqInSoporte, ({one}) => ({
+	preguntasFrecuentesInSoporte: one(preguntasFrecuentesInSoporte, {
+		fields: [valoracionesFaqInSoporte.idPreguntaFaq],
+		references: [preguntasFrecuentesInSoporte.idPregunta]
 	}),
 	usuariosInSeguridad: one(usuariosInSeguridad, {
-		fields: [respuestasEncuestasInAcademia.usuarioId],
+		fields: [valoracionesFaqInSoporte.idUsuario],
 		references: [usuariosInSeguridad.id]
 	}),
 }));

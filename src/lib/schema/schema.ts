@@ -1,11 +1,45 @@
-import { pgTable, pgSchema, serial, date, integer, numeric, jsonb, foreignKey, varchar, text, boolean, unique, timestamp, index, inet, check } from "drizzle-orm/pg-core"
+import { pgTable, pgSchema, index, foreignKey, serial, integer, varchar, text, boolean, timestamp, date, numeric, jsonb, unique, inet, check } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
-export const clinica = pgSchema("clinica");
+export const soporte = pgSchema("soporte");
 export const seguridad = pgSchema("seguridad");
-export const academia = pgSchema("academia");
+export const clinica = pgSchema("clinica");
 export const auditoria = pgSchema("auditoria");
+export const academia = pgSchema("academia");
 
+
+export const preguntasUsuariosInSoporte = soporte.table("preguntas_usuarios", {
+	idPregunta: serial("id_pregunta").primaryKey().notNull(),
+	idUsuario: integer("id_usuario").notNull(),
+	idCategoria: integer("id_categoria"),
+	titulo: varchar({ length: 300 }).notNull(),
+	descripcion: text().notNull(),
+	estado: varchar({ length: 20 }).default('pendiente'),
+	prioridad: varchar({ length: 10 }).default('normal'),
+	esPrivada: boolean("es_privada").default(false),
+	idPreguntaFaq: integer("id_pregunta_faq"),
+	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+	index("idx_preguntas_usuarios_estado").using("btree", table.estado.asc().nullsLast().op("text_ops")),
+	index("idx_preguntas_usuarios_fecha").using("btree", table.createdAt.desc().nullsFirst().op("timestamp_ops")),
+	index("idx_preguntas_usuarios_usuario").using("btree", table.idUsuario.asc().nullsLast().op("int4_ops")),
+	foreignKey({
+			columns: [table.idUsuario],
+			foreignColumns: [usuariosInSeguridad.id],
+			name: "fk_pregunta_usuario_usuario"
+		}),
+	foreignKey({
+			columns: [table.idCategoria],
+			foreignColumns: [categoriasAyudaInSoporte.idCategoria],
+			name: "fk_pregunta_usuario_categoria"
+		}),
+	foreignKey({
+			columns: [table.idPreguntaFaq],
+			foreignColumns: [preguntasFrecuentesInSoporte.idPregunta],
+			name: "fk_pregunta_usuario_faq"
+		}),
+]);
 
 export const estadisticasConsumoInSeguridad = seguridad.table("estadisticas_consumo", {
 	idEstadistica: serial("id_estadistica").primaryKey().notNull(),
@@ -19,23 +53,32 @@ export const estadisticasConsumoInSeguridad = seguridad.table("estadisticas_cons
 	operacionesCrud: jsonb("operaciones_crud"),
 });
 
-export const academiaInfantilInAcademia = academia.table("academia_infantil", {
-	idGuia: serial("id_guia").primaryKey().notNull(),
-	tituloGuia: varchar("titulo_guia", { length: 255 }).notNull(),
-	descripcionCorta: text("descripcion_corta"),
-	idAutor: integer("id_autor"),
-	fechaPublicacion: date("fecha_publicacion").default(sql`CURRENT_DATE`),
-	urlImagen: text("url_imagen"),
-	etiquetas: text(),
-	descripcionLarga: text("descripcion_larga"),
-	activo: boolean().default(true),
+export const rolesInSeguridad = seguridad.table("roles", {
+	id: serial().primaryKey().notNull(),
+	nombre: text().notNull(),
 }, (table) => [
-	foreignKey({
-			columns: [table.idAutor],
-			foreignColumns: [medicosInClinica.idMedico],
-			name: "academia_infantil_id_autor_fkey"
-		}),
+	unique("roles_nombre_unique").on(table.nombre),
 ]);
+
+export const backupsInAuditoria = auditoria.table("backups", {
+	id: serial().primaryKey().notNull(),
+	fecha: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+	tipo: varchar({ length: 20 }).notNull(),
+	"tamaño": varchar("tamaño", { length: 20 }),
+	archivoUrl: text("archivo_url"),
+	estado: varchar({ length: 20 }).default('exitoso'),
+}, (table) => [
+	index("idx_backups_fecha").using("btree", table.fecha.desc().nullsFirst().op("timestamp_ops")),
+	index("idx_backups_tipo").using("btree", table.tipo.asc().nullsLast().op("text_ops")),
+]);
+
+export const intentosRecuperacionInAuditoria = auditoria.table("intentos_recuperacion", {
+	id: serial().primaryKey().notNull(),
+	identificador: text().notNull(),
+	conteo: integer().default(0),
+	ultimoIntento: timestamp("ultimo_intento", { mode: 'string' }).defaultNow(),
+	bloqueadoHasta: timestamp("bloqueado_hasta", { mode: 'string' }),
+});
 
 export const publicacionesInAcademia = academia.table("publicaciones", {
 	idPublicacion: serial("id_publicacion").primaryKey().notNull(),
@@ -82,33 +125,6 @@ export const usuariosInSeguridad = seguridad.table("usuarios", {
 		}),
 	unique("usuarios_correo_unique").on(table.correo),
 ]);
-
-export const rolesInSeguridad = seguridad.table("roles", {
-	id: serial().primaryKey().notNull(),
-	nombre: text().notNull(),
-}, (table) => [
-	unique("roles_nombre_unique").on(table.nombre),
-]);
-
-export const backupsInAuditoria = auditoria.table("backups", {
-	id: serial().primaryKey().notNull(),
-	fecha: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
-	tipo: varchar({ length: 20 }).notNull(),
-	"tamaño": varchar("tamaño", { length: 20 }),
-	archivoUrl: text("archivo_url"),
-	estado: varchar({ length: 20 }).default('exitoso'),
-}, (table) => [
-	index("idx_backups_fecha").using("btree", table.fecha.desc().nullsFirst().op("timestamp_ops")),
-	index("idx_backups_tipo").using("btree", table.tipo.asc().nullsLast().op("text_ops")),
-]);
-
-export const intentosRecuperacionInAuditoria = auditoria.table("intentos_recuperacion", {
-	id: serial().primaryKey().notNull(),
-	identificador: text().notNull(),
-	conteo: integer().default(0),
-	ultimoIntento: timestamp("ultimo_intento", { mode: 'string' }).defaultNow(),
-	bloqueadoHasta: timestamp("bloqueado_hasta", { mode: 'string' }),
-});
 
 export const monitoreoRendimientoInSeguridad = seguridad.table("monitoreo_rendimiento", {
 	idMonitoreo: serial("id_monitoreo").primaryKey().notNull(),
@@ -169,23 +185,27 @@ export const nosotrosInClinica = clinica.table("nosotros", {
 	urlImagen: text("url_imagen").default('/pediatric-illustration.png'),
 });
 
-export const instructoresInAcademia = academia.table("instructores", {
-	idInstructor: serial("id_instructor").primaryKey().notNull(),
-	nombre: varchar({ length: 100 }).notNull(),
-	apellidoPaterno: varchar("apellido_paterno", { length: 100 }).notNull(),
-	apellidoMaterno: varchar("apellido_materno", { length: 100 }),
-	especialidad: varchar({ length: 100 }).notNull(),
-	edad: integer().notNull(),
-	telefono: varchar({ length: 20 }),
-	correo: varchar({ length: 150 }).notNull(),
-	direccion: text(),
-	activo: boolean().default(true),
+export const respuestasAyudaInSoporte = soporte.table("respuestas_ayuda", {
+	idRespuesta: serial("id_respuesta").primaryKey().notNull(),
+	idPregunta: integer("id_pregunta").notNull(),
+	idUsuario: integer("id_usuario").notNull(),
+	contenido: text().notNull(),
+	esRespuestaAdmin: boolean("es_respuesta_admin").default(false),
+	esSolucion: boolean("es_solucion").default(false),
 	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
-	updatedAt: timestamp("updated_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [
-	index("idx_instructores_activo").using("btree", table.activo.asc().nullsLast().op("bool_ops")),
-	index("idx_instructores_especialidad").using("btree", table.especialidad.asc().nullsLast().op("text_ops")),
-	unique("instructores_correo_key").on(table.correo),
+	index("idx_respuestas_fecha").using("btree", table.createdAt.asc().nullsLast().op("timestamp_ops")),
+	index("idx_respuestas_pregunta").using("btree", table.idPregunta.asc().nullsLast().op("int4_ops")),
+	foreignKey({
+			columns: [table.idPregunta],
+			foreignColumns: [preguntasUsuariosInSoporte.idPregunta],
+			name: "fk_respuesta_pregunta"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.idUsuario],
+			foreignColumns: [usuariosInSeguridad.id],
+			name: "fk_respuesta_usuario"
+		}),
 ]);
 
 export const cursosInAcademia = academia.table("cursos", {
@@ -241,6 +261,25 @@ export const cursosInAcademia = academia.table("cursos", {
 	check("check_cupos", sql`cupos_ocupados <= cupo_maximo`),
 ]);
 
+export const instructoresInAcademia = academia.table("instructores", {
+	idInstructor: serial("id_instructor").primaryKey().notNull(),
+	nombre: varchar({ length: 100 }).notNull(),
+	apellidoPaterno: varchar("apellido_paterno", { length: 100 }).notNull(),
+	apellidoMaterno: varchar("apellido_materno", { length: 100 }),
+	especialidad: varchar({ length: 100 }).notNull(),
+	edad: integer().notNull(),
+	telefono: varchar({ length: 20 }),
+	correo: varchar({ length: 150 }).notNull(),
+	direccion: text(),
+	activo: boolean().default(true),
+	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+	index("idx_instructores_activo").using("btree", table.activo.asc().nullsLast().op("bool_ops")),
+	index("idx_instructores_especialidad").using("btree", table.especialidad.asc().nullsLast().op("text_ops")),
+	unique("instructores_correo_key").on(table.correo),
+]);
+
 export const categoriasCursosInAcademia = academia.table("categorias_cursos", {
 	idCategoria: serial("id_categoria").primaryKey().notNull(),
 	nombreCategoria: varchar("nombre_categoria", { length: 50 }).notNull(),
@@ -268,32 +307,6 @@ export const modalidadesInAcademia = academia.table("modalidades", {
 	unique("modalidades_nombre_modalidad_key").on(table.nombreModalidad),
 ]);
 
-export const inscripcionesCursosInAcademia = academia.table("inscripciones_cursos", {
-	idInscripcion: serial("id_inscripcion").primaryKey().notNull(),
-	cursoId: integer("curso_id").notNull(),
-	usuarioId: integer("usuario_id").notNull(),
-	fechaInscripcion: timestamp("fecha_inscripcion", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
-	estado: varchar({ length: 20 }).default('activo'),
-	montoPagado: numeric("monto_pagado", { precision: 10, scale:  2 }),
-	metodoPago: varchar("metodo_pago", { length: 50 }),
-}, (table) => [
-	index("idx_inscripciones_curso").using("btree", table.cursoId.asc().nullsLast().op("int4_ops")),
-	index("idx_inscripciones_estado").using("btree", table.estado.asc().nullsLast().op("text_ops")),
-	index("idx_inscripciones_fecha").using("btree", table.fechaInscripcion.desc().nullsFirst().op("timestamp_ops")),
-	index("idx_inscripciones_usuario").using("btree", table.usuarioId.asc().nullsLast().op("int4_ops")),
-	foreignKey({
-			columns: [table.cursoId],
-			foreignColumns: [cursosInAcademia.idCurso],
-			name: "fk_inscripcion_curso"
-		}).onDelete("cascade"),
-	foreignKey({
-			columns: [table.usuarioId],
-			foreignColumns: [usuariosInSeguridad.id],
-			name: "fk_inscripcion_usuario"
-		}).onDelete("cascade"),
-	unique("unique_inscripcion_curso_usuario").on(table.cursoId, table.usuarioId),
-]);
-
 export const medicosInClinica = clinica.table("medicos", {
 	idMedico: serial("id_medico").primaryKey().notNull(),
 	nombres: varchar({ length: 100 }).notNull(),
@@ -317,6 +330,50 @@ export const serviciosInClinica = clinica.table("servicios", {
 	activo: boolean().default(true),
 });
 
+export const categoriasAyudaInSoporte = soporte.table("categorias_ayuda", {
+	idCategoria: serial("id_categoria").primaryKey().notNull(),
+	nombreCategoria: varchar("nombre_categoria", { length: 100 }).notNull(),
+	descripcion: text(),
+	icono: varchar({ length: 50 }),
+	orden: integer().default(0),
+	activo: boolean().default(true),
+	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+	index("idx_categorias_ayuda_orden").using("btree", table.orden.asc().nullsLast().op("int4_ops")),
+	unique("categorias_ayuda_nombre_key").on(table.nombreCategoria),
+]);
+
+export const preguntasFrecuentesInSoporte = soporte.table("preguntas_frecuentes", {
+	idPregunta: serial("id_pregunta").primaryKey().notNull(),
+	idCategoria: integer("id_categoria").notNull(),
+	pregunta: varchar({ length: 500 }).notNull(),
+	respuesta: text().notNull(),
+	orden: integer().default(0),
+	vecesUtil: integer("veces_util").default(0),
+	vecesNoUtil: integer("veces_no_util").default(0),
+	activo: boolean().default(true),
+	esDestacada: boolean("es_destacada").default(false),
+	tags: text().array(),
+	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+	creadoPor: integer("creado_por"),
+}, (table) => [
+	index("idx_preguntas_frecuentes_categoria").using("btree", table.idCategoria.asc().nullsLast().op("int4_ops")),
+	index("idx_preguntas_frecuentes_destacada").using("btree", table.esDestacada.asc().nullsLast().op("bool_ops")),
+	index("idx_preguntas_frecuentes_orden").using("btree", table.orden.asc().nullsLast().op("int4_ops")),
+	foreignKey({
+			columns: [table.idCategoria],
+			foreignColumns: [categoriasAyudaInSoporte.idCategoria],
+			name: "fk_pregunta_frecuente_categoria"
+		}),
+	foreignKey({
+			columns: [table.creadoPor],
+			foreignColumns: [usuariosInSeguridad.id],
+			name: "fk_pregunta_frecuente_creador"
+		}),
+]);
+
 export const empresaInfoInClinica = clinica.table("empresa_info", {
 	id: serial().primaryKey().notNull(),
 	nombre: varchar({ length: 150 }).notNull(),
@@ -331,6 +388,43 @@ export const empresaInfoInClinica = clinica.table("empresa_info", {
 	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
 	updatedAt: timestamp("updated_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const academiaInfantilInAcademia = academia.table("academia_infantil", {
+	idGuia: serial("id_guia").primaryKey().notNull(),
+	tituloGuia: varchar("titulo_guia", { length: 255 }).notNull(),
+	descripcionCorta: text("descripcion_corta"),
+	idAutor: integer("id_autor"),
+	fechaPublicacion: date("fecha_publicacion").default(sql`CURRENT_DATE`),
+	urlImagen: text("url_imagen"),
+	etiquetas: text(),
+	descripcionLarga: text("descripcion_larga"),
+	activo: boolean().default(true),
+}, (table) => [
+	foreignKey({
+			columns: [table.idAutor],
+			foreignColumns: [medicosInClinica.idMedico],
+			name: "academia_infantil_id_autor_fkey"
+		}),
+]);
+
+export const respuestasEncuestasInAcademia = academia.table("respuestas_encuestas", {
+	id: serial().primaryKey().notNull(),
+	encuestaId: integer("encuesta_id"),
+	usuarioId: integer("usuario_id"),
+	respuestas: jsonb(),
+	fechaRespuesta: timestamp("fecha_respuesta", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+	foreignKey({
+			columns: [table.encuestaId],
+			foreignColumns: [encuestasInAcademia.id],
+			name: "respuestas_encuestas_encuesta_id_fkey"
+		}),
+	foreignKey({
+			columns: [table.usuarioId],
+			foreignColumns: [usuariosInSeguridad.id],
+			name: "respuestas_encuestas_usuario_id_fkey"
+		}),
+]);
 
 export const contenidoSaberPediatricoInAcademia = academia.table("contenido_saber_pediatrico", {
 	id: serial().primaryKey().notNull(),
@@ -370,21 +464,49 @@ export const encuestasInAcademia = academia.table("encuestas", {
 		}),
 ]);
 
-export const respuestasEncuestasInAcademia = academia.table("respuestas_encuestas", {
-	id: serial().primaryKey().notNull(),
-	encuestaId: integer("encuesta_id"),
-	usuarioId: integer("usuario_id"),
-	respuestas: jsonb(),
-	fechaRespuesta: timestamp("fecha_respuesta", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+export const inscripcionesCursosInAcademia = academia.table("inscripciones_cursos", {
+	idInscripcion: serial("id_inscripcion").primaryKey().notNull(),
+	cursoId: integer("curso_id").notNull(),
+	usuarioId: integer("usuario_id").notNull(),
+	fechaInscripcion: timestamp("fecha_inscripcion", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+	estado: varchar({ length: 20 }).default('activo'),
+	montoPagado: numeric("monto_pagado", { precision: 10, scale:  2 }),
+	metodoPago: varchar("metodo_pago", { length: 50 }),
 }, (table) => [
+	index("idx_inscripciones_curso").using("btree", table.cursoId.asc().nullsLast().op("int4_ops")),
+	index("idx_inscripciones_estado").using("btree", table.estado.asc().nullsLast().op("text_ops")),
+	index("idx_inscripciones_fecha").using("btree", table.fechaInscripcion.desc().nullsFirst().op("timestamp_ops")),
+	index("idx_inscripciones_usuario").using("btree", table.usuarioId.asc().nullsLast().op("int4_ops")),
 	foreignKey({
-			columns: [table.encuestaId],
-			foreignColumns: [encuestasInAcademia.id],
-			name: "respuestas_encuestas_encuesta_id_fkey"
-		}),
+			columns: [table.cursoId],
+			foreignColumns: [cursosInAcademia.idCurso],
+			name: "fk_inscripcion_curso"
+		}).onDelete("cascade"),
 	foreignKey({
 			columns: [table.usuarioId],
 			foreignColumns: [usuariosInSeguridad.id],
-			name: "respuestas_encuestas_usuario_id_fkey"
+			name: "fk_inscripcion_usuario"
+		}).onDelete("cascade"),
+	unique("unique_inscripcion_curso_usuario").on(table.cursoId, table.usuarioId),
+]);
+
+export const valoracionesFaqInSoporte = soporte.table("valoraciones_faq", {
+	idValoracion: serial("id_valoracion").primaryKey().notNull(),
+	idPreguntaFaq: integer("id_pregunta_faq").notNull(),
+	idUsuario: integer("id_usuario").notNull(),
+	esUtil: boolean("es_util").notNull(),
+	comentario: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+	foreignKey({
+			columns: [table.idPreguntaFaq],
+			foreignColumns: [preguntasFrecuentesInSoporte.idPregunta],
+			name: "fk_valoracion_faq"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.idUsuario],
+			foreignColumns: [usuariosInSeguridad.id],
+			name: "fk_valoracion_usuario"
 		}),
+	unique("unique_valoracion_usuario_faq").on(table.idPreguntaFaq, table.idUsuario),
 ]);

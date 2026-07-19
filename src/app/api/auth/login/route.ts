@@ -153,15 +153,25 @@ export async function POST(request: NextRequest) {
     const versionToken = Number(usuario.versionToken ?? 1);
 
     const token = await new SignJWT({
+      // Se conserva por compatibilidad con el código que llegó de Git
       id: usuario.id,
+
+      // Se conserva para que tu auth.ts siga funcionando
+      userId: usuario.id,
+
       email: usuario.correo,
+      nombre: usuario.nombre,
       rol: nombreRol,
+
+      // Se conserva el control de versión del token
       version: versionToken,
     })
       .setProtectedHeader({ alg: "HS256" })
       .setIssuedAt()
       .setExpirationTime("7d")
       .sign(getJwtSecret());
+
+    /* OBJETO USUARIO */
 
     const usuarioResponse = {
       id: usuario.id,
