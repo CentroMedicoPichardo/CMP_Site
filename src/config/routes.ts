@@ -47,6 +47,7 @@ export const adminRoutes = {
   saberPediatricoEncuestas: "/saber-pediatrico/encuestas",
   // ========== CURSOS DASHBOARD ==========
   cursosDashboard: (id: number) => `/cursos-admin/${id}/dashboard`,
+  comprasCursos: "/compras-cursos",
 };
 
 // Estructura para menús

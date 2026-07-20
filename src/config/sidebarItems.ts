@@ -28,6 +28,7 @@ import {
   Bell,
   Youtube,
   FileQuestion,
+  WalletCards,
   FileArchive,
   ShoppingBag,
 } from "lucide-react";
@@ -136,6 +137,12 @@ export const adminSidebarItems: SidebarItem[] = [
         href: adminRoutes.cursosadm,
         icon: GraduationCap,
         description: "Cursos y talleres"
+      },
+      {
+        label: "Pagos de cursos",
+        href: adminRoutes.comprasCursos,
+        icon: WalletCards,
+        description: "Validar compras y pagos de cursos",
       },
       {
         label: "Quiénes Somos",
