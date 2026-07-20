@@ -29,47 +29,53 @@ import {
   Youtube,
   FileQuestion,
   FileArchive,
+  ShoppingBag,
 } from "lucide-react";
 import { SidebarItem } from '@/types/sidebar.types';
 import { adminRoutes, clienteRoutes, publicRoutes } from './routes';
 
-// Items para clientes (sin cambios)
 export const clientSidebarItems: SidebarItem[] = [
   {
     label: "Dashboard",
     href: clienteRoutes.dashboard,
     icon: LayoutDashboard,
-    description: "Resumen de tu actividad"
+    description: "Resumen de tu actividad",
+  },
+  {
+    label: "Mis compras",
+    href: clienteRoutes.misComprasCursos,
+    icon: ShoppingBag,
+    description: "Compras y pagos de cursos",
   },
   {
     label: "Mis Cursos",
     href: clienteRoutes.misCursos,
     icon: BookOpen,
-    description: "Cursos inscritos"
+    description: "Cursos inscritos",
   },
   {
     label: "Perfil",
     href: clienteRoutes.perfil,
     icon: User,
-    description: "Tus datos personales"
+    description: "Tus datos personales",
   },
   {
     label: "Foros",
     href: clienteRoutes.foros,
     icon: MessageCircle,
-    description: "Participa en la comunidad"
+    description: "Participa en la comunidad",
   },
   {
     label: "Saber Pediátrico",
     href: clienteRoutes.saberPediatrico,
     icon: GraduationCap,
-    description: "Contenido educativo"
+    description: "Contenido educativo",
   },
   {
     label: "Ayuda",
     href: publicRoutes.ayuda,
     icon: HelpCircle,
-    description: "Soporte y preguntas frecuentes"
+    description: "Soporte y preguntas frecuentes",
   },
 ];
 

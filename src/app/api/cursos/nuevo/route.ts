@@ -1,25 +1,30 @@
 // src/app/api/cursos/nuevo/route.ts
+
 import { NextResponse } from "next/server";
+import { eq, and, ne } from "drizzle-orm";
+
+import { requireApiRole } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { sql } from "drizzle-orm";
 import { sendEmail } from "@/lib/email";
 import { NuevoCursoEmail } from "@/lib/NuevoCursoEmail";
-import { requireApiRole } from "@/lib/auth";
+import { cursos, usuarios } from "@/lib/schema";
+import {
+  isRecord,
+  parsePositiveInteger,
+} from "@/lib/validators/common";
 
-function obtenerFilas(resultado: any): any[] {
-  if (Array.isArray(resultado)) {
-    return resultado;
+interface ResultadoNotificacion {
+  enviados: number;
+  fallidos: number;
+  total: number;
+}
+
+function obtenerCursoId(value: unknown): number | null {
+  if (!isRecord(value)) {
+    return null;
   }
 
-  if (Array.isArray(resultado?.rows)) {
-    return resultado.rows;
-  }
-
-  if (Array.isArray(resultado?.[0])) {
-    return resultado[0];
-  }
-
-  return [];
+  return parsePositiveInteger(value.cursoId);
 }
 
 export async function GET() {
@@ -28,11 +33,16 @@ export async function GET() {
       message:
         "Este endpoint solo acepta solicitudes POST para notificar un nuevo curso.",
     },
-    { status: 405 }
+    {
+      status: 405,
+      headers: {
+        Allow: "POST",
+      },
+    }
   );
 }
 
-export async function POST(req: Request) {
+export async function POST(request: Request) {
   const { error } = await requireApiRole("admin");
 
   if (error) {
@@ -40,100 +50,122 @@ export async function POST(req: Request) {
   }
 
   try {
-    const body = await req.json();
-    const cursoId = Number(body.cursoId);
+    const body: unknown = await request.json();
+    const cursoId = obtenerCursoId(body);
 
-    if (!Number.isFinite(cursoId) || cursoId <= 0) {
+    if (!cursoId) {
       return NextResponse.json(
-        { error: "Curso ID inválido" },
+        {
+          error: "Curso ID inválido",
+        },
         { status: 400 }
       );
     }
 
-    const cursoResultado = await db.execute(sql`
-      SELECT titulo_curso, costo
-      FROM academia.cursos
-      WHERE id_curso = ${cursoId}
-    `);
+    const resultadoCurso = await db
+      .select({
+        tituloCurso: cursos.tituloCurso,
+        costo: cursos.costo,
+      })
+      .from(cursos)
+      .where(eq(cursos.idCurso, cursoId))
+      .limit(1);
 
-    const cursosEncontrados = obtenerFilas(cursoResultado);
+    const curso = resultadoCurso[0];
 
-    if (!cursosEncontrados.length) {
+    if (!curso) {
       return NextResponse.json(
-        { error: "Curso no encontrado" },
+        {
+          error: "Curso no encontrado",
+        },
         { status: 404 }
       );
     }
 
-    const curso = cursosEncontrados[0];
+    const destinatarios = await db
+      .select({
+        correo: usuarios.correo,
+      })
+      .from(usuarios)
+      .where(
+        and(
+          eq(usuarios.activo, true),
+          ne(usuarios.correo, "")
+        )
+      );
 
-    const titulo = String(curso.titulo_curso ?? "Nuevo curso");
-    const costo = String(curso.costo ?? "0.00");
+    const correos = destinatarios
+      .map((usuario) => usuario.correo?.trim())
+      .filter(
+        (correo): correo is string =>
+          typeof correo === "string" &&
+          correo.length > 0
+      );
 
-    const usuariosResultado = await db.execute(sql`
-      SELECT correo
-      FROM seguridad.usuarios
-      WHERE activo = true
-        AND correo IS NOT NULL
-        AND correo <> ''
-    `);
-
-    const usuarios = obtenerFilas(usuariosResultado);
-
-    if (!usuarios.length) {
+    if (correos.length === 0) {
       return NextResponse.json({
         success: true,
-        message: "No hay usuarios activos con correo para notificar",
+        message:
+          "No hay usuarios activos con correo para notificar",
         enviados: 0,
         fallidos: 0,
         total: 0,
       });
     }
 
+    const titulo =
+      curso.tituloCurso || "Nuevo curso";
+
+    const costo = curso.costo ?? "0.00";
+
     const html = NuevoCursoEmail({
       titulo,
       costo,
     });
 
-    let enviados = 0;
-    let fallidos = 0;
+    const resultado: ResultadoNotificacion = {
+      enviados: 0,
+      fallidos: 0,
+      total: correos.length,
+    };
 
-    for (const usuario of usuarios) {
-      const email = String(usuario.correo ?? "").trim();
-
-      if (!email) {
-        fallidos++;
-        continue;
-      }
-
+    for (const correo of correos) {
       try {
-        const result = await sendEmail(
-          email,
+        const envio = await sendEmail(
+          correo,
           `✨ Nuevo curso disponible: ${titulo}`,
           html
         );
 
-        if (result.success) {
-          enviados++;
+        if (envio.success) {
+          resultado.enviados += 1;
         } else {
-          fallidos++;
+          resultado.fallidos += 1;
         }
-      } catch {
-        fallidos++;
+      } catch (error: unknown) {
+        console.error(
+          `Error enviando anuncio a ${correo}:`,
+          error
+        );
+
+        resultado.fallidos += 1;
       }
     }
 
     return NextResponse.json({
       success: true,
-      enviados,
-      fallidos,
-      total: usuarios.length,
+      ...resultado,
     });
-  } catch (error) {
-    console.error("Error notificando nuevo curso:", error);
+  } catch (error: unknown) {
+    console.error(
+      "Error notificando nuevo curso:",
+      error
+    );
 
     return NextResponse.json(
-      { error: "Error al notificar nuevo curso" },
+      {
+        error: "Error al notificar nuevo curso",
+      },
       { status: 500 }
     );
   }

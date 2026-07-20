@@ -1,74 +1,81 @@
 // src/app/api/instructores/[id]/route.ts
+
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { instructores } from "@/lib/schema/index";
-import { and, eq, sql } from "drizzle-orm";
-import { withUserEmail } from "@/lib/db-with-user";
+import {
+  and,
+  eq,
+  sql,
+} from "drizzle-orm";
+
 import { requireApiRole } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { withUserEmail } from "@/lib/db-with-user";
+import { instructores } from "@/lib/schema";
+import {
+  hasPostgresCode,
+  type ValidationResult,
+} from "@/lib/validators/common";
+import {
+  validarInstructor,
+  type InstructorInput,
+} from "@/lib/validators/catalogos-cursos";
 
-function validarId(id: string) {
-  const idNum = Number(id);
-  return Number.isInteger(idNum) && idNum > 0 ? idNum : null;
+interface InstructorRouteContext {
+  params: Promise<{
+    id: string;
+  }>;
 }
 
-function normalizarTexto(valor: unknown, maxLength = 255) {
-  if (typeof valor !== "string") {
-    return "";
-  }
+function parseId(id: string): number | null {
+  const parsed = Number(id);
 
-  return valor.trim().slice(0, maxLength);
+  return Number.isInteger(parsed) && parsed > 0
+    ? parsed
+    : null;
 }
 
-function normalizarEdad(valor: unknown) {
-  const edad = Number(valor);
-
-  if (!Number.isInteger(edad) || edad <= 0 || edad > 120) {
-    return null;
-  }
-
-  return edad;
-}
-
-function normalizarBooleano(valor: unknown, defaultValue = true) {
-  if (typeof valor === "boolean") {
-    return valor;
-  }
-
-  if (valor === "true") {
-    return true;
-  }
-
-  if (valor === "false") {
-    return false;
-  }
-
-  return defaultValue;
-}
-
-function correoValido(correo: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo);
+function validationErrorResponse<T>(
+  result: Extract<
+    ValidationResult<T>,
+    { success: false }
+  >
+) {
+  return NextResponse.json(
+    {
+      error: result.error,
+      details: result.fieldErrors,
+    },
+    { status: 400 }
+  );
 }
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: InstructorRouteContext
 ) {
   try {
     const { id } = await params;
-    const idInstructor = validarId(id);
+    const instructorId = parseId(id);
 
-    if (!idInstructor) {
+    if (!instructorId) {
       return NextResponse.json(
-        { error: "ID de instructor inválido" },
+        {
+          error:
+            "ID de instructor inválido",
+        },
         { status: 400 }
       );
     }
 
-    const { searchParams } = new URL(request.url);
-    const isAdmin = searchParams.get("admin") === "true";
+    const { searchParams } =
+      new URL(request.url);
+
+    const isAdmin =
+      searchParams.get("admin") === "true";
 
     if (isAdmin) {
-      const { error } = await requireApiRole("admin");
+      const { error } =
+        await requireApiRole("admin");
 
       if (error) {
         return error;
@@ -76,19 +83,29 @@ export async function GET(
     }
 
     const condicion = isAdmin
-      ? eq(instructores.idInstructor, idInstructor)
+      ? eq(
+          instructores.idInstructor,
+          instructorId
+        )
       : and(
-          eq(instructores.idInstructor, idInstructor),
+          eq(
+            instructores.idInstructor,
+            instructorId
+          ),
           eq(instructores.activo, true)
         );
 
-    const instructor = await db
+    const resultado = await db
       .select({
-        idInstructor: instructores.idInstructor,
+        idInstructor:
+          instructores.idInstructor,
         nombre: instructores.nombre,
-        apellidoPaterno: instructores.apellidoPaterno,
-        apellidoMaterno: instructores.apellidoMaterno,
-        especialidad: instructores.especialidad,
+        apellidoPaterno:
+          instructores.apellidoPaterno,
+        apellidoMaterno:
+          instructores.apellidoMaterno,
+        especialidad:
+          instructores.especialidad,
         edad: instructores.edad,
         telefono: instructores.telefono,
         correo: instructores.correo,
@@ -99,19 +116,30 @@ export async function GET(
       .where(condicion)
       .limit(1);
 
-    if (!instructor.length) {
+    const instructor = resultado[0];
+
+    if (!instructor) {
       return NextResponse.json(
-        { error: "Instructor no encontrado" },
+        {
+          error:
+            "Instructor no encontrado",
+        },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(instructor[0]);
-  } catch (error) {
-    console.error("Error en GET instructor:", error);
+    return NextResponse.json(instructor);
+  } catch (error: unknown) {
+    console.error(
+      "Error en GET instructor:",
+      error
+    );
 
     return NextResponse.json(
-      { error: "Error al obtener instructor" },
+      {
+        error:
+          "Error al obtener instructor",
+      },
       { status: 500 }
     );
   }
@@ -119,187 +147,240 @@ export async function GET(
 
 export async function PUT(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: InstructorRouteContext
 ) {
-  const { session, error } = await requireApiRole("admin");
+  const { session, error } =
+    await requireApiRole("admin");
 
   if (error) {
     return error;
   }
 
   if (!session) {
-    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    return NextResponse.json(
+      {
+        error: "No autenticado",
+      },
+      { status: 401 }
+    );
   }
 
   try {
     const { id } = await params;
-    const idInstructor = validarId(id);
+    const instructorId = parseId(id);
 
-    if (!idInstructor) {
+    if (!instructorId) {
       return NextResponse.json(
-        { error: "ID de instructor inválido" },
+        {
+          error:
+            "ID de instructor inválido",
+        },
         { status: 400 }
       );
     }
 
-    const body = await request.json();
+    const body: unknown = await request.json();
 
-    const nombre = normalizarTexto(body.nombre, 100);
-    const apellidoPaterno = normalizarTexto(body.apellidoPaterno, 100);
-    const apellidoMaterno =
-      normalizarTexto(body.apellidoMaterno, 100) || null;
-    const especialidad = normalizarTexto(body.especialidad, 150);
-    const edad = normalizarEdad(body.edad);
-    const telefono = normalizarTexto(body.telefono, 30) || null;
-    const correo = normalizarTexto(body.correo, 150).toLowerCase();
-    const direccion = normalizarTexto(body.direccion, 300) || null;
-    const activo = normalizarBooleano(body.activo, true);
+    const validation =
+      validarInstructor(body, {
+        requireActivo: true,
+      });
 
-    if (!nombre) {
+    if (!validation.success) {
+      return validationErrorResponse(validation);
+    }
+
+    const input: InstructorInput =
+      validation.data;
+
+    if (input.activo === undefined) {
       return NextResponse.json(
-        { error: "El nombre del instructor es requerido" },
+        {
+          error:
+            "El estado del instructor es requerido",
+        },
         { status: 400 }
       );
     }
 
-    if (!apellidoPaterno) {
-      return NextResponse.json(
-        { error: "El apellido paterno es requerido" },
-        { status: 400 }
+    const actualizados =
+      await withUserEmail(
+        session.user.correo,
+        async () =>
+          db
+            .update(instructores)
+            .set({
+              nombre: input.nombre,
+              apellidoPaterno:
+                input.apellidoPaterno,
+              apellidoMaterno:
+                input.apellidoMaterno,
+              especialidad:
+                input.especialidad,
+              edad: input.edad,
+              telefono: input.telefono,
+              correo: input.correo,
+              direccion: input.direccion,
+              activo: input.activo,
+              updatedAt:
+                sql`CURRENT_TIMESTAMP`,
+            })
+            .where(
+              eq(
+                instructores.idInstructor,
+                instructorId
+              )
+            )
+            .returning({
+              idInstructor:
+                instructores.idInstructor,
+              nombre:
+                instructores.nombre,
+              apellidoPaterno:
+                instructores.apellidoPaterno,
+              apellidoMaterno:
+                instructores.apellidoMaterno,
+              especialidad:
+                instructores.especialidad,
+              edad: instructores.edad,
+              telefono:
+                instructores.telefono,
+              correo: instructores.correo,
+              direccion:
+                instructores.direccion,
+              activo: instructores.activo,
+            })
       );
-    }
 
-    if (!especialidad) {
+    const instructor = actualizados[0];
+
+    if (!instructor) {
       return NextResponse.json(
-        { error: "La especialidad es requerida" },
-        { status: 400 }
-      );
-    }
-
-    if (!edad) {
-      return NextResponse.json(
-        { error: "La edad es requerida y debe ser válida" },
-        { status: 400 }
-      );
-    }
-
-    if (!correo || !correoValido(correo)) {
-      return NextResponse.json(
-        { error: "El correo es requerido y debe ser válido" },
-        { status: 400 }
-      );
-    }
-
-    const userEmail = session.user.correo;
-
-    const actualizado = await withUserEmail(userEmail, async () => {
-      return await db
-        .update(instructores)
-        .set({
-          nombre,
-          apellidoPaterno,
-          apellidoMaterno,
-          especialidad,
-          edad,
-          telefono,
-          correo,
-          direccion,
-          activo,
-          updatedAt: sql`CURRENT_TIMESTAMP`,
-        })
-        .where(eq(instructores.idInstructor, idInstructor))
-        .returning({
-          idInstructor: instructores.idInstructor,
-          nombre: instructores.nombre,
-          apellidoPaterno: instructores.apellidoPaterno,
-          apellidoMaterno: instructores.apellidoMaterno,
-          especialidad: instructores.especialidad,
-          edad: instructores.edad,
-          telefono: instructores.telefono,
-          correo: instructores.correo,
-          direccion: instructores.direccion,
-          activo: instructores.activo,
-        });
-    });
-
-    if (!actualizado.length) {
-      return NextResponse.json(
-        { error: "Instructor no encontrado" },
+        {
+          error:
+            "Instructor no encontrado",
+        },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(actualizado[0]);
-  } catch (error) {
-    console.error("Error en PUT instructor:", error);
+    return NextResponse.json(instructor);
+  } catch (error: unknown) {
+    console.error(
+      "Error en PUT instructor:",
+      error
+    );
+
+    if (hasPostgresCode(error, "23505")) {
+      return NextResponse.json(
+        {
+          error:
+            "Ya existe un instructor con ese correo",
+        },
+        { status: 409 }
+      );
+    }
 
     return NextResponse.json(
-      { error: "Error al actualizar instructor" },
+      {
+        error:
+          "Error al actualizar instructor",
+      },
       { status: 500 }
     );
   }
 }
 
 export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  _request: Request,
+  { params }: InstructorRouteContext
 ) {
-  const { session, error } = await requireApiRole("admin");
+  const { session, error } =
+    await requireApiRole("admin");
 
   if (error) {
     return error;
   }
 
   if (!session) {
-    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    return NextResponse.json(
+      {
+        error: "No autenticado",
+      },
+      { status: 401 }
+    );
   }
 
   try {
     const { id } = await params;
-    const idInstructor = validarId(id);
+    const instructorId = parseId(id);
 
-    if (!idInstructor) {
+    if (!instructorId) {
       return NextResponse.json(
-        { error: "ID de instructor inválido" },
+        {
+          error:
+            "ID de instructor inválido",
+        },
         { status: 400 }
       );
     }
 
-    const userEmail = session.user.correo;
+    const ocultados = await withUserEmail(
+      session.user.correo,
+      async () =>
+        db
+          .update(instructores)
+          .set({
+            activo: false,
+            updatedAt:
+              sql`CURRENT_TIMESTAMP`,
+          })
+          .where(
+            eq(
+              instructores.idInstructor,
+              instructorId
+            )
+          )
+          .returning({
+            idInstructor:
+              instructores.idInstructor,
+            nombre: instructores.nombre,
+            apellidoPaterno:
+              instructores.apellidoPaterno,
+            especialidad:
+              instructores.especialidad,
+            activo: instructores.activo,
+          })
+    );
 
-    const ocultado = await withUserEmail(userEmail, async () => {
-      return await db
-        .update(instructores)
-        .set({
-          activo: false,
-          updatedAt: sql`CURRENT_TIMESTAMP`,
-        })
-        .where(eq(instructores.idInstructor, idInstructor))
-        .returning({
-          idInstructor: instructores.idInstructor,
-          nombre: instructores.nombre,
-          apellidoPaterno: instructores.apellidoPaterno,
-          especialidad: instructores.especialidad,
-          activo: instructores.activo,
-        });
-    });
+    const instructor = ocultados[0];
 
-    if (!ocultado.length) {
+    if (!instructor) {
       return NextResponse.json(
-        { error: "Instructor no encontrado" },
+        {
+          error:
+            "Instructor no encontrado",
+        },
         { status: 404 }
       );
     }
 
     return NextResponse.json({
-      message: "Instructor ocultado correctamente",
-      instructor: ocultado[0],
+      message:
+        "Instructor ocultado correctamente",
+      instructor,
     });
-  } catch (error) {
-    console.error("Error en DELETE instructor:", error);
+  } catch (error: unknown) {
+    console.error(
+      "Error en DELETE instructor:",
+      error
+    );
 
     return NextResponse.json(
-      { error: "Error al ocultar instructor" },
+      {
+        error:
+          "Error al ocultar instructor",
+      },
       { status: 500 }
     );
   }

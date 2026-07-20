@@ -1,66 +1,117 @@
 // src/app/api/modalidades/[id]/route.ts
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { modalidades } from "@/lib/schema/index";
-import { eq } from "drizzle-orm";
-import { withUserEmail } from "@/lib/db-with-user";
-import { requireApiRole } from "@/lib/auth";
 
-function validarId(id: string) {
-  const idNum = Number(id);
-  return Number.isInteger(idNum) && idNum > 0 ? idNum : null;
+import { NextResponse } from "next/server";
+import { eq, sql } from "drizzle-orm";
+
+import { requireApiRole } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { withUserEmail } from "@/lib/db-with-user";
+import {
+  cursos,
+  modalidades,
+} from "@/lib/schema";
+import {
+  hasPostgresCode,
+  type ValidationResult,
+} from "@/lib/validators/common";
+import {
+  validarModalidadCurso,
+  type ModalidadCursoInput,
+} from "@/lib/validators/catalogos-cursos";
+
+interface ModalidadRouteContext {
+  params: Promise<{
+    id: string;
+  }>;
 }
 
-function normalizarTexto(valor: unknown, maxLength = 255) {
-  if (typeof valor !== "string") {
-    return "";
-  }
+function parseId(id: string): number | null {
+  const parsed = Number(id);
 
-  return valor.trim().slice(0, maxLength);
+  return Number.isInteger(parsed) && parsed > 0
+    ? parsed
+    : null;
+}
+
+function validationErrorResponse<T>(
+  result: Extract<
+    ValidationResult<T>,
+    { success: false }
+  >
+) {
+  return NextResponse.json(
+    {
+      error: result.error,
+      details: result.fieldErrors,
+    },
+    { status: 400 }
+  );
 }
 
 export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  _request: Request,
+  { params }: ModalidadRouteContext
 ) {
   try {
     const { id } = await params;
-    const idModalidad = validarId(id);
+    const modalidadId = parseId(id);
 
-    if (!idModalidad) {
+    if (!modalidadId) {
       return NextResponse.json(
-        { error: "ID de modalidad inválido" },
+        {
+          error:
+            "ID de modalidad inválido",
+        },
         { status: 400 }
       );
     }
 
-    const modalidad = await db
+    const resultado = await db
       .select({
-        idModalidad: modalidades.idModalidad,
-        nombreModalidad: modalidades.nombreModalidad,
-        descripcion: modalidades.descripcion,
+        idModalidad:
+          modalidades.idModalidad,
+        nombreModalidad:
+          modalidades.nombreModalidad,
+        descripcion:
+          modalidades.descripcion,
       })
       .from(modalidades)
-      .where(eq(modalidades.idModalidad, idModalidad))
+      .where(
+        eq(
+          modalidades.idModalidad,
+          modalidadId
+        )
+      )
       .limit(1);
 
-    if (!modalidad.length) {
+    const modalidad = resultado[0];
+
+    if (!modalidad) {
       return NextResponse.json(
-        { error: "Modalidad no encontrada" },
+        {
+          error:
+            "Modalidad no encontrada",
+        },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(modalidad[0], {
+    return NextResponse.json(modalidad, {
       headers: {
         "Cache-Control": "no-store",
       },
     });
-  } catch (error) {
-    console.error("Error en GET modalidad:", error);
+  } catch (error: unknown) {
+    console.error(
+      "Error en GET modalidad:",
+      error
+    );
 
     return NextResponse.json(
-      { error: "Error al obtener modalidad" },
+      {
+        error:
+          "Error al obtener modalidad",
+      },
       { status: 500 }
     );
   }
@@ -68,130 +119,237 @@ export async function GET(
 
 export async function PUT(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: ModalidadRouteContext
 ) {
-  const { session, error } = await requireApiRole("admin");
+  const { session, error } =
+    await requireApiRole("admin");
 
   if (error) {
     return error;
   }
 
   if (!session) {
-    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    return NextResponse.json(
+      {
+        error: "No autenticado",
+      },
+      { status: 401 }
+    );
   }
 
   try {
     const { id } = await params;
-    const idModalidad = validarId(id);
+    const modalidadId = parseId(id);
 
-    if (!idModalidad) {
+    if (!modalidadId) {
       return NextResponse.json(
-        { error: "ID de modalidad inválido" },
+        {
+          error:
+            "ID de modalidad inválido",
+        },
         { status: 400 }
       );
     }
 
-    const body = await request.json();
+    const body: unknown = await request.json();
 
-    const nombreModalidad = normalizarTexto(body.nombreModalidad, 150);
-    const descripcion = normalizarTexto(body.descripcion, 500) || null;
+    const validation =
+      validarModalidadCurso(body);
 
-    if (!nombreModalidad) {
-      return NextResponse.json(
-        { error: "El nombre de la modalidad es requerido" },
-        { status: 400 }
-      );
+    if (!validation.success) {
+      return validationErrorResponse(validation);
     }
 
-    const userEmail = session.user.correo;
+    const input: ModalidadCursoInput =
+      validation.data;
 
-    const actualizada = await withUserEmail(userEmail, async () => {
-      return await db
-        .update(modalidades)
-        .set({
-          nombreModalidad,
-          descripcion,
-        })
-        .where(eq(modalidades.idModalidad, idModalidad))
-        .returning({
-          idModalidad: modalidades.idModalidad,
-          nombreModalidad: modalidades.nombreModalidad,
-          descripcion: modalidades.descripcion,
-        });
-    });
+    const actualizadas =
+      await withUserEmail(
+        session.user.correo,
+        async () =>
+          db
+            .update(modalidades)
+            .set({
+              nombreModalidad:
+                input.nombreModalidad,
+              descripcion:
+                input.descripcion,
+            })
+            .where(
+              eq(
+                modalidades.idModalidad,
+                modalidadId
+              )
+            )
+            .returning({
+              idModalidad:
+                modalidades.idModalidad,
+              nombreModalidad:
+                modalidades.nombreModalidad,
+              descripcion:
+                modalidades.descripcion,
+            })
+      );
 
-    if (!actualizada.length) {
+    const modalidad = actualizadas[0];
+
+    if (!modalidad) {
       return NextResponse.json(
-        { error: "Modalidad no encontrada" },
+        {
+          error:
+            "Modalidad no encontrada",
+        },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(actualizada[0]);
-  } catch (error) {
-    console.error("Error en PUT modalidad:", error);
+    return NextResponse.json(modalidad);
+  } catch (error: unknown) {
+    console.error(
+      "Error en PUT modalidad:",
+      error
+    );
+
+    if (hasPostgresCode(error, "23505")) {
+      return NextResponse.json(
+        {
+          error:
+            "Ya existe una modalidad con ese nombre",
+        },
+        { status: 409 }
+      );
+    }
 
     return NextResponse.json(
-      { error: "Error al actualizar modalidad" },
+      {
+        error:
+          "Error al actualizar modalidad",
+      },
       { status: 500 }
     );
   }
 }
 
 export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  _request: Request,
+  { params }: ModalidadRouteContext
 ) {
-  const { session, error } = await requireApiRole("admin");
+  const { session, error } =
+    await requireApiRole("admin");
 
   if (error) {
     return error;
   }
 
   if (!session) {
-    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    return NextResponse.json(
+      {
+        error: "No autenticado",
+      },
+      { status: 401 }
+    );
   }
 
   try {
     const { id } = await params;
-    const idModalidad = validarId(id);
+    const modalidadId = parseId(id);
 
-    if (!idModalidad) {
+    if (!modalidadId) {
       return NextResponse.json(
-        { error: "ID de modalidad inválido" },
+        {
+          error:
+            "ID de modalidad inválido",
+        },
         { status: 400 }
       );
     }
 
-    const userEmail = session.user.correo;
+    const uso = await db
+      .select({
+        total:
+          sql<number>`COUNT(*)::int`,
+      })
+      .from(cursos)
+      .where(
+        eq(
+          cursos.idModalidad,
+          modalidadId
+        )
+      );
 
-    const eliminada = await withUserEmail(userEmail, async () => {
-      return await db
-        .delete(modalidades)
-        .where(eq(modalidades.idModalidad, idModalidad))
-        .returning({
-          idModalidad: modalidades.idModalidad,
-          nombreModalidad: modalidades.nombreModalidad,
-          descripcion: modalidades.descripcion,
-        });
-    });
+    const totalCursos =
+      uso[0]?.total ?? 0;
 
-    if (!eliminada.length) {
+    if (totalCursos > 0) {
       return NextResponse.json(
-        { error: "Modalidad no encontrada" },
+        {
+          error:
+            "No se puede eliminar la modalidad porque está siendo utilizada por uno o más cursos",
+        },
+        { status: 409 }
+      );
+    }
+
+    const eliminadas =
+      await withUserEmail(
+        session.user.correo,
+        async () =>
+          db
+            .delete(modalidades)
+            .where(
+              eq(
+                modalidades.idModalidad,
+                modalidadId
+              )
+            )
+            .returning({
+              idModalidad:
+                modalidades.idModalidad,
+              nombreModalidad:
+                modalidades.nombreModalidad,
+              descripcion:
+                modalidades.descripcion,
+            })
+      );
+
+    const modalidad = eliminadas[0];
+
+    if (!modalidad) {
+      return NextResponse.json(
+        {
+          error:
+            "Modalidad no encontrada",
+        },
         { status: 404 }
       );
     }
 
     return NextResponse.json({
-      message: "Modalidad eliminada correctamente",
-      modalidad: eliminada[0],
+      message:
+        "Modalidad eliminada correctamente",
+      modalidad,
     });
-  } catch (error) {
-    console.error("Error en DELETE modalidad:", error);
+  } catch (error: unknown) {
+    console.error(
+      "Error en DELETE modalidad:",
+      error
+    );
+
+    if (hasPostgresCode(error, "23503")) {
+      return NextResponse.json(
+        {
+          error:
+            "No se puede eliminar la modalidad porque tiene registros relacionados",
+        },
+        { status: 409 }
+      );
+    }
 
     return NextResponse.json(
-      { error: "Error al eliminar modalidad" },
+      {
+        error:
+          "Error al eliminar modalidad",
+      },
       { status: 500 }
     );
   }

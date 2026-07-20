@@ -1,26 +1,46 @@
 // src/app/api/modalidades/route.ts
+
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { modalidades } from "@/lib/schema/index";
 import { desc } from "drizzle-orm";
-import { withUserEmail } from "@/lib/db-with-user";
+
 import { requireApiRole } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { withUserEmail } from "@/lib/db-with-user";
+import { modalidades } from "@/lib/schema";
+import {
+  hasPostgresCode,
+  type ValidationResult,
+} from "@/lib/validators/common";
+import {
+  validarModalidadCurso,
+  type ModalidadCursoInput,
+} from "@/lib/validators/catalogos-cursos";
 
-function normalizarTexto(valor: unknown, maxLength = 255) {
-  if (typeof valor !== "string") {
-    return "";
-  }
-
-  return valor.trim().slice(0, maxLength);
+function validationErrorResponse<T>(
+  result: Extract<
+    ValidationResult<T>,
+    { success: false }
+  >
+) {
+  return NextResponse.json(
+    {
+      error: result.error,
+      details: result.fieldErrors,
+    },
+    { status: 400 }
+  );
 }
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const isAdmin = searchParams.get("admin") === "true";
+
+    const isAdmin =
+      searchParams.get("admin") === "true";
 
     if (isAdmin) {
-      const { error } = await requireApiRole("admin");
+      const { error } =
+        await requireApiRole("admin");
 
       if (error) {
         return error;
@@ -29,81 +49,127 @@ export async function GET(request: Request) {
 
     const data = await db
       .select({
-        idModalidad: modalidades.idModalidad,
-        nombreModalidad: modalidades.nombreModalidad,
-        descripcion: modalidades.descripcion,
+        idModalidad:
+          modalidades.idModalidad,
+        nombreModalidad:
+          modalidades.nombreModalidad,
+        descripcion:
+          modalidades.descripcion,
       })
       .from(modalidades)
-      .orderBy(desc(modalidades.idModalidad));
+      .orderBy(
+        desc(modalidades.idModalidad)
+      );
 
     return NextResponse.json(data, {
       headers: {
         "Cache-Control": "no-store",
       },
     });
-  } catch (error) {
-    console.error("Error en GET modalidades:", error);
+  } catch (error: unknown) {
+    console.error(
+      "Error en GET modalidades:",
+      error
+    );
 
     return NextResponse.json(
-      { error: "Error al obtener modalidades" },
+      {
+        error:
+          "Error al obtener modalidades",
+      },
       { status: 500 }
     );
   }
 }
 
 export async function POST(request: Request) {
-  const { session, error } = await requireApiRole("admin");
+  const { session, error } =
+    await requireApiRole("admin");
 
   if (error) {
     return error;
   }
 
   if (!session) {
-    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    return NextResponse.json(
+      {
+        error: "No autenticado",
+      },
+      { status: 401 }
+    );
   }
 
   try {
-    const body = await request.json();
+    const body: unknown = await request.json();
 
-    const nombreModalidad = normalizarTexto(body.nombreModalidad, 150);
-    const descripcion = normalizarTexto(body.descripcion, 500) || null;
+    const validation =
+      validarModalidadCurso(body);
 
-    if (!nombreModalidad) {
-      return NextResponse.json(
-        { error: "El nombre de la modalidad es requerido" },
-        { status: 400 }
-      );
+    if (!validation.success) {
+      return validationErrorResponse(validation);
     }
 
-    const userEmail = session.user.correo;
+    const input: ModalidadCursoInput =
+      validation.data;
 
-    const nueva = await withUserEmail(userEmail, async () => {
-      return await db
-        .insert(modalidades)
-        .values({
-          nombreModalidad,
-          descripcion,
-        })
-        .returning({
-          idModalidad: modalidades.idModalidad,
-          nombreModalidad: modalidades.nombreModalidad,
-          descripcion: modalidades.descripcion,
-        });
-    });
+    const nuevas = await withUserEmail(
+      session.user.correo,
+      async () =>
+        db
+          .insert(modalidades)
+          .values({
+            nombreModalidad:
+              input.nombreModalidad,
+            descripcion:
+              input.descripcion,
+          })
+          .returning({
+            idModalidad:
+              modalidades.idModalidad,
+            nombreModalidad:
+              modalidades.nombreModalidad,
+            descripcion:
+              modalidades.descripcion,
+          })
+    );
 
-    if (!nueva.length || !nueva[0]) {
+    const modalidad = nuevas[0];
+
+    if (!modalidad) {
       return NextResponse.json(
-        { error: "Error al crear modalidad" },
+        {
+          error:
+            "No se pudo crear la modalidad",
+        },
         { status: 500 }
       );
     }
 
-    return NextResponse.json(nueva[0], { status: 201 });
-  } catch (error) {
-    console.error("Error en POST modalidad:", error);
+    return NextResponse.json(
+      modalidad,
+      { status: 201 }
+    );
+  } catch (error: unknown) {
+    console.error(
+      "Error en POST modalidad:",
+      error
+    );
+
+    if (hasPostgresCode(error, "23505")) {
+      return NextResponse.json(
+        {
+          error:
+            "Ya existe una modalidad con ese nombre",
+        },
+        { status: 409 }
+      );
+    }
 
     return NextResponse.json(
-      { error: "Error al crear modalidad" },
+      {
+        error:
+          "Error al crear modalidad",
+      },
       { status: 500 }
     );
   }

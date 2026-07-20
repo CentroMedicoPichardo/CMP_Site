@@ -1,18 +1,44 @@
 // src/lib/swr-provider.tsx
-'use client';
+"use client";
 
-import { SWRConfig } from 'swr';
+import { SWRConfig } from "swr";
+import type { ReactNode } from "react";
+import { getApiErrorMessage } from "@/types/api";
 
-const fetcher = async (url: string) => {
-  const res = await fetch(url);
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.message || 'Error al cargar datos');
+async function fetcher<T>(url: string): Promise<T> {
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  let payload: unknown = null;
+
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
   }
-  return res.json();
-};
 
-export function SWRProvider({ children }: { children: React.ReactNode }) {
+  if (!response.ok) {
+    throw new Error(
+      getApiErrorMessage(
+        payload,
+        `Error al cargar datos (${response.status})`
+      )
+    );
+  }
+
+  return payload as T;
+}
+
+interface SWRProviderProps {
+  children: ReactNode;
+}
+
+export function SWRProvider({
+  children,
+}: SWRProviderProps) {
   return (
     <SWRConfig
       value={{
@@ -21,6 +47,7 @@ export function SWRProvider({ children }: { children: React.ReactNode }) {
         revalidateOnReconnect: true,
         dedupingInterval: 2000,
         errorRetryCount: 3,
+        shouldRetryOnError: true,
       }}
     >
       {children}

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { AlertTriangle, Bell, TrendingDown, CheckCircle } from 'lucide-react';
 import type { Curso, CursoAnalytics } from '@/types/cursos';
+import { getApiErrorMessage } from "@/types/api";
 
 
 type AlertType = 'danger' | 'warning' | 'success';
@@ -67,9 +68,17 @@ export function CursoAlerts({ curso, analytics }: Props) {
           })
         });
 
-        const data = await res.json();
+        const payload: unknown =
+          await res.json();
 
-        if (!res.ok) throw new Error(data.error);
+        if (!res.ok) {
+          throw new Error(
+            getApiErrorMessage(
+              payload,
+              "Error al enviar la promoción"
+            )
+          );
+        }
 
         setMensaje('✅ Correos enviados correctamente');
       }
@@ -78,8 +87,13 @@ export function CursoAlerts({ curso, analytics }: Props) {
         setMensaje('⚡ Estrategia de urgencia activada');
       }
 
-    } catch (error: any) {
-      setMensaje('❌ ' + error.message);
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No fue posible completar la acción";
+
+      setMensaje(`❌ ${message}`);
     } finally {
       setLoading(null);
 

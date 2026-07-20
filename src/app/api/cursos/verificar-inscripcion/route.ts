@@ -1,35 +1,66 @@
 // src/app/api/cursos/verificar-inscripcion/route.ts
+
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  inArray,
+} from "drizzle-orm";
+
 import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { inscripcionesCursos } from "@/lib/schema";
+import { parsePositiveInteger } from "@/lib/validators/common";
 
-function obtenerFilas(resultado: any): any[] {
-  if (Array.isArray(resultado)) {
-    return resultado;
-  }
+interface InscripcionResumen {
+  idInscripcion: number;
+  estado: string | null;
+  participanteId: number | null;
+  compraParticipanteId: number | null;
+}
 
-  if (Array.isArray(resultado?.rows)) {
-    return resultado.rows;
-  }
+interface VerificarInscripcionResponse {
+  autenticado: boolean;
+  inscrito: boolean;
+  cantidadInscripciones: number;
+  inscripcionId: number | null;
+  inscripciones: InscripcionResumen[];
+}
 
-  if (Array.isArray(resultado?.[0])) {
-    return resultado[0];
-  }
+const ESTADOS_VIGENTES = [
+  "activo",
+  "Activo",
+  "confirmada",
+  "Confirmada",
+] as const;
 
-  return [];
+function respuestaSinInscripcion(
+  autenticado: boolean
+): VerificarInscripcionResponse {
+  return {
+    autenticado,
+    inscrito: false,
+    cantidadInscripciones: 0,
+    inscripcionId: null,
+    inscripciones: [],
+  };
 }
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const cursoId = searchParams.get("cursoId");
 
-    const cursoIdNum = Number(cursoId);
+    const cursoId = parsePositiveInteger(
+      searchParams.get("cursoId")
+    );
 
-    if (!cursoId || !Number.isFinite(cursoIdNum) || cursoIdNum <= 0) {
+    if (!cursoId) {
       return NextResponse.json(
-        { error: "Curso ID requerido o inválido" },
+        {
+          error:
+            "El parámetro cursoId es requerido y debe ser un entero positivo",
+        },
         { status: 400 }
       );
     }
@@ -37,37 +68,94 @@ export async function GET(request: Request) {
     const session = await auth();
 
     if (!session) {
-      return NextResponse.json({
-        inscrito: false,
-        inscripcionId: null,
-      });
+      return NextResponse.json(
+        respuestaSinInscripcion(false),
+        {
+          headers: {
+            "Cache-Control": "no-store",
+          },
+        }
+      );
     }
 
-    const usuarioId = session.user.id;
+    const usuarioId = Number(session.user.id);
 
-    const resultado = await db.execute(sql`
-      SELECT id_inscripcion, estado
-      FROM academia.inscripciones_cursos
-      WHERE curso_id = ${cursoIdNum}
-      AND usuario_id = ${usuarioId}
-      AND estado = 'activo'
-      LIMIT 1
-    `);
+    if (
+      !Number.isInteger(usuarioId) ||
+      usuarioId <= 0
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "La sesión no contiene un usuario válido",
+        },
+        { status: 401 }
+      );
+    }
 
-    const inscripcion = obtenerFilas(resultado);
-
-    return NextResponse.json({
-      inscrito: inscripcion.length > 0,
-      inscripcionId: inscripcion[0]?.id_inscripcion ?? null,
-    });
-  } catch (error) {
-    console.error("Error verificando inscripción:", error);
+    const inscripciones = await db
+      .select({
+        idInscripcion:
+          inscripcionesCursos.idInscripcion,
+        estado: inscripcionesCursos.estado,
+        participanteId:
+          inscripcionesCursos.participanteId,
+        compraParticipanteId:
+          inscripcionesCursos.compraParticipanteId,
+      })
+      .from(inscripcionesCursos)
+      .where(
+        and(
+          eq(
+            inscripcionesCursos.cursoId,
+            cursoId
+          ),
+          eq(
+            inscripcionesCursos.usuarioId,
+            usuarioId
+          ),
+          inArray(
+            inscripcionesCursos.estado,
+            [...ESTADOS_VIGENTES]
+          )
+        )
+      )
+      .orderBy(
+        asc(inscripcionesCursos.idInscripcion)
+      );
 
     return NextResponse.json(
       {
+        autenticado: true,
+        inscrito: inscripciones.length > 0,
+        cantidadInscripciones:
+          inscripciones.length,
+        inscripcionId:
+          inscripciones[0]?.idInscripcion ??
+          null,
+        inscripciones,
+      } satisfies VerificarInscripcionResponse,
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      }
+    );
+  } catch (error: unknown) {
+    console.error(
+      "Error verificando inscripción:",
+      error
+    );
+
+    return NextResponse.json(
+      {
+        error:
+          "Error al verificar la inscripción",
+        autenticado: false,
         inscrito: false,
+        cantidadInscripciones: 0,
         inscripcionId: null,
-        error: "Error al verificar inscripción",
+        inscripciones: [],
       },
       { status: 500 }
     );

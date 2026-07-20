@@ -4,37 +4,31 @@
 import { useState, useEffect } from 'react';
 import { X, Save, GraduationCap, Calendar, Clock, Users, MapPin, DollarSign, Tag, User } from 'lucide-react';
 import { CloudinaryUploader } from '@/components/admin/cloudinary/CloudinaryUploader';
-import type { Curso, CursoFormData } from '@/types/cursos';
+import type {
+  ActualizarCursoInput,
+  CrearCursoInput,
+  Curso,
+  CursoFormData,
+} from "@/types/cursos";
 
-// Tipos para los datos de las tablas relacionadas
-interface Instructor {
-  idInstructor: number;
-  nombre: string;
-  apellidoPaterno: string;
-  apellidoMaterno: string | null;
-  especialidad: string;
-}
+import type {
+  CategoriaCursoOption,
+  InstructorCursoOption,
+  ModalidadCurso,
+  UbicacionCursoOption,
+} from "@/types/catalogos-cursos";
 
-interface Categoria {
-  idCategoria: number;
-  nombreCategoria: string;
-}
 
-interface Ubicacion {
-  idUbicacion: number;
-  nombreUbicacion: string;
-  direccionCompleta: string | null;
-}
-
-interface Modalidad {
-  idModalidad: number;
-  nombreModalidad: string;
-}
+type CursoSubmitInput =
+  | CrearCursoInput
+  | ActualizarCursoInput;
 
 interface CursoFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (cursoData: Partial<Curso>) => Promise<void>;
+  onSave: (
+    cursoData: CursoSubmitInput
+  ) => Promise<void>;
   curso: Curso | null;
 }
 
@@ -56,40 +50,97 @@ const initialFormData: CursoFormData = {
   activo: true
 };
 
+
+
+
 export function CursoFormModal({ isOpen, onClose, onSave, curso }: CursoFormModalProps) {
   const [formData, setFormData] = useState<CursoFormData>(initialFormData);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof CursoFormData, string>>>({});
 
   // Estados para los datos de las tablas relacionadas
-  const [instructores, setInstructores] = useState<Instructor[]>([]);
-  const [categorias, setCategorias] = useState<Categoria[]>([]);
-  const [ubicaciones, setUbicaciones] = useState<Ubicacion[]>([]);
-  const [modalidades, setModalidades] = useState<Modalidad[]>([]);
-  const [loadingData, setLoadingData] = useState(true);
+  const [instructores, setInstructores] =
+    useState<InstructorCursoOption[]>([]);
 
+  const [categorias, setCategorias] =
+    useState<CategoriaCursoOption[]>([]);
+
+  const [ubicaciones, setUbicaciones] =
+    useState<UbicacionCursoOption[]>([]);
+
+  const [modalidades, setModalidades] =
+    useState<ModalidadCurso[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
+  
+  async function readJsonResponse<T>(
+    response: Response
+  ): Promise<T> {
+    const payload: unknown = await response.json();
+
+    return payload as T;
+  }
   // Cargar datos de las tablas relacionadas
   useEffect(() => {
-    const fetchRelatedData = async () => {
-      setLoadingData(true);
-      try {
-        const [instructoresRes, categoriasRes, ubicacionesRes, modalidadesRes] = await Promise.all([
-          fetch('/api/instructores?admin=true'),
-          fetch('/api/categorias'),
-          fetch('/api/ubicaciones'),
-          fetch('/api/modalidades')
-        ]);
+  const fetchRelatedData = async () => {
+    setLoadingData(true);
 
-        if (instructoresRes.ok) setInstructores(await instructoresRes.json());
-        if (categoriasRes.ok) setCategorias(await categoriasRes.json());
-        if (ubicacionesRes.ok) setUbicaciones(await ubicacionesRes.json());
-        if (modalidadesRes.ok) setModalidades(await modalidadesRes.json());
-      } catch (error) {
-        console.error('Error cargando datos relacionados:', error);
-      } finally {
-        setLoadingData(false);
+    try {
+      const [
+        instructoresRes,
+        categoriasRes,
+        ubicacionesRes,
+        modalidadesRes,
+      ] = await Promise.all([
+        fetch("/api/instructores?admin=true"),
+        fetch("/api/categorias?admin=true"),
+        fetch("/api/ubicaciones?admin=true"),
+        fetch("/api/modalidades?admin=true"),
+      ]);
+
+      if (
+        !instructoresRes.ok ||
+        !categoriasRes.ok ||
+        !ubicacionesRes.ok ||
+        !modalidadesRes.ok
+      ) {
+        throw new Error(
+          "No fue posible cargar los catálogos del curso"
+        );
       }
-    };
+
+      const [
+        instructoresData,
+        categoriasData,
+        ubicacionesData,
+        modalidadesData,
+      ] = await Promise.all([
+        readJsonResponse<InstructorCursoOption[]>(
+          instructoresRes
+        ),
+        readJsonResponse<CategoriaCursoOption[]>(
+          categoriasRes
+        ),
+        readJsonResponse<UbicacionCursoOption[]>(
+          ubicacionesRes
+        ),
+        readJsonResponse<ModalidadCurso[]>(
+          modalidadesRes
+        ),
+      ]);
+
+      setInstructores(instructoresData);
+      setCategorias(categoriasData);
+      setUbicaciones(ubicacionesData);
+      setModalidades(modalidadesData);
+    } catch (error: unknown) {
+      console.error(
+        "Error cargando datos relacionados:",
+        error
+      );
+    } finally {
+      setLoadingData(false);
+    }
+  };
 
     if (isOpen) {
       fetchRelatedData();
@@ -122,53 +173,56 @@ export function CursoFormModal({ isOpen, onClose, onSave, curso }: CursoFormModa
     setErrors({});
   }, [curso, isOpen]);
 
+
+  
   // Función para convertir CursoFormData a Partial<Curso>
   // IMPORTANTE: Los campos obligatorios en Curso no pueden ser null, solo undefined
-  const convertToCursoPartial = (data: CursoFormData): Partial<Curso> => {
-    const result: Partial<Curso> = {
-      tituloCurso: data.tituloCurso,
-      descripcion: data.descripcion === null ? undefined : data.descripcion,
+  function buildCursoSubmitInput(
+    data: CursoFormData,
+    editing: boolean
+  ): CursoSubmitInput {
+    const baseInput: CrearCursoInput = {
+      tituloCurso: data.tituloCurso.trim(),
+      descripcion:
+        data.descripcion?.trim() || null,
+
+      idInstructor: data.idInstructor as number,
+      idCategoria: data.idCategoria as number,
+      idUbicacion: data.idUbicacion,
+      idModalidad: data.idModalidad as number,
+
       fechaInicio: data.fechaInicio,
       fechaFin: data.fechaFin,
+      horario: data.horario?.trim() || null,
       dirigidoA: data.dirigidoA,
+
       cupoMaximo: data.cupoMaximo,
-      cuposOcupados: data.cuposOcupados,
       costo: data.costo,
-      activo: data.activo,
+      urlImagenPortada:
+        data.urlImagenPortada?.trim() || null,
     };
 
-    // Solo agregar idCurso si existe (para edición)
-    if (data.idCurso) {
-      result.idCurso = data.idCurso;
+    if (!editing) {
+      return baseInput;
     }
 
-    // Campos obligatorios (no pueden ser null)
-    if (data.idInstructor !== null && data.idInstructor !== undefined) {
-      result.idInstructor = data.idInstructor;
-    }
-    if (data.idCategoria !== null && data.idCategoria !== undefined) {
-      result.idCategoria = data.idCategoria;
-    }
-    if (data.idModalidad !== null && data.idModalidad !== undefined) {
-      result.idModalidad = data.idModalidad;
-    }
-
-    // Campos opcionales (pueden ser undefined)
-    if (data.idUbicacion !== null && data.idUbicacion !== undefined) {
-      result.idUbicacion = data.idUbicacion;
-    }
-    if (data.horario !== null && data.horario !== undefined && data.horario !== '') {
-      result.horario = data.horario;
-    }
-    if (data.urlImagenPortada !== null && data.urlImagenPortada !== undefined && data.urlImagenPortada !== '') {
-      result.urlImagenPortada = data.urlImagenPortada;
-    }
-
-    return result;
-  };
+    return {
+      ...baseInput,
+      activo: data.activo,
+    };
+  }
 
   const validateForm = (): boolean => {
     const newErrors: Partial<Record<keyof CursoFormData, string>> = {};
+    const costoNumero = Number(formData.costo);
+
+    if (
+      !Number.isFinite(costoNumero) ||
+      costoNumero < 0
+    ) {
+      newErrors.costo =
+        "El costo debe ser un número mayor o igual que cero";
+    }
 
     if (!formData.tituloCurso.trim()) {
       newErrors.tituloCurso = 'El título del curso es requerido';
@@ -199,42 +253,107 @@ export function CursoFormModal({ isOpen, onClose, onSave, curso }: CursoFormModa
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateForm()) return;
+  const handleSubmit = async (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+
+    if (!validateForm()) {
+      return;
+    }
 
     setSaving(true);
+
     try {
-      // Convertir los datos antes de enviar
-      const cursoData = convertToCursoPartial(formData);
-      console.log('Enviando datos:', cursoData); // Debug
+      const cursoData =
+        buildCursoSubmitInput(
+          formData,
+          curso !== null
+        );
+
       await onSave(cursoData);
-      onClose();
-    } catch (error) {
-      console.error('Error al guardar:', error);
+    } catch (error: unknown) {
+      console.error(
+        "Error al guardar curso:",
+        error
+      );
     } finally {
       setSaving(false);
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    // Para campos que pueden ser null, si el valor es string vacío, lo dejamos como está
-    setFormData(prev => ({ ...prev, [name]: value }));
-    if (errors[name as keyof CursoFormData]) {
-      setErrors(prev => ({ ...prev, [name]: undefined }));
+  const handleChange = (
+    event: React.ChangeEvent<
+      HTMLInputElement |
+      HTMLTextAreaElement |
+      HTMLSelectElement
+    >
+  ) => {
+    const { name, value } = event.target;
+
+    setFormData((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+
+    const field =
+      name as keyof CursoFormData;
+
+    if (errors[field]) {
+      setErrors((previous) => ({
+        ...previous,
+        [field]: undefined,
+      }));
     }
   };
 
-  const handleNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    const numValue = value ? Number(value) : null;
-    setFormData(prev => ({ ...prev, [name]: numValue }));
-    
-    // Limpiar error del campo si existe
-    if (errors[name as keyof CursoFormData]) {
-      setErrors(prev => ({ ...prev, [name]: undefined }));
+  const handleNullableIdChange = (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    const { name, value } = event.target;
+
+    const parsedValue =
+      value === "" ? null : Number(value);
+
+    const field =
+      name as keyof CursoFormData;
+
+    setFormData((previous) => ({
+      ...previous,
+      [field]: parsedValue,
+    }));
+
+    if (errors[field]) {
+      setErrors((previous) => ({
+        ...previous,
+        [field]: undefined,
+      }));
+    }
+  };
+
+  const handleNumberChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const { name, value } = event.target;
+
+    const field =
+      name as keyof CursoFormData;
+
+    const parsedValue =
+      value === "" ? 0 : Number(value);
+
+    setFormData((previous) => ({
+      ...previous,
+      [field]: Number.isFinite(parsedValue)
+        ? parsedValue
+        : 0,
+    }));
+
+    if (errors[field]) {
+      setErrors((previous) => ({
+        ...previous,
+        [field]: undefined,
+      }));
     }
   };
 
@@ -340,7 +459,7 @@ export function CursoFormModal({ isOpen, onClose, onSave, curso }: CursoFormModa
                   <select
                     name="idInstructor"
                     value={formData.idInstructor || ''}
-                    onChange={handleChange}
+                    onChange={handleNullableIdChange}
                     className={`w-full pl-10 pr-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-4 transition-all duration-300 text-gray-800 bg-white ${
                       errors.idInstructor ? 'border-red-500 focus:ring-red-200' : 'border-[#FFC300]/30 focus:border-[#FFC300] focus:ring-[#FFC300]/20'
                     }`}
@@ -365,7 +484,7 @@ export function CursoFormModal({ isOpen, onClose, onSave, curso }: CursoFormModa
                   <select
                     name="idCategoria"
                     value={formData.idCategoria || ''}
-                    onChange={handleChange}
+                    onChange={handleNullableIdChange}
                     className={`w-full pl-10 pr-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-4 transition-all duration-300 text-gray-800 bg-white ${
                       errors.idCategoria ? 'border-red-500 focus:ring-red-200' : 'border-[#FFC300]/30 focus:border-[#FFC300] focus:ring-[#FFC300]/20'
                     }`}
@@ -454,7 +573,7 @@ export function CursoFormModal({ isOpen, onClose, onSave, curso }: CursoFormModa
                   <select
                     name="idModalidad"
                     value={formData.idModalidad || ''}
-                    onChange={handleChange}
+                    onChange={handleNullableIdChange}
                     className={`w-full pl-10 pr-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-4 transition-all duration-300 text-gray-800 bg-white ${
                       errors.idModalidad ? 'border-red-500 focus:ring-red-200' : 'border-[#FFC300]/30 focus:border-[#FFC300] focus:ring-[#FFC300]/20'
                     }`}
@@ -518,7 +637,7 @@ export function CursoFormModal({ isOpen, onClose, onSave, curso }: CursoFormModa
                   <select
                     name="idUbicacion"
                     value={formData.idUbicacion || ''}
-                    onChange={handleChange}
+                    onChange={handleNullableIdChange}
                     className="w-full pl-10 pr-4 py-3 border-2 border-[#FFC300]/30 rounded-xl focus:outline-none focus:border-[#FFC300] focus:ring-4 focus:ring-[#FFC300]/20 transition-all duration-300 text-gray-800 bg-white"
                   >
                     <option value="">Sin ubicación definida</option>
@@ -536,35 +655,38 @@ export function CursoFormModal({ isOpen, onClose, onSave, curso }: CursoFormModa
                 <div className="relative">
                   <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-[#0A3D62]" size={18} />
                   <input
-                    type="text"
+                    type="number"
                     name="costo"
                     value={formData.costo}
                     onChange={handleChange}
+                    min="0"
+                    step="0.01"
                     className="w-full pl-10 pr-4 py-3 border-2 border-[#FFC300]/30 rounded-xl focus:outline-none focus:border-[#FFC300] focus:ring-4 focus:ring-[#FFC300]/20 text-gray-800"
-                    placeholder="0.00 (gratuito) o monto"
+                    placeholder="0.00"
                   />
+                  {errors.costo && (
+                    <p className="text-xs text-red-500">
+                      {errors.costo}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Cupos ocupados (solo visible en edición) */}
             {curso && (
-              <div className="space-y-2">
-                <label className="block text-sm font-semibold text-[#0A3D62]">Cupos Ocupados</label>
-                <div className="relative">
-                  <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-[#0A3D62]" size={18} />
-                  <input
-                    type="number"
-                    name="cuposOcupados"
-                    value={formData.cuposOcupados}
-                    onChange={handleNumberChange}
-                    className="w-full pl-10 pr-4 py-3 border-2 border-[#FFC300]/30 rounded-xl focus:outline-none focus:border-[#FFC300] focus:ring-4 focus:ring-[#FFC300]/20 text-gray-800"
-                    min="0"
-                    max={formData.cupoMaximo}
-                  />
-                </div>
-                <p className="text-xs text-gray-500">
-                  Cupos disponibles: {(formData.cupoMaximo || 0) - (formData.cuposOcupados || 0)}
+              <div className="rounded-xl border border-[#FFC300]/30 bg-[#FFF9E6] px-4 py-3">
+                <p className="text-sm font-semibold text-[#0A3D62]">
+                  Ocupación actual
+                </p>
+
+                <p className="mt-1 text-sm text-gray-600">
+                  {curso.cuposOcupados ?? 0} de{" "}
+                  {formData.cupoMaximo} lugares ocupados
+                </p>
+
+                <p className="mt-1 text-xs text-gray-500">
+                  Los cupos ocupados se actualizan mediante
+                  compras, inscripciones y cancelaciones.
                 </p>
               </div>
             )}

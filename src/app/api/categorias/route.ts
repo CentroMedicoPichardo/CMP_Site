@@ -1,28 +1,53 @@
 // src/app/api/categorias/route.ts
+
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { categoriasCursos } from "@/lib/schema/index";
-import { desc, eq, and, type SQL } from "drizzle-orm";
-import { withUserEmail } from "@/lib/db-with-user";
+import {
+  and,
+  desc,
+  eq,
+  ilike,
+  type SQL,
+} from "drizzle-orm";
+
 import { requireApiRole } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { withUserEmail } from "@/lib/db-with-user";
+import { categoriasCursos } from "@/lib/schema";
+import {
+  hasPostgresCode,
+  type ValidationResult,
+} from "@/lib/validators/common";
+import {
+  validarCategoriaCurso,
+  type CategoriaCursoInput,
+} from "@/lib/validators/catalogos-cursos";
 
-function normalizarTexto(valor: unknown, maxLength = 255) {
-  if (typeof valor !== "string") {
-    return "";
-  }
-
-  return valor.trim().slice(0, maxLength);
+function validationErrorResponse<T>(
+  result: Extract<
+    ValidationResult<T>,
+    { success: false }
+  >
+) {
+  return NextResponse.json(
+    {
+      error: result.error,
+      details: result.fieldErrors,
+    },
+    { status: 400 }
+  );
 }
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-
-    const isAdmin = searchParams.get("admin") === "true";
-    const search = normalizarTexto(searchParams.get("search"), 150);
+    const isAdmin =
+      searchParams.get("admin") === "true";
+    const search =
+      searchParams.get("search")?.trim() ?? "";
 
     if (isAdmin) {
-      const { error } = await requireApiRole("admin");
+      const { error } =
+        await requireApiRole("admin");
 
       if (error) {
         return error;
@@ -32,90 +57,142 @@ export async function GET(request: Request) {
     const filtros: SQL[] = [];
 
     if (!isAdmin) {
-      filtros.push(eq(categoriasCursos.activo, true));
+      filtros.push(
+        eq(categoriasCursos.activo, true)
+      );
     }
 
     if (search) {
-      filtros.push(eq(categoriasCursos.nombreCategoria, search));
+      filtros.push(
+        ilike(
+          categoriasCursos.nombreCategoria,
+          `%${search.slice(0, 50)}%`
+        )
+      );
     }
 
     const data = await db
       .select({
-        idCategoria: categoriasCursos.idCategoria,
-        nombreCategoria: categoriasCursos.nombreCategoria,
-        descripcion: categoriasCursos.descripcion,
+        idCategoria:
+          categoriasCursos.idCategoria,
+        nombreCategoria:
+          categoriasCursos.nombreCategoria,
+        descripcion:
+          categoriasCursos.descripcion,
         activo: categoriasCursos.activo,
       })
       .from(categoriasCursos)
-      .where(filtros.length ? and(...filtros) : undefined)
-      .orderBy(desc(categoriasCursos.idCategoria));
+      .where(
+        filtros.length > 0
+          ? and(...filtros)
+          : undefined
+      )
+      .orderBy(
+        desc(categoriasCursos.idCategoria)
+      );
 
     return NextResponse.json(data);
-  } catch (error) {
-    console.error("Error en GET categorías:", error);
+  } catch (error: unknown) {
+    console.error(
+      "Error en GET categorías:",
+      error
+    );
 
     return NextResponse.json(
-      { error: "Error al obtener categorías" },
+      {
+        error: "Error al obtener categorías",
+      },
       { status: 500 }
     );
   }
 }
 
 export async function POST(request: Request) {
-  const { session, error } = await requireApiRole("admin");
+  const { session, error } =
+    await requireApiRole("admin");
 
   if (error) {
     return error;
   }
 
   if (!session) {
-    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    return NextResponse.json(
+      { error: "No autenticado" },
+      { status: 401 }
+    );
   }
 
   try {
-    const body = await request.json();
+    const body: unknown = await request.json();
 
-    const nombreCategoria = normalizarTexto(body.nombreCategoria, 150);
-    const descripcion = normalizarTexto(body.descripcion, 500) || null;
+    const validation =
+      validarCategoriaCurso(body);
 
-    if (!nombreCategoria) {
-      return NextResponse.json(
-        { error: "El nombre de la categoría es requerido" },
-        { status: 400 }
-      );
+    if (!validation.success) {
+      return validationErrorResponse(validation);
     }
 
-    const userEmail = session.user.correo;
+    const input: CategoriaCursoInput =
+      validation.data;
 
-    const nueva = await withUserEmail(userEmail, async () => {
-      return await db
-        .insert(categoriasCursos)
-        .values({
-          nombreCategoria,
-          descripcion,
-          activo: true,
-        })
-        .returning({
-          idCategoria: categoriasCursos.idCategoria,
-          nombreCategoria: categoriasCursos.nombreCategoria,
-          descripcion: categoriasCursos.descripcion,
-          activo: categoriasCursos.activo,
-        });
-    });
+    const nueva = await withUserEmail(
+      session.user.correo,
+      async () =>
+        db
+          .insert(categoriasCursos)
+          .values({
+            nombreCategoria:
+              input.nombreCategoria,
+            descripcion: input.descripcion,
+            activo: true,
+          })
+          .returning({
+            idCategoria:
+              categoriasCursos.idCategoria,
+            nombreCategoria:
+              categoriasCursos.nombreCategoria,
+            descripcion:
+              categoriasCursos.descripcion,
+            activo: categoriasCursos.activo,
+          })
+    );
 
-    if (!nueva.length || !nueva[0]) {
+    const categoria = nueva[0];
+
+    if (!categoria) {
       return NextResponse.json(
-        { error: "Error al crear categoría" },
+        {
+          error:
+            "No se pudo crear la categoría",
+        },
         { status: 500 }
       );
     }
 
-    return NextResponse.json(nueva[0], { status: 201 });
-  } catch (error) {
-    console.error("Error en POST categoría:", error);
+    return NextResponse.json(
+      categoria,
+      { status: 201 }
+    );
+  } catch (error: unknown) {
+    console.error(
+      "Error en POST categoría:",
+      error
+    );
+
+    if (hasPostgresCode(error, "23505")) {
+      return NextResponse.json(
+        {
+          error:
+            "Ya existe una categoría con ese nombre",
+        },
+        { status: 409 }
+      );
+    }
 
     return NextResponse.json(
-      { error: "Error al crear categoría" },
+      {
+        error: "Error al crear categoría",
+      },
       { status: 500 }
     );
   }

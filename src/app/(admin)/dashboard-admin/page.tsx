@@ -39,8 +39,18 @@ export default function AdminDashboardPage() {
       
       const response = await fetch('/api/dashboard-admin');
       
+      const payload: unknown = await response.json().catch(() => null);
+
       if (!response.ok) {
-        throw new Error(`Error ${response.status}`);
+        const message =
+          typeof payload === "object" &&
+          payload !== null &&
+          "error" in payload &&
+          typeof payload.error === "string"
+            ? payload.error
+            : `Error ${response.status}`;
+
+        throw new Error(message);
       }
       
       const result = await response.json();

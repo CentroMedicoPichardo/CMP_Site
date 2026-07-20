@@ -84,7 +84,6 @@ export function CursosGrid({ cursos, loading, onEdit, onToggleActivo }: CursosGr
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {cursos.map((curso) => {
-        const uniqueKey = curso.idCurso || `curso-${Math.random()}`;
         const cuposOcupados = typeof curso.cuposOcupados === 'number' 
           ? curso.cuposOcupados 
           : Number(curso.cuposOcupados) || 0;
@@ -96,10 +95,11 @@ export function CursosGrid({ cursos, loading, onEdit, onToggleActivo }: CursosGr
         
         return (
           <div
-            key={uniqueKey}
+            key={curso.idCurso}
             className={`
-              group bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden
-              ${!curso.activo ? 'opacity-60 hover:opacity-100' : ''}
+              group bg-white rounded-2xl shadow-lg hover:shadow-xl
+              transition-all duration-300 overflow-hidden
+              ${!curso.activo ? "opacity-60 hover:opacity-100" : ""}
             `}
           >
             {/* Imagen */}

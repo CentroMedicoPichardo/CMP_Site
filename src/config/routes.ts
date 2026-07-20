@@ -17,11 +17,12 @@ export const publicRoutes = {
 
 export const clienteRoutes = {
   dashboard: "/dashboard",
+  misComprasCursos: "/mis-compras/cursos",
   misCursos: "/mis-cursos",
   perfil: "/perfil",
   foros: "/foros",
   saberPediatrico: "/dashboard/saber-pediatrico",
-};
+} as const;
 
 export const adminRoutes = {
   dashboard: "/dashboard-admin",

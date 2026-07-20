@@ -2,12 +2,22 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import useSWR, { mutate as swrMutate } from 'swr';
+import useSWR from "swr";
 import { CursosHeader } from '@/components/admin/cursos/CursosHeader';
 import { CursosSearchBar } from '@/components/admin/cursos/CursosSearchBar';
 import { CursosGrid } from '@/components/admin/cursos/CursosGrid';
 import { CursoFormModal } from '@/components/admin/cursos/CursoFormModal';
-import type { Curso } from '@/types/cursos';
+import type {
+  ActualizarCursoInput,
+  CrearCursoInput,
+  Curso,
+} from "@/types/cursos";
+
+import { getApiErrorMessage } from "@/types/api";
+
+type CursoSubmitInput =
+  | CrearCursoInput
+  | ActualizarCursoInput;
 
 // Clave para SWR
 const CURSOS_API_KEY = '/api/cursos?admin=true';
@@ -20,9 +30,12 @@ export default function AdminCursosPage() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   // SWR para cargar cursos
-  const { data: cursos = [], error, isLoading, mutate: refreshData } = useSWR(
-    CURSOS_API_KEY,
-    {
+  const {
+    data: cursos = [],
+    error,
+    isLoading,
+    mutate: refreshData,
+  } = useSWR<Curso[]>(CURSOS_API_KEY, {
       revalidateOnFocus: false,
       revalidateOnReconnect: true,
       dedupingInterval: 2000,
@@ -40,11 +53,13 @@ export default function AdminCursosPage() {
   };
 
   // Formatear cursos con propiedades computadas
-  const cursosFormateados = cursos.map((c: any, index: number) => ({
-    ...c,
-    idCurso: c.idCurso || `temp-${index}-${Date.now()}`,
-    imagenSrc: getValidImageUrl(c.urlImagenPortada),
-  }));
+  const cursosFormateados: Curso[] =
+    cursos.map((curso) => ({
+      ...curso,
+      imagenSrc: getValidImageUrl(
+        curso.urlImagenPortada
+      ),
+    }));
 
   // Aplicar filtros localmente
   const filteredCursos = cursosFormateados.filter((c: Curso) => {
@@ -83,52 +98,104 @@ export default function AdminCursosPage() {
     setRefreshKey(prev => prev + 1);
   }, [refreshData]);
 
-  const handleSave = async (cursoData: Partial<Curso>) => {
+  const handleSave = async (
+    cursoData: CursoSubmitInput
+  ) => {
     try {
-      const url = selectedCurso 
+      const editing = selectedCurso !== null;
+
+      const url = editing
         ? `/api/cursos/${selectedCurso.idCurso}`
-        : '/api/cursos';
-      
-      const method = selectedCurso ? 'PUT' : 'POST';
-      
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(cursoData)
+        : "/api/cursos";
+
+      const response = await fetch(url, {
+        method: editing ? "PUT" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(cursoData),
       });
 
-      if (!res.ok) throw new Error('Error al guardar');
+      const payload: unknown =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          getApiErrorMessage(
+            payload,
+            editing
+              ? "Error al actualizar el curso"
+              : "Error al crear el curso"
+          )
+        );
+      }
 
       setModalOpen(false);
+      setSelectedCurso(null);
+
       await forceRefresh();
-      
-    } catch (error) {
-      console.error('Error:', error);
-      alert('Error al guardar el curso');
+    } catch (error: unknown) {
+      console.error(
+        "Error al guardar curso:",
+        error
+      );
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Error al guardar el curso"
+      );
+
+      throw error;
     }
   };
 
-  const handleToggleActivo = async (curso: Curso) => {
+  const handleToggleActivo = async (
+    curso: Curso
+  ) => {
     try {
-      const url = `/api/cursos/${curso.idCurso}`;
-      
-      const res = await fetch(url, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...curso, activo: !curso.activo })
-      });
+      const response = await fetch(
+        `/api/cursos/${curso.idCurso}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            activo: !curso.activo,
+          }),
+        }
+      );
 
-      if (!res.ok) throw new Error('Error al actualizar');
+      const payload: unknown =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          getApiErrorMessage(
+            payload,
+            "Error al cambiar el estado del curso"
+          )
+        );
+      }
 
       await forceRefresh();
-    } catch (error) {
-      console.error('Error:', error);
-      alert('Error al cambiar el estado del curso');
+    } catch (error: unknown) {
+      console.error(
+        "Error al cambiar el estado:",
+        error
+      );
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Error al cambiar el estado del curso"
+      );
     }
   };
 
-  const handleRefresh = useCallback(() => {
-    forceRefresh();
+  const handleRefresh = useCallback(async () => {
+    await forceRefresh();
   }, [forceRefresh]);
 
   return (
@@ -145,7 +212,13 @@ export default function AdminCursosPage() {
         onFilterChange={setFilterActivo}
         onRefresh={handleRefresh}
       />
-
+      {error && (
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error instanceof Error
+            ? error.message
+            : "No fue posible cargar los cursos"}
+        </div>
+      )}
       <CursosGrid
         key={refreshKey}
         cursos={filteredCursos}
@@ -156,7 +229,10 @@ export default function AdminCursosPage() {
 
       <CursoFormModal
         isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() => {
+          setModalOpen(false);
+          setSelectedCurso(null);
+        }}
         onSave={handleSave}
         curso={selectedCurso}
       />

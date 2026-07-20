@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { Mail, Send, CheckCircle } from 'lucide-react';
 import type { Curso, CursoAnalytics } from '@/types/cursos';
+import { getApiErrorMessage } from "@/types/api";
 
 interface MarketingActionsProps {
   curso: Curso;
@@ -37,9 +38,17 @@ export function MarketingActions({ curso }: MarketingActionsProps) {
         })
       });
 
-      const data = await response.json();
+      const payload: unknown =
+        await response.json();
 
-      if (!response.ok) throw new Error(data.error || 'Error al enviar');
+      if (!response.ok) {
+        throw new Error(
+          getApiErrorMessage(
+            payload,
+            "Error al enviar la campaña"
+          )
+        );
+      }
 
       setStatus('success');
       setMensaje('📧 Campaña enviada correctamente');
@@ -49,13 +58,16 @@ export function MarketingActions({ curso }: MarketingActionsProps) {
         setMensaje(null);
       }, 3000);
 
-    } catch (error: any) {
-      setStatus('error');
-      setMensaje(error.message || 'Error al enviar correos');
-    } finally {
-      setSending(false);
+    } catch (error: unknown) {
+      setStatus("error");
+
+      setMensaje(
+        error instanceof Error
+          ? error.message
+          : "Error al enviar correos"
+      );
     }
-  };
+  }
 
   return (
     <div className="bg-white rounded-2xl shadow-md p-6 border border-gray-100">

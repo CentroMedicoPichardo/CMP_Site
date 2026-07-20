@@ -1,41 +1,149 @@
 // src/app/api/cursos/route.ts
+
 import { NextResponse } from "next/server";
+import { and, desc, eq, sql, type SQL } from "drizzle-orm";
+
+import { requireApiRole } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { withUserEmail } from "@/lib/db-with-user";
 import {
+  categoriasCursos,
   cursos,
   instructores,
-  categoriasCursos,
-  ubicacionesCursos,
   modalidades,
-} from "@/lib/schema/index";
-import { desc, eq, and, sql } from "drizzle-orm";
-import { withUserEmail } from "@/lib/db-with-user";
-import { requireApiRole } from "@/lib/auth";
+  ubicacionesCursos,
+} from "@/lib/schema";
+import {
+  hasPostgresCode,
+  type ValidationResult,
+} from "@/lib/validators/common";
+import { validarCrearCurso } from "@/lib/validators/cursos";
+import type { CrearCursoInput } from "@/types/cursos";
+
+const cursoSelect = {
+  idCurso: cursos.idCurso,
+  tituloCurso: cursos.tituloCurso,
+  descripcion: cursos.descripcion,
+
+  idInstructor: cursos.idInstructor,
+  instructorNombre:
+    sql<string>`TRIM(CONCAT(
+      ${instructores.nombre},
+      ' ',
+      ${instructores.apellidoPaterno},
+      ' ',
+      COALESCE(${instructores.apellidoMaterno}, '')
+    ))`.as("instructor_nombre"),
+  instructorEspecialidad: instructores.especialidad,
+
+  idCategoria: cursos.idCategoria,
+  categoriaNombre: categoriasCursos.nombreCategoria,
+
+  idUbicacion: cursos.idUbicacion,
+  ubicacionNombre: ubicacionesCursos.nombreUbicacion,
+  ubicacionDireccion: ubicacionesCursos.direccionCompleta,
+
+  idModalidad: cursos.idModalidad,
+  modalidadNombre: modalidades.nombreModalidad,
+
+  fechaInicio: cursos.fechaInicio,
+  fechaFin: cursos.fechaFin,
+  horario: cursos.horario,
+  dirigidoA: cursos.dirigidoA,
+
+  cupoMaximo: cursos.cupoMaximo,
+  cuposOcupados: cursos.cuposOcupados,
+
+  costo: cursos.costo,
+  urlImagenPortada: cursos.urlImagenPortada,
+  activo: cursos.activo,
+
+  createdAt: cursos.createdAt,
+  updatedAt: cursos.updatedAt,
+};
+
+function validationErrorResponse<T>(
+  result: Extract<ValidationResult<T>, { success: false }>
+) {
+  return NextResponse.json(
+    {
+      error: result.error,
+      details: result.fieldErrors,
+    },
+    { status: 400 }
+  );
+}
+
+function databaseErrorResponse(error: unknown) {
+  if (hasPostgresCode(error, "23503")) {
+    return NextResponse.json(
+      {
+        error:
+          "El instructor, la categoría, la modalidad o la ubicación seleccionada no existe",
+      },
+      { status: 400 }
+    );
+  }
+
+  if (hasPostgresCode(error, "23505")) {
+    return NextResponse.json(
+      {
+        error: "Ya existe un curso con esos datos",
+      },
+      { status: 409 }
+    );
+  }
+
+  return null;
+}
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const isAdmin = searchParams.get("admin") === "true";
+
+    const isAdmin =
+      searchParams.get("admin") === "true";
 
     if (isAdmin) {
-      const { error } = await requireApiRole("admin");
+      const { error } =
+        await requireApiRole("admin");
 
       if (error) {
         return error;
       }
     }
 
-    const modalidadId = searchParams.get("modalidadId");
-    const dirigidoA = searchParams.get("dirigidoA");
+    const modalidadIdParam =
+      searchParams.get("modalidadId");
 
-    const filtros = [];
+    const dirigidoA =
+      searchParams.get("dirigidoA")?.trim() ?? "";
+
+    const filtros: SQL[] = [];
 
     if (!isAdmin) {
       filtros.push(eq(cursos.activo, true));
     }
 
-    if (modalidadId && !Number.isNaN(Number(modalidadId))) {
-      filtros.push(eq(cursos.idModalidad, Number(modalidadId)));
+    if (modalidadIdParam) {
+      const modalidadId = Number(modalidadIdParam);
+
+      if (
+        !Number.isInteger(modalidadId) ||
+        modalidadId <= 0
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "El identificador de modalidad no es válido",
+          },
+          { status: 400 }
+        );
+      }
+
+      filtros.push(
+        eq(cursos.idModalidad, modalidadId)
+      );
     }
 
     if (dirigidoA) {
@@ -43,162 +151,180 @@ export async function GET(request: Request) {
     }
 
     const data = await db
-      .select({
-        idCurso: cursos.idCurso,
-        tituloCurso: cursos.tituloCurso,
-        descripcion: cursos.descripcion,
-        idInstructor: cursos.idInstructor,
-        instructorNombre:
-          sql<string>`CONCAT(${instructores.nombre}, ' ', ${instructores.apellidoPaterno}, ' ', COALESCE(${instructores.apellidoMaterno}, ''))`.as(
-            "instructor_nombre"
-          ),
-        instructorEspecialidad: instructores.especialidad,
-        idCategoria: cursos.idCategoria,
-        categoriaNombre: categoriasCursos.nombreCategoria,
-        idUbicacion: cursos.idUbicacion,
-        ubicacionNombre: ubicacionesCursos.nombreUbicacion,
-        ubicacionDireccion: ubicacionesCursos.direccionCompleta,
-        idModalidad: cursos.idModalidad,
-        modalidadNombre: modalidades.nombreModalidad,
-        fechaInicio: cursos.fechaInicio,
-        fechaFin: cursos.fechaFin,
-        horario: cursos.horario,
-        dirigidoA: cursos.dirigidoA,
-        cupoMaximo: cursos.cupoMaximo,
-        cuposOcupados: cursos.cuposOcupados,
-        costo: cursos.costo,
-        urlImagenPortada: cursos.urlImagenPortada,
-        activo: cursos.activo,
-      })
+      .select(cursoSelect)
       .from(cursos)
-      .leftJoin(instructores, eq(cursos.idInstructor, instructores.idInstructor))
+      .leftJoin(
+        instructores,
+        eq(
+          cursos.idInstructor,
+          instructores.idInstructor
+        )
+      )
       .leftJoin(
         categoriasCursos,
-        eq(cursos.idCategoria, categoriasCursos.idCategoria)
+        eq(
+          cursos.idCategoria,
+          categoriasCursos.idCategoria
+        )
       )
       .leftJoin(
         ubicacionesCursos,
-        eq(cursos.idUbicacion, ubicacionesCursos.idUbicacion)
+        eq(
+          cursos.idUbicacion,
+          ubicacionesCursos.idUbicacion
+        )
       )
-      .leftJoin(modalidades, eq(cursos.idModalidad, modalidades.idModalidad))
-      .where(filtros.length ? and(...filtros) : undefined)
+      .leftJoin(
+        modalidades,
+        eq(
+          cursos.idModalidad,
+          modalidades.idModalidad
+        )
+      )
+      .where(
+        filtros.length > 0
+          ? and(...filtros)
+          : undefined
+      )
       .orderBy(desc(cursos.idCurso));
 
     return NextResponse.json(data);
-  } catch (error) {
-    console.error("Error en GET cursos:", error);
+  } catch (error: unknown) {
+    console.error(
+      "Error en GET cursos:",
+      error
+    );
 
     return NextResponse.json(
-      { error: "Error al obtener cursos" },
+      {
+        error: "Error al obtener cursos",
+      },
       { status: 500 }
     );
   }
 }
 
 export async function POST(request: Request) {
-  const { session, error } = await requireApiRole("admin");
+  const { session, error } =
+    await requireApiRole("admin");
 
   if (error) {
     return error;
   }
 
   if (!session) {
-    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    return NextResponse.json(
+      {
+        error: "No autenticado",
+      },
+      { status: 401 }
+    );
   }
 
   try {
-    const body = await request.json();
+    const body: unknown = await request.json();
 
-    if (!body.tituloCurso) {
-      return NextResponse.json(
-        { error: "El título del curso es requerido" },
-        { status: 400 }
-      );
+    const validation =
+      validarCrearCurso(body);
+
+    if (!validation.success) {
+      return validationErrorResponse(validation);
     }
 
-    if (!body.idInstructor || Number.isNaN(Number(body.idInstructor))) {
-      return NextResponse.json(
-        { error: "El instructor es requerido" },
-        { status: 400 }
-      );
-    }
-
-    if (!body.idCategoria || Number.isNaN(Number(body.idCategoria))) {
-      return NextResponse.json(
-        { error: "La categoría es requerida" },
-        { status: 400 }
-      );
-    }
-
-    if (!body.idModalidad || Number.isNaN(Number(body.idModalidad))) {
-      return NextResponse.json(
-        { error: "La modalidad es requerida" },
-        { status: 400 }
-      );
-    }
-
-    if (!body.fechaInicio || !body.fechaFin) {
-      return NextResponse.json(
-        { error: "Las fechas de inicio y fin son requeridas" },
-        { status: 400 }
-      );
-    }
+    const input: CrearCursoInput =
+      validation.data;
 
     const userEmail = session.user.correo;
 
-    const nuevo = await withUserEmail(userEmail, async () => {
-      return await db
-        .insert(cursos)
-        .values({
-          tituloCurso: body.tituloCurso,
-          descripcion: body.descripcion || null,
-          idInstructor: Number(body.idInstructor),
-          idCategoria: Number(body.idCategoria),
-          idUbicacion: body.idUbicacion ? Number(body.idUbicacion) : null,
-          idModalidad: Number(body.idModalidad),
-          fechaInicio: body.fechaInicio,
-          fechaFin: body.fechaFin,
-          horario: body.horario || null,
-          dirigidoA: body.dirigidoA || "Padres",
-          cupoMaximo: body.cupoMaximo ? Number(body.cupoMaximo) : 20,
-          cuposOcupados: 0,
-          costo: body.costo ? String(body.costo) : "0.00",
-          urlImagenPortada: body.urlImagenPortada || null,
-          activo: true,
-        })
-        .returning({
-          idCurso: cursos.idCurso,
-          tituloCurso: cursos.tituloCurso,
-          descripcion: cursos.descripcion,
-          idInstructor: cursos.idInstructor,
-          idCategoria: cursos.idCategoria,
-          idUbicacion: cursos.idUbicacion,
-          idModalidad: cursos.idModalidad,
-          fechaInicio: cursos.fechaInicio,
-          fechaFin: cursos.fechaFin,
-          horario: cursos.horario,
-          dirigidoA: cursos.dirigidoA,
-          cupoMaximo: cursos.cupoMaximo,
-          cuposOcupados: cursos.cuposOcupados,
-          costo: cursos.costo,
-          urlImagenPortada: cursos.urlImagenPortada,
-          activo: cursos.activo,
-        });
-    });
+    const nuevo = await withUserEmail(
+      userEmail,
+      async () =>
+        db
+          .insert(cursos)
+          .values({
+            tituloCurso: input.tituloCurso,
+            descripcion: input.descripcion,
 
-    if (!nuevo.length || !nuevo[0]) {
+            idInstructor: input.idInstructor,
+            idCategoria: input.idCategoria,
+            idUbicacion: input.idUbicacion,
+            idModalidad: input.idModalidad,
+
+            fechaInicio: input.fechaInicio,
+            fechaFin: input.fechaFin,
+            horario: input.horario,
+            dirigidoA: input.dirigidoA,
+
+            cupoMaximo: input.cupoMaximo,
+            cuposOcupados: 0,
+
+            costo: input.costo,
+            urlImagenPortada:
+              input.urlImagenPortada,
+
+            activo: true,
+          })
+          .returning({
+            idCurso: cursos.idCurso,
+            tituloCurso: cursos.tituloCurso,
+            descripcion: cursos.descripcion,
+
+            idInstructor: cursos.idInstructor,
+            idCategoria: cursos.idCategoria,
+            idUbicacion: cursos.idUbicacion,
+            idModalidad: cursos.idModalidad,
+
+            fechaInicio: cursos.fechaInicio,
+            fechaFin: cursos.fechaFin,
+            horario: cursos.horario,
+            dirigidoA: cursos.dirigidoA,
+
+            cupoMaximo: cursos.cupoMaximo,
+            cuposOcupados:
+              cursos.cuposOcupados,
+
+            costo: cursos.costo,
+            urlImagenPortada:
+              cursos.urlImagenPortada,
+            activo: cursos.activo,
+
+            createdAt: cursos.createdAt,
+            updatedAt: cursos.updatedAt,
+          })
+    );
+
+    const cursoCreado = nuevo[0];
+
+    if (!cursoCreado) {
       return NextResponse.json(
-        { error: "Error al crear curso" },
+        {
+          error: "No se pudo crear el curso",
+        },
         { status: 500 }
       );
     }
 
-    return NextResponse.json(nuevo[0], { status: 201 });
-  } catch (error) {
-    console.error("Error en POST cursos:", error);
+    return NextResponse.json(
+      cursoCreado,
+      { status: 201 }
+    );
+  } catch (error: unknown) {
+    console.error(
+      "Error en POST cursos:",
+      error
+    );
+
+    const databaseResponse =
+      databaseErrorResponse(error);
+
+    if (databaseResponse) {
+      return databaseResponse;
+    }
 
     return NextResponse.json(
-      { error: "Error al crear curso" },
+      {
+        error: "Error al crear curso",
+      },
       { status: 500 }
     );
   }
