@@ -13,6 +13,9 @@ import {
 import { NextResponse } from "next/server";
 
 import { requireApiRole } from "@/lib/auth";
+import {
+  expirarComprasVencidas,
+} from "@/lib/compras-cursos/expirar-compras";
 import { db } from "@/lib/db";
 import {
   comprasCursos,
@@ -27,9 +30,25 @@ import type {
   ListarComprasCursosAdminResponse,
 } from "@/types/admin-compras-cursos";
 
-const ESTADOS_COMPRA_REVISION = [
+const ESTADOS_COMPRA = [
+  "Pendiente de pago",
   "Pago reportado",
   "En validación",
+  "Pago validado",
+  "Inscripciones generadas",
+  "Rechazada",
+  "Cancelada",
+  "Expirada",
+] as const;
+
+const ESTADOS_PENDIENTES_REVISION = [
+  "Pago reportado",
+  "En validación",
+] as const;
+
+const ESTADOS_APROBADOS = [
+  "Pago validado",
+  "Inscripciones generadas",
 ] as const;
 
 const PAGE_SIZES_PERMITIDOS = [
@@ -38,13 +57,27 @@ const PAGE_SIZES_PERMITIDOS = [
   20,
 ] as const;
 
-const FILTROS_PERMITIDOS: readonly FiltroComprasCursosAdmin[] =
-  [
+const FILTROS_PERMITIDOS:
+  readonly FiltroComprasCursosAdmin[] = [
     "todos",
-    "con_pago",
-    "en_validacion",
-    "sin_pago",
+    "pendientes_revision",
+    "pendiente_pago",
+    "inscripciones_generadas",
+    "rechazada",
+    "cancelada",
+    "expirada",
   ];
+
+const ESTADO_POR_FILTRO: Partial<
+  Record<FiltroComprasCursosAdmin, string>
+> = {
+  pendiente_pago: "Pendiente de pago",
+  inscripciones_generadas:
+    "Inscripciones generadas",
+  rechazada: "Rechazada",
+  cancelada: "Cancelada",
+  expirada: "Expirada",
+};
 
 function parsePositiveInteger(
   value: string | null,
@@ -91,10 +124,7 @@ function idToSafeNumber(
   value: bigint | number,
   fieldName: string
 ): number {
-  const result =
-    typeof value === "bigint"
-      ? Number(value)
-      : value;
+  const result = Number(value);
 
   if (
     !Number.isSafeInteger(result) ||
@@ -156,21 +186,17 @@ export async function GET(
   }
 
   const url = new URL(request.url);
-
   const requestedPage =
     parsePositiveInteger(
       url.searchParams.get("page"),
       1
     );
-
   const pageSize = parsePageSize(
     url.searchParams.get("pageSize")
   );
-
   const filtro = parseFiltro(
     url.searchParams.get("filtro")
   );
-
   const search =
     url.searchParams
       .get("search")
@@ -178,6 +204,13 @@ export async function GET(
       .slice(0, 120) ?? "";
 
   try {
+    await db.transaction(async (tx) => {
+      await expirarComprasVencidas(
+        tx,
+        {}
+      );
+    });
+
     const pagosAgregados = db
       .select({
         idCompra:
@@ -208,14 +241,7 @@ export async function GET(
         fechaUltimoReporte: sql<
           string | Date | null
         >`
-          MAX(${pagosCursos.fechaReporte}) FILTER (
-            WHERE ${pagosCursos.estado}
-              IN (
-                'Reportado',
-                'En revisión',
-                'Aprobado'
-              )
-          )
+          MAX(${pagosCursos.fechaReporte})
         `.as("fecha_ultimo_reporte"),
       })
       .from(pagosCursos)
@@ -227,7 +253,7 @@ export async function GET(
     const conditions = [
       inArray(
         estadosCompra.nombre,
-        [...ESTADOS_COMPRA_REVISION]
+        [...ESTADOS_COMPRA]
       ),
     ];
 
@@ -246,24 +272,26 @@ export async function GET(
       );
     }
 
-    if (filtro === "con_pago") {
+    if (
+      filtro === "pendientes_revision"
+    ) {
       conditions.push(
-        sql`COALESCE(${pagosAgregados.cantidadPagos}, 0) > 0`
-      );
-    }
-
-    if (filtro === "en_validacion") {
-      conditions.push(
-        eq(
+        inArray(
           estadosCompra.nombre,
-          "En validación"
+          [...ESTADOS_PENDIENTES_REVISION]
         )
       );
     }
 
-    if (filtro === "sin_pago") {
+    const estadoFiltro =
+      ESTADO_POR_FILTRO[filtro];
+
+    if (estadoFiltro) {
       conditions.push(
-        sql`COALESCE(${pagosAgregados.cantidadPagos}, 0) = 0`
+        eq(
+          estadosCompra.nombre,
+          estadoFiltro
+        )
       );
     }
 
@@ -276,26 +304,28 @@ export async function GET(
           count(
             comprasCursos.idcompra
           ),
-        conPagoReportado: sql<number>`
-          COUNT(*) FILTER (
-            WHERE COALESCE(
-              ${pagosAgregados.cantidadPagos},
-              0
-            ) > 0
-          )::int
-        `,
-        enValidacion: sql<number>`
+        pendientesRevision: sql<number>`
           COUNT(*) FILTER (
             WHERE ${estadosCompra.nombre}
-              = 'En validación'
+              IN (
+                'Pago reportado',
+                'En validación'
+              )
           )::int
         `,
-        sinPagoRelacionado: sql<number>`
+        aprobadas: sql<number>`
           COUNT(*) FILTER (
-            WHERE COALESCE(
-              ${pagosAgregados.cantidadPagos},
-              0
-            ) = 0
+            WHERE ${estadosCompra.nombre}
+              IN (
+                'Pago validado',
+                'Inscripciones generadas'
+              )
+          )::int
+        `,
+        expiradas: sql<number>`
+          COUNT(*) FILTER (
+            WHERE ${estadosCompra.nombre}
+              = 'Expirada'
           )::int
         `,
         montoReportado: sql<string>`
@@ -334,7 +364,11 @@ export async function GET(
       )
       .leftJoin(
         pagosAgregados,
-        sql`${pagosAgregados.idCompra} = ${comprasCursos.idcompra}`
+        sql`
+          ${pagosAgregados.idCompra}
+          =
+          ${comprasCursos.idcompra}
+        `
       )
       .where(whereCondition);
 
@@ -434,16 +468,21 @@ export async function GET(
       )
       .leftJoin(
         pagosAgregados,
-        sql`${pagosAgregados.idCompra} = ${comprasCursos.idcompra}`
+        sql`
+          ${pagosAgregados.idCompra}
+          =
+          ${comprasCursos.idcompra}
+        `
       )
       .where(whereCondition)
       .orderBy(
         asc(sql`
           CASE
-            WHEN COALESCE(
-              ${pagosAgregados.cantidadPagos},
-              0
-            ) > 0
+            WHEN ${estadosCompra.nombre}
+              IN (
+                'Pago reportado',
+                'En validación'
+              )
             THEN 0
             ELSE 1
           END
@@ -451,14 +490,6 @@ export async function GET(
         desc(
           pagosAgregados.fechaUltimoReporte
         ),
-        asc(sql`
-          CASE
-            WHEN ${estadosCompra.nombre}
-              = 'En validación'
-            THEN 0
-            ELSE 1
-          END
-        `),
         desc(
           comprasCursos.fechacompra
         ),
@@ -472,10 +503,11 @@ export async function GET(
     const compras:
       CompraCursoAdminListaItem[] =
       filas.map((fila) => ({
-        idCompra: idToSafeNumber(
-          fila.idCompra,
-          "idCompra"
-        ),
+        idCompra:
+          idToSafeNumber(
+            fila.idCompra,
+            "idCompra"
+          ),
         folioCompra:
           fila.folioCompra,
         usuarioId:
@@ -528,19 +560,18 @@ export async function GET(
         },
         resumen: {
           total: totalItems,
-          conPagoReportado:
+          pendientesRevision:
             Number(
-              conteo?.conPagoReportado ??
+              conteo?.pendientesRevision ??
                 0
             ),
-          enValidacion:
+          aprobadas:
             Number(
-              conteo?.enValidacion ?? 0
+              conteo?.aprobadas ?? 0
             ),
-          sinPagoRelacionado:
+          expiradas:
             Number(
-              conteo?.sinPagoRelacionado ??
-                0
+              conteo?.expiradas ?? 0
             ),
           montoReportado:
             conteo?.montoReportado ??
@@ -560,14 +591,14 @@ export async function GET(
     );
   } catch (errorValue: unknown) {
     console.error(
-      "Error listando compras para revisión administrativa:",
+      "Error listando compras administrativas:",
       errorValue
     );
 
     return NextResponse.json(
       {
         error:
-          "Error interno al obtener las compras pendientes de revisión",
+          "Error interno al obtener el historial de compras",
       },
       { status: 500 }
     );

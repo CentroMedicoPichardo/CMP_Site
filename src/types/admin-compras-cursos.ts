@@ -8,9 +8,12 @@ import type {
 
 export type FiltroComprasCursosAdmin =
   | "todos"
-  | "con_pago"
-  | "en_validacion"
-  | "sin_pago";
+  | "pendientes_revision"
+  | "pendiente_pago"
+  | "inscripciones_generadas"
+  | "rechazada"
+  | "cancelada"
+  | "expirada";
 
 export interface CompraCursoAdminListaItem {
   idCompra: number;
@@ -39,9 +42,9 @@ export interface PaginacionComprasCursosAdmin {
 
 export interface ResumenComprasCursosAdmin {
   total: number;
-  conPagoReportado: number;
-  enValidacion: number;
-  sinPagoRelacionado: number;
+  pendientesRevision: number;
+  aprobadas: number;
+  expiradas: number;
   montoReportado: string;
 }
 
@@ -90,6 +93,7 @@ export type AccionValidacionCompraCurso =
 export interface ValidarCompraCursoAdminInput {
   accion: AccionValidacionCompraCurso;
   observaciones: string | null;
+  comprobantesWhatsappRevisados: boolean;
 }
 
 export interface ValidarCompraCursoAdminResponse {

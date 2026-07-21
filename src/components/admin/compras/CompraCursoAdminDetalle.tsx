@@ -1,12 +1,16 @@
-// src/components/admin/compras/CompraCursoAdminDetalle.tsx
+/// src/components/admin/compras/CompraCursoAdminDetalle.tsx
 "use client";
 
 import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
+  Clock3,
   FileText,
+  Image as ImageIcon,
+  Link2,
   Loader2,
+  MessageCircle,
   RefreshCw,
   UserRound,
   Users,
@@ -22,14 +26,18 @@ import {
 } from "react";
 
 import { getApiErrorMessage } from "@/types/api";
+
 import type {
   CompraCursoAdminDetalleResponse,
   ValidarCompraCursoAdminResponse,
 } from "@/types/admin-compras-cursos";
+
 import type {
   CompraParticipanteResumen,
   PagoCursoResumen,
 } from "@/types/compras-cursos";
+
+import NextImage from "next/image";
 
 interface CompraCursoAdminDetalleProps {
   compraId: string;
@@ -203,6 +211,11 @@ export function CompraCursoAdminDetalle({
       text: string;
     } | null>(null);
 
+  const [
+    comprobantesWhatsappRevisados,
+    setComprobantesWhatsappRevisados,
+  ] = useState(false);
+
   const cargarDetalle = useCallback(
     async (cargaInicial = false) => {
       if (cargaInicial) {
@@ -246,6 +259,7 @@ export function CompraCursoAdminDetalle({
         }
 
         setData(result);
+        setComprobantesWhatsappRevisados(false);
       } catch (errorValue: unknown) {
         setError(
           errorValue instanceof Error
@@ -264,12 +278,47 @@ export function CompraCursoAdminDetalle({
     void cargarDetalle(true);
   }, [cargarDetalle]);
 
+  const requiereRevisionWhatsapp = useMemo(
+    () =>
+      data?.pagos.some(
+        (pago) =>
+          pago.canalComprobante === "WhatsApp" &&
+          !pago.comprobanteConfirmado
+      ) ?? false,
+    [data]
+  );
+
   const validarCompra = useCallback(
     async (
       accion: "aprobar" | "rechazar"
     ) => {
       const observacionesLimpias =
         observaciones.trim();
+
+      if (
+        data?.compra.estado ===
+        "Expirada"
+      ) {
+        setMensajeAccion({
+          type: "error",
+          text:
+            "La compra ya expiró y no admite acciones administrativas.",
+        });
+        return;
+      }
+
+      if (
+        accion === "aprobar" &&
+        requiereRevisionWhatsapp &&
+        !comprobantesWhatsappRevisados
+      ) {
+        setMensajeAccion({
+          type: "error",
+          text:
+            "Debes confirmar que localizaste y revisaste los comprobantes enviados por WhatsApp.",
+        });
+        return;
+      }
 
       if (
         accion === "rechazar" &&
@@ -313,9 +362,14 @@ export function CompraCursoAdminDetalle({
             credentials: "include",
             body: JSON.stringify({
               accion,
+
               observaciones:
-                observacionesLimpias ||
-                null,
+                observacionesLimpias || null,
+
+              comprobantesWhatsappRevisados:
+                accion === "aprobar"
+                  ? comprobantesWhatsappRevisados
+                  : false,
             }),
           }
         );
@@ -365,7 +419,10 @@ export function CompraCursoAdminDetalle({
     [
       cargarDetalle,
       compraId,
+      data,
+      comprobantesWhatsappRevisados,
       observaciones,
+      requiereRevisionWhatsapp,
     ]
   );
 
@@ -423,9 +480,17 @@ export function CompraCursoAdminDetalle({
   const { compra, participantes, pagos, resumenPago } =
     data;
 
+  const compraExpirada =
+    compra.estado === "Expirada";
+
   const puedeValidarse =
-    compra.estado === "Pago reportado" ||
-    compra.estado === "En validación";
+    !compraExpirada &&
+    (
+      compra.estado ===
+        "Pago reportado" ||
+      compra.estado ===
+        "En validación"
+    );
 
   return (
     <div className="space-y-6">
@@ -483,6 +548,37 @@ export function CompraCursoAdminDetalle({
           </span>
         </div>
       </section>
+
+      {compraExpirada && (
+        <section className="rounded-2xl border border-red-200 bg-red-50 p-5 text-red-800 shadow-sm">
+          <div className="flex items-start gap-3">
+            <Clock3
+              size={22}
+              className="mt-0.5 shrink-0"
+            />
+
+            <div>
+              <h2 className="font-bold">
+                Compra expirada
+              </h2>
+
+              <p className="mt-1 text-sm">
+                El plazo de pago venció el{" "}
+                <strong>
+                  {formatDate(
+                    compra.fechaLimitePago
+                  )}
+                </strong>
+                . Los participantes asociados fueron cancelados y esta compra ya no puede aprobarse ni rechazarse.
+              </p>
+
+              <p className="mt-2 text-sm">
+                La expiración fue aplicada automáticamente por el sistema.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <ResumenCard
@@ -560,6 +656,50 @@ export function CompraCursoAdminDetalle({
               observación antes de aprobar o rechazar.
             </p>
           </div>
+
+          {requiereRevisionWhatsapp && (
+            <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <div className="flex items-start gap-3">
+                <MessageCircle
+                  size={21}
+                  className="mt-0.5 shrink-0 text-emerald-700"
+                />
+
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-emerald-900">
+                    Hay comprobantes enviados por WhatsApp
+                  </p>
+
+                  <p className="mt-1 text-sm text-emerald-800">
+                    Antes de aprobar, localiza los mensajes usando el folio de la compra y revisa que el importe y la evidencia sean correctos.
+                  </p>
+
+                  <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-lg border border-emerald-200 bg-white p-3">
+                    <input
+                      type="checkbox"
+                      checked={
+                        comprobantesWhatsappRevisados
+                      }
+                      onChange={(event) => {
+                        setComprobantesWhatsappRevisados(
+                          event.target.checked
+                        );
+                        setMensajeAccion(null);
+                      }}
+                      disabled={
+                        procesandoAccion !== null
+                      }
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+
+                    <span className="text-sm font-medium text-gray-800">
+                      Confirmo que localicé y revisé los comprobantes enviados por WhatsApp.
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
 
           <label
             htmlFor="observaciones-validacion"
@@ -650,12 +790,19 @@ export function CompraCursoAdminDetalle({
               }}
               disabled={
                 procesandoAccion !== null ||
-                !pagoCompleto
+                !pagoCompleto ||
+                (
+                  requiereRevisionWhatsapp &&
+                  !comprobantesWhatsappRevisados
+                )
               }
               title={
-                pagoCompleto
-                  ? "Aprobar compra y generar inscripciones"
-                  : "El total reportado debe cubrir el total de la compra"
+                !pagoCompleto
+                  ? "El total reportado debe cubrir el total de la compra"
+                  : requiereRevisionWhatsapp &&
+                    !comprobantesWhatsappRevisados
+                    ? "Debes confirmar que revisaste los comprobantes enviados por WhatsApp"
+                    : "Aprobar compra y generar inscripciones"
               }
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 px-5 py-3 font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -684,14 +831,35 @@ export function CompraCursoAdminDetalle({
               de la compra.
             </p>
           )}
+
+          {pagoCompleto &&
+            requiereRevisionWhatsapp &&
+            !comprobantesWhatsappRevisados && (
+              <p className="mt-3 text-sm text-emerald-700">
+                La aprobación está bloqueada hasta confirmar que se revisaron los comprobantes enviados por WhatsApp.
+              </p>
+            )}
         </section>
       )}
 
       {!puedeValidarse && (
-        <section className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
-          Esta compra ya no tiene acciones administrativas
-          pendientes. Su estado actual es{" "}
-          <strong>{compra.estado}</strong>.
+        <section
+          className={`rounded-xl border p-4 text-sm ${
+            compraExpirada
+              ? "border-red-200 bg-red-50 text-red-800"
+              : "border-gray-200 bg-gray-50 text-gray-700"
+          }`}
+        >
+          {compraExpirada ? (
+            <>
+              La compra expiró por vencimiento del plazo de pago. No hay acciones administrativas disponibles.
+            </>
+          ) : (
+            <>
+              Esta compra ya no tiene acciones administrativas pendientes. Su estado actual es{" "}
+              <strong>{compra.estado}</strong>.
+            </>
+          )}
         </section>
       )}
 
@@ -885,7 +1053,14 @@ function ParticipanteCard({
           Cupo {participante.numeroCupo}
         </h3>
 
-        <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600">
+        <span
+          className={`rounded-full border px-3 py-1 text-xs font-medium ${
+            participante.estado ===
+            "Cancelado"
+              ? "border-red-200 bg-red-50 text-red-700"
+              : "border-gray-200 bg-white text-gray-600"
+          }`}
+        >
           {participante.estado}
         </span>
       </div>
@@ -932,11 +1107,35 @@ function ParticipanteCard({
   );
 }
 
+function canalComprobanteClassName(
+  canal: PagoCursoResumen["canalComprobante"]
+): string {
+  switch (canal) {
+    case "Imagen":
+      return "border-violet-200 bg-violet-50 text-violet-700";
+    case "URL":
+      return "border-blue-200 bg-blue-50 text-blue-700";
+    case "WhatsApp":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "Sin comprobante":
+      return "border-gray-200 bg-gray-50 text-gray-700";
+  }
+}
+
 function PagoCard({
   pago,
 }: {
   pago: PagoCursoResumen;
 }) {
+  const esWhatsapp =
+    pago.canalComprobante === "WhatsApp";
+
+  const esImagen =
+    pago.canalComprobante === "Imagen";
+
+  const esUrl =
+    pago.canalComprobante === "URL";
+
   return (
     <article className="rounded-xl border border-gray-200 p-4">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -952,6 +1151,14 @@ function PagoCard({
               )}`}
             >
               {pago.estado}
+            </span>
+
+            <span
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${canalComprobanteClassName(
+                pago.canalComprobante
+              )}`}
+            >
+              {pago.canalComprobante}
             </span>
           </div>
 
@@ -990,17 +1197,125 @@ function PagoCard({
         </div>
       </div>
 
+      {esWhatsapp && (
+        <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+          <div className="flex items-start gap-3">
+            <MessageCircle
+              size={20}
+              className="mt-0.5 shrink-0 text-emerald-700"
+            />
+
+            <div>
+              <p className="font-semibold text-emerald-900">
+                Comprobante reportado por WhatsApp
+              </p>
+
+              <p className="mt-1 text-sm text-emerald-800">
+                El cliente indicó que envió el comprobante por WhatsApp.
+              </p>
+
+              <p className="mt-2 text-sm text-emerald-800">
+                Fecha indicada de envío:{" "}
+                <strong>
+                  {pago.fechaEnvioWhatsapp
+                    ? formatDate(
+                        pago.fechaEnvioWhatsapp
+                      )
+                    : "No registrada"}
+                </strong>
+              </p>
+
+              <p className="mt-2 text-sm text-emerald-800">
+                Estado de revisión:{" "}
+                <strong>
+                  {pago.comprobanteConfirmado
+                    ? "Verificado"
+                    : "Pendiente de localizar y revisar"}
+                </strong>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {pago.rutaComprobante && (
         <div className="mt-4 border-t pt-4">
-          <a
-            href={pago.rutaComprobante}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-4 py-2 text-sm font-medium text-[#0A3D62] hover:bg-blue-100"
-          >
-            <FileText size={17} />
-            Abrir comprobante
-          </a>
+          {esImagen ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <ImageIcon
+                  size={18}
+                  className="text-violet-700"
+                />
+
+                <p className="font-semibold text-gray-900">
+                  Imagen del comprobante
+                </p>
+              </div>
+
+              <div className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+                <div className="relative min-h-[260px] w-full sm:min-h-[360px] lg:min-h-[440px]">
+                  <NextImage
+                    src={pago.rutaComprobante}
+                    alt={
+                      pago.nombreArchivoOriginal
+                        ? `Comprobante ${pago.nombreArchivoOriginal}`
+                        : "Comprobante de pago"
+                    }
+                    fill
+                    sizes="
+                      (max-width: 640px) 100vw,
+                      (max-width: 1024px) 80vw,
+                      900px
+                    "
+                    className="object-contain p-3"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-gray-800">
+                    {pago.nombreArchivoOriginal ??
+                      "Comprobante de pago"}
+                  </p>
+
+                  {pago.tipoArchivo && (
+                    <p className="text-xs text-gray-500">
+                      {pago.tipoArchivo}
+                    </p>
+                  )}
+                </div>
+
+                <a
+                  href={pago.rutaComprobante}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-violet-50 px-4 py-2 text-sm font-medium text-violet-700 transition hover:bg-violet-100"
+                >
+                  <ImageIcon size={17} />
+                  Abrir imagen completa
+                </a>
+              </div>
+            </div>
+          ) : (
+            <a
+              href={pago.rutaComprobante}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-4 py-2 text-sm font-medium text-[#0A3D62] transition hover:bg-blue-100"
+            >
+              {esUrl ? (
+                <Link2 size={17} />
+              ) : (
+                <FileText size={17} />
+              )}
+
+              {esUrl
+                ? "Abrir URL del comprobante"
+                : "Abrir comprobante"}
+            </a>
+          )}
         </div>
       )}
 
@@ -1009,7 +1324,7 @@ function PagoCard({
           <p className="font-medium text-gray-800">
             Observaciones del cliente
           </p>
-          <p className="mt-1">
+          <p className="mt-1 whitespace-pre-line">
             {pago.observaciones}
           </p>
         </div>

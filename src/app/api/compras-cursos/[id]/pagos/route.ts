@@ -9,6 +9,9 @@ import {
 } from "drizzle-orm";
 
 import { auth } from "@/lib/auth";
+import {
+  expirarComprasVencidas,
+} from "@/lib/compras-cursos/expirar-compras";
 import { db } from "@/lib/db";
 import { withUserEmail } from "@/lib/db-with-user";
 import {
@@ -26,6 +29,7 @@ import {
   validarReportarPagoCurso,
 } from "@/lib/validators/pagos-cursos";
 import type {
+  CanalComprobanteCurso,
   ReportarPagoCursoInput,
   ReportarPagoCursoResponse,
 } from "@/types/compras-cursos";
@@ -36,9 +40,18 @@ interface PagoRouteContext {
   }>;
 }
 
+interface DatosComprobanteNormalizados {
+  canalComprobante: CanalComprobanteCurso;
+  rutaComprobante: string | null;
+  nombreArchivoOriginal: string | null;
+  tipoArchivo: string | null;
+  comprobanteConfirmado: boolean;
+  fechaEnvioWhatsapp: string | null;
+  observaciones: string | null;
+}
+
 const ESTADO_COMPRA_PENDIENTE =
   "Pendiente de pago";
-
 const ESTADO_COMPRA_PAGO_REPORTADO =
   "Pago reportado";
 
@@ -51,6 +64,12 @@ const ESTADOS_PAGO_ACUMULABLES = [
   "Reportado",
   "En revisión",
   "Aprobado",
+] as const;
+
+const TIPOS_IMAGEN_PERMITIDOS = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
 ] as const;
 
 class ReportePagoError extends Error {
@@ -95,6 +114,24 @@ function idToSafeNumber(
   }
 
   return converted;
+}
+
+function parseCanalComprobante(
+  value: string
+): CanalComprobanteCurso {
+  switch (value) {
+    case "Imagen":
+    case "URL":
+    case "WhatsApp":
+    case "Sin comprobante":
+      return value;
+
+    default:
+      throw new ReportePagoError(
+        "La base de datos devolvió un canal de comprobante inválido",
+        500
+      );
+  }
 }
 
 function validationErrorResponse<T>(
@@ -173,6 +210,200 @@ function fechaToString(
   );
 }
 
+function normalizeNullableText(
+  value: string | null | undefined
+): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim();
+
+  return normalized.length > 0
+    ? normalized
+    : null;
+}
+
+function validateHttpsUrl(
+  value: string,
+  fieldName: string
+): string {
+  let url: URL;
+
+  try {
+    url = new URL(value);
+  } catch {
+    throw new ReportePagoError(
+      `${fieldName} no contiene una URL válida`,
+      400
+    );
+  }
+
+  if (url.protocol !== "https:") {
+    throw new ReportePagoError(
+      `${fieldName} debe usar HTTPS`,
+      400
+    );
+  }
+
+  if (
+    !url.hostname ||
+    url.username ||
+    url.password
+  ) {
+    throw new ReportePagoError(
+      `${fieldName} no contiene una URL permitida`,
+      400
+    );
+  }
+
+  return url.toString();
+}
+
+function normalizarComprobante(
+  input: ReportarPagoCursoInput,
+  requiereComprobante: boolean
+): DatosComprobanteNormalizados {
+  const canal = input.canalComprobante;
+  const observaciones =
+    normalizeNullableText(
+      input.observaciones
+    );
+
+  if (canal === "Sin comprobante") {
+    if (requiereComprobante) {
+      throw new ReportePagoError(
+        "Este método de pago requiere comprobante",
+        400
+      );
+    }
+
+    return {
+      canalComprobante:
+        "Sin comprobante",
+      rutaComprobante: null,
+      nombreArchivoOriginal: null,
+      tipoArchivo: null,
+      comprobanteConfirmado: false,
+      fechaEnvioWhatsapp: null,
+      observaciones,
+    };
+  }
+
+  if (canal === "Imagen") {
+    const ruta = normalizeNullableText(
+      input.rutaComprobante
+    );
+    const nombreArchivo =
+      normalizeNullableText(
+        input.nombreArchivoOriginal
+      );
+    const tipoArchivo =
+      normalizeNullableText(
+        input.tipoArchivo
+      );
+
+    if (
+      !ruta ||
+      !nombreArchivo ||
+      !tipoArchivo
+    ) {
+      throw new ReportePagoError(
+        "Para enviar una imagen debes cargar el comprobante completo",
+        400
+      );
+    }
+
+    if (
+      !TIPOS_IMAGEN_PERMITIDOS.some(
+        (tipo) => tipo === tipoArchivo
+      )
+    ) {
+      throw new ReportePagoError(
+        "La imagen debe ser JPG, PNG o WEBP",
+        400
+      );
+    }
+
+    return {
+      canalComprobante: "Imagen",
+      rutaComprobante:
+        validateHttpsUrl(
+          ruta,
+          "La URL de la imagen"
+        ),
+      nombreArchivoOriginal:
+        nombreArchivo.slice(0, 255),
+      tipoArchivo,
+      comprobanteConfirmado: true,
+      fechaEnvioWhatsapp: null,
+      observaciones,
+    };
+  }
+
+  if (canal === "URL") {
+    const ruta = normalizeNullableText(
+      input.rutaComprobante
+    );
+
+    if (!ruta) {
+      throw new ReportePagoError(
+        "Debes proporcionar la URL del comprobante",
+        400
+      );
+    }
+
+    return {
+      canalComprobante: "URL",
+      rutaComprobante:
+        validateHttpsUrl(
+          ruta,
+          "La URL del comprobante"
+        ),
+      nombreArchivoOriginal: null,
+      tipoArchivo: null,
+      comprobanteConfirmado: true,
+      fechaEnvioWhatsapp: null,
+      observaciones,
+    };
+  }
+
+  if (canal === "WhatsApp") {
+    if (
+      input.comprobanteConfirmado !==
+      true
+    ) {
+      throw new ReportePagoError(
+        "Debes confirmar que ya enviaste el comprobante por WhatsApp",
+        400
+      );
+    }
+
+    const notaWhatsapp =
+      "El cliente indicó que envió el comprobante por WhatsApp.";
+
+    return {
+      canalComprobante:
+        "WhatsApp",
+      rutaComprobante: null,
+      nombreArchivoOriginal: null,
+      tipoArchivo: null,
+      comprobanteConfirmado: false,
+      fechaEnvioWhatsapp:
+        new Date().toISOString(),
+      observaciones:
+        observaciones
+          ? `${notaWhatsapp}\n${observaciones}`
+          : notaWhatsapp,
+    };
+  }
+
+  throw new ReportePagoError(
+    "El canal de comprobante no es válido",
+    400
+  );
+}
+
 export async function POST(
   request: Request,
   { params }: PagoRouteContext
@@ -181,9 +412,7 @@ export async function POST(
 
   if (!session) {
     return NextResponse.json(
-      {
-        error: "No autenticado",
-      },
+      { error: "No autenticado" },
       { status: 401 }
     );
   }
@@ -211,9 +440,7 @@ export async function POST(
 
     if (!compraId) {
       return NextResponse.json(
-        {
-          error: "ID de compra inválido",
-        },
+        { error: "ID de compra inválido" },
         { status: 400 }
       );
     }
@@ -237,16 +464,13 @@ export async function POST(
       session.user.correo,
       async () =>
         db.transaction(async (tx) => {
-          /*
-           * Bloqueamos la compra para evitar dos reportes
-           * concurrentes que superen el total.
-           */
-          await tx.execute(sql`
-            SELECT idcompra
-            FROM academia.comprascursosinacademia
-            WHERE idcompra = ${compraId}
-            FOR UPDATE
-          `);
+          await expirarComprasVencidas(
+            tx,
+            {
+              usuarioId,
+              compraId,
+            }
+          );
 
           const comprasEncontradas =
             await tx
@@ -297,6 +521,15 @@ export async function POST(
           }
 
           if (
+            compra.estado === "Expirada"
+          ) {
+            throw new ReportePagoError(
+              "La fecha límite de pago ya venció y la compra fue marcada como expirada",
+              409
+            );
+          }
+
+          if (
             !ESTADOS_COMPRA_REPORTABLES.some(
               (estado) =>
                 estado === compra.estado
@@ -315,9 +548,17 @@ export async function POST(
           if (
             Number.isNaN(
               limitePago.getTime()
-            ) ||
-            limitePago.getTime() <
-              Date.now()
+            )
+          ) {
+            throw new ReportePagoError(
+              "La fecha límite de pago almacenada no es válida",
+              500
+            );
+          }
+
+          if (
+            limitePago.getTime() <=
+            Date.now()
           ) {
             throw new ReportePagoError(
               "La fecha límite de pago ya venció",
@@ -360,15 +601,11 @@ export async function POST(
             );
           }
 
-          if (
-            metodoPago.requiereComprobante &&
-            !input.rutaComprobante
-          ) {
-            throw new ReportePagoError(
-              "Este método de pago requiere comprobante",
-              400
+          const comprobante =
+            normalizarComprobante(
+              input,
+              metodoPago.requiereComprobante
             );
-          }
 
           const pagosExistentes =
             await tx
@@ -396,13 +633,11 @@ export async function POST(
 
           const totalCompraCents =
             decimalToCents(compra.total);
-
           const totalReportadoCents =
             decimalToCents(
               pagosExistentes[0]
                 ?.totalReportado ?? "0.00"
             );
-
           const nuevoPagoCents =
             decimalToCents(input.monto);
 
@@ -474,16 +709,22 @@ export async function POST(
                 referencia:
                   input.referencia,
                 rutaComprobante:
-                  input.rutaComprobante,
+                  comprobante.rutaComprobante,
                 nombreArchivoOriginal:
-                  input.nombreArchivoOriginal,
+                  comprobante.nombreArchivoOriginal,
                 tipoArchivo:
-                  input.tipoArchivo,
+                  comprobante.tipoArchivo,
+                canalComprobante:
+                  comprobante.canalComprobante,
+                comprobanteConfirmado:
+                  comprobante.comprobanteConfirmado,
+                fechaEnvioWhatsapp:
+                  comprobante.fechaEnvioWhatsapp,
                 estado: "Reportado",
                 fechaPago:
                   input.fechaPago,
                 observaciones:
-                  input.observaciones,
+                  comprobante.observaciones,
               })
               .returning({
                 idPago:
@@ -502,6 +743,12 @@ export async function POST(
                   pagosCursos.nombreArchivoOriginal,
                 tipoArchivo:
                   pagosCursos.tipoArchivo,
+                canalComprobante:
+                  pagosCursos.canalComprobante,
+                comprobanteConfirmado:
+                  pagosCursos.comprobanteConfirmado,
+                fechaEnvioWhatsapp:
+                  pagosCursos.fechaEnvioWhatsapp,
                 estado:
                   pagosCursos.estado,
                 fechaPago:
@@ -570,14 +817,17 @@ export async function POST(
                 motivo:
                   "Pago reportado por el usuario",
                 observaciones:
-                  input.observaciones,
+                  comprobante.observaciones,
               });
           }
 
           const response:
             ReportarPagoCursoResponse = {
             message:
-              "Pago reportado correctamente. Queda pendiente de revisión administrativa.",
+              comprobante.canalComprobante ===
+              "WhatsApp"
+                ? "Pago reportado correctamente. El administrador verificará el comprobante enviado por WhatsApp."
+                : "Pago reportado correctamente. Queda pendiente de revisión administrativa.",
 
             pago: {
               idPago: idToSafeNumber(
@@ -600,6 +850,14 @@ export async function POST(
                 pagoInsertado.nombreArchivoOriginal,
               tipoArchivo:
                 pagoInsertado.tipoArchivo,
+              canalComprobante:
+                parseCanalComprobante(
+                  pagoInsertado.canalComprobante
+                ),
+              comprobanteConfirmado:
+                pagoInsertado.comprobanteConfirmado,
+              fechaEnvioWhatsapp:
+                pagoInsertado.fechaEnvioWhatsapp,
               estado:
                 pagoInsertado.estado,
               fechaPago:
@@ -614,6 +872,7 @@ export async function POST(
                 ),
               observaciones:
                 pagoInsertado.observaciones,
+              motivoRechazo: null,
             },
 
             estadoCompra:
@@ -644,12 +903,8 @@ export async function POST(
       error instanceof ReportePagoError
     ) {
       return NextResponse.json(
-        {
-          error: error.message,
-        },
-        {
-          status: error.status,
-        }
+        { error: error.message },
+        { status: error.status }
       );
     }
 

@@ -1,4 +1,4 @@
-import { pgTable, pgSchema, index,customType, foreignKey, serial, integer, varchar, text, boolean, timestamp, date, numeric, jsonb, unique, inet, check, uniqueIndex, bigserial, smallint, smallserial, bigint, time } from "drizzle-orm/pg-core"
+import { pgTable, pgSchema, index, customType, foreignKey, serial, integer, varchar, text, boolean, timestamp, check, bigserial, bigint, smallint, numeric, date, jsonb, unique, inet, uniqueIndex, smallserial, time } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 export const soporte = pgSchema("soporte");
@@ -15,9 +15,10 @@ const bytea = customType<{
   driverData: Buffer;
 }>({
   dataType() {
-    return "bytea";
+	return "bytea";
   },
 });
+
 
 export const preguntasUsuariosInSoporte = soporte.table("preguntas_usuarios", {
 	idPregunta: serial("id_pregunta").primaryKey().notNull(),
@@ -50,6 +51,58 @@ export const preguntasUsuariosInSoporte = soporte.table("preguntas_usuarios", {
 			foreignColumns: [usuariosInSeguridad.id],
 			name: "fk_pregunta_usuario_usuario"
 		}),
+]);
+
+export const pagosCursosInAcademia = academia.table("pagos_cursos", {
+	idPago: bigserial("id_pago", { mode: "bigint" }).primaryKey().notNull(),
+	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
+	idCompra: bigint("id_compra", { mode: "number" }).notNull(),
+	idMetodoPago: smallint("id_metodo_pago").notNull(),
+	monto: numeric({ precision: 10, scale:  2 }).notNull(),
+	referencia: varchar({ length: 100 }),
+	rutaComprobante: text("ruta_comprobante"),
+	nombreArchivoOriginal: varchar("nombre_archivo_original", { length: 255 }),
+	tipoArchivo: varchar("tipo_archivo", { length: 100 }),
+	estado: varchar({ length: 20 }).default('Reportado').notNull(),
+	fechaPago: timestamp("fecha_pago", { mode: 'string' }).notNull(),
+	fechaReporte: timestamp("fecha_reporte", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+	fechaValidacion: timestamp("fecha_validacion", { mode: 'string' }),
+	usuarioValida: integer("usuario_valida"),
+	motivoRechazo: text("motivo_rechazo"),
+	observaciones: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+	canalComprobante: varchar("canal_comprobante", { length: 20 }).default('Sin comprobante').notNull(),
+	comprobanteConfirmado: boolean("comprobante_confirmado").default(false).notNull(),
+	fechaEnvioWhatsapp: timestamp("fecha_envio_whatsapp", { mode: 'string' }),
+}, (table) => [
+	index("idx_pagos_cursos_compra").using("btree", table.idCompra.asc().nullsLast().op("int8_ops")),
+	index("idx_pagos_cursos_compra_estado").using("btree", table.idCompra.asc().nullsLast().op("int8_ops"), table.estado.asc().nullsLast().op("int8_ops")),
+	index("idx_pagos_cursos_estado").using("btree", table.estado.asc().nullsLast().op("text_ops")),
+	index("idx_pagos_cursos_fecha_reporte").using("btree", table.fechaReporte.asc().nullsLast().op("timestamp_ops")),
+	index("idx_pagos_cursos_metodo").using("btree", table.idMetodoPago.asc().nullsLast().op("int2_ops")),
+	index("idx_pagos_cursos_reportados").using("btree", table.fechaReporte.asc().nullsLast().op("timestamp_ops"), table.idPago.asc().nullsLast().op("timestamp_ops")).where(sql`((estado)::text = 'Reportado'::text)`),
+	index("idx_pagos_cursos_usuario_valida").using("btree", table.usuarioValida.asc().nullsLast().op("int4_ops")),
+	foreignKey({
+			columns: [table.idCompra],
+			foreignColumns: [comprascursosinacademiaInAcademia.idcompra],
+			name: "fk_pago_compra"
+		}).onDelete("restrict"),
+	foreignKey({
+			columns: [table.idMetodoPago],
+			foreignColumns: [metodosPagoCursosInAcademia.idMetodoPago],
+			name: "fk_pago_metodo"
+		}).onDelete("restrict"),
+	foreignKey({
+			columns: [table.usuarioValida],
+			foreignColumns: [usuariosInSeguridad.id],
+			name: "fk_pago_usuario_valida"
+		}).onDelete("set null"),
+	check("chk_pago_canal_comprobante", sql`(canal_comprobante)::text = ANY ((ARRAY['Imagen'::character varying, 'URL'::character varying, 'WhatsApp'::character varying, 'Sin comprobante'::character varying])::text[])`),
+	check("chk_pago_estado", sql`(estado)::text = ANY ((ARRAY['Reportado'::character varying, 'En revisión'::character varying, 'Aprobado'::character varying, 'Rechazado'::character varying, 'Cancelado'::character varying])::text[])`),
+	check("chk_pago_monto", sql`monto > (0)::numeric`),
+	check("chk_pago_motivo_rechazo", sql`((estado)::text <> 'Rechazado'::text) OR (motivo_rechazo IS NOT NULL)`),
+	check("chk_pago_validacion", sql`(fecha_validacion IS NULL) OR (fecha_validacion >= fecha_reporte)`),
 ]);
 
 export const estadisticasConsumoInSeguridad = seguridad.table("estadisticas_consumo", {
@@ -487,174 +540,174 @@ export const valoracionesFaqInSoporte = soporte.table("valoraciones_faq", {
 export const comprascursosinacademiaInAcademia = academia.table(
   "comprascursosinacademia",
   {
-    idcompra: bigserial({ mode: "bigint" })
-      .primaryKey()
-      .notNull(),
+	idcompra: bigserial({ mode: "bigint" })
+	  .primaryKey()
+	  .notNull(),
 
-    foliocompra: varchar({ length: 20 })
-      .default(sql`academia.generar_folio_compra()`)
-      .notNull(),
+	foliocompra: varchar({ length: 20 })
+	  .default(sql`academia.generar_folio_compra()`)
+	  .notNull(),
 
-    idusuario: integer().notNull(),
-    idcurso: integer().notNull(),
-    idestadocompra: smallint().notNull(),
-    cantidadcupos: smallint().notNull(),
+	idusuario: integer().notNull(),
+	idcurso: integer().notNull(),
+	idestadocompra: smallint().notNull(),
+	cantidadcupos: smallint().notNull(),
 
-    preciounitario: numeric({
-      precision: 10,
-      scale: 2,
-    }).notNull(),
+	preciounitario: numeric({
+	  precision: 10,
+	  scale: 2,
+	}).notNull(),
 
-    subtotal: numeric({
-      precision: 10,
-      scale: 2,
-    }).notNull(),
+	subtotal: numeric({
+	  precision: 10,
+	  scale: 2,
+	}).notNull(),
 
-    descuento: numeric({
-      precision: 10,
-      scale: 2,
-    })
-      .default("0")
-      .notNull(),
+	descuento: numeric({
+	  precision: 10,
+	  scale: 2,
+	})
+	  .default("0")
+	  .notNull(),
 
-    total: numeric({
-      precision: 10,
-      scale: 2,
-    }).notNull(),
+	total: numeric({
+	  precision: 10,
+	  scale: 2,
+	}).notNull(),
 
-    fechacompra: timestamp({ mode: "string" })
-      .default(sql`CURRENT_TIMESTAMP`)
-      .notNull(),
+	fechacompra: timestamp({ mode: "string" })
+	  .default(sql`CURRENT_TIMESTAMP`)
+	  .notNull(),
 
-    fechalimitepago: timestamp({ mode: "string" }).notNull(),
-    fechapago: timestamp({ mode: "string" }),
-    fechavalidacion: timestamp({ mode: "string" }),
+	fechalimitepago: timestamp({ mode: "string" }).notNull(),
+	fechapago: timestamp({ mode: "string" }),
+	fechavalidacion: timestamp({ mode: "string" }),
 
-    usuariovalida: integer(),
-    observaciones: text(),
+	usuariovalida: integer(),
+	observaciones: text(),
   },
   (table) => [
-    index("idx_compra_curso").using(
-      "btree",
-      table.idcurso.asc().nullsLast().op("int4_ops"),
-    ),
+	index("idx_compra_curso").using(
+	  "btree",
+	  table.idcurso.asc().nullsLast().op("int4_ops"),
+	),
 
-    index("idx_compra_estado").using(
-      "btree",
-      table.idestadocompra.asc().nullsLast().op("int2_ops"),
-    ),
+	index("idx_compra_estado").using(
+	  "btree",
+	  table.idestadocompra.asc().nullsLast().op("int2_ops"),
+	),
 
-    index("idx_compra_fecha").using(
-      "btree",
-      table.fechacompra.asc().nullsLast().op("timestamp_ops"),
-    ),
+	index("idx_compra_fecha").using(
+	  "btree",
+	  table.fechacompra.asc().nullsLast().op("timestamp_ops"),
+	),
 
-    index("idx_compra_usuario").using(
-      "btree",
-      table.idusuario.asc().nullsLast().op("int4_ops"),
-    ),
+	index("idx_compra_usuario").using(
+	  "btree",
+	  table.idusuario.asc().nullsLast().op("int4_ops"),
+	),
 
-    index("idx_compras_cursos_curso").using(
-      "btree",
-      table.idcurso.asc().nullsLast().op("int4_ops"),
-    ),
+	index("idx_compras_cursos_curso").using(
+	  "btree",
+	  table.idcurso.asc().nullsLast().op("int4_ops"),
+	),
 
-    index("idx_compras_cursos_curso_estado").using(
-      "btree",
-      table.idcurso.asc().nullsLast().op("int4_ops"),
-      table.idestadocompra.asc().nullsLast().op("int2_ops"),
-    ),
+	index("idx_compras_cursos_curso_estado").using(
+	  "btree",
+	  table.idcurso.asc().nullsLast().op("int4_ops"),
+	  table.idestadocompra.asc().nullsLast().op("int2_ops"),
+	),
 
-    index("idx_compras_cursos_estado").using(
-      "btree",
-      table.idestadocompra.asc().nullsLast().op("int2_ops"),
-    ),
+	index("idx_compras_cursos_estado").using(
+	  "btree",
+	  table.idestadocompra.asc().nullsLast().op("int2_ops"),
+	),
 
-    index("idx_compras_cursos_fecha").using(
-      "btree",
-      table.fechacompra.asc().nullsLast().op("timestamp_ops"),
-    ),
+	index("idx_compras_cursos_fecha").using(
+	  "btree",
+	  table.fechacompra.asc().nullsLast().op("timestamp_ops"),
+	),
 
-    index("idx_compras_cursos_limite_pago")
-      .using(
-        "btree",
-        table.fechalimitepago.asc().nullsLast().op("timestamp_ops"),
-        table.idcompra.asc().nullsLast().op("int8_ops"),
-      )
-      .where(sql`${table.fechalimitepago} IS NOT NULL`),
+	index("idx_compras_cursos_limite_pago")
+	  .using(
+		"btree",
+		table.fechalimitepago.asc().nullsLast().op("timestamp_ops"),
+		table.idcompra.asc().nullsLast().op("int8_ops"),
+	  )
+	  .where(sql`${table.fechalimitepago} IS NOT NULL`),
 
-    index("idx_compras_cursos_usuario").using(
-      "btree",
-      table.idusuario.asc().nullsLast().op("int4_ops"),
-    ),
+	index("idx_compras_cursos_usuario").using(
+	  "btree",
+	  table.idusuario.asc().nullsLast().op("int4_ops"),
+	),
 
-    index("idx_compras_cursos_usuario_fecha").using(
-      "btree",
-      table.idusuario.asc().nullsLast().op("int4_ops"),
-      table.fechacompra.desc().nullsFirst().op("timestamp_ops"),
-    ),
+	index("idx_compras_cursos_usuario_fecha").using(
+	  "btree",
+	  table.idusuario.asc().nullsLast().op("int4_ops"),
+	  table.fechacompra.desc().nullsFirst().op("timestamp_ops"),
+	),
 
-    uniqueIndex("uq_compras_cursos_folio").using(
-      "btree",
-      table.foliocompra.asc().nullsLast().op("text_ops"),
-    ),
+	uniqueIndex("uq_compras_cursos_folio").using(
+	  "btree",
+	  table.foliocompra.asc().nullsLast().op("text_ops"),
+	),
 
-    foreignKey({
-      columns: [table.usuariovalida],
-      foreignColumns: [usuariosInSeguridad.id],
-      name: "fk_compra_admin",
-    }),
+	foreignKey({
+	  columns: [table.usuariovalida],
+	  foreignColumns: [usuariosInSeguridad.id],
+	  name: "fk_compra_admin",
+	}),
 
-    foreignKey({
-      columns: [table.idcurso],
-      foreignColumns: [cursosInAcademia.idCurso],
-      name: "fk_compra_curso",
-    }),
+	foreignKey({
+	  columns: [table.idcurso],
+	  foreignColumns: [cursosInAcademia.idCurso],
+	  name: "fk_compra_curso",
+	}),
 
-    foreignKey({
-      columns: [table.idestadocompra],
-      foreignColumns: [
-        estadocomprainacademiaInAcademia.idestadocompra,
-      ],
-      name: "fk_compra_estado",
-    }),
+	foreignKey({
+	  columns: [table.idestadocompra],
+	  foreignColumns: [
+		estadocomprainacademiaInAcademia.idestadocompra,
+	  ],
+	  name: "fk_compra_estado",
+	}),
 
-    foreignKey({
-      columns: [table.idusuario],
-      foreignColumns: [usuariosInSeguridad.id],
-      name: "fk_compra_usuario",
-    }),
+	foreignKey({
+	  columns: [table.idusuario],
+	  foreignColumns: [usuariosInSeguridad.id],
+	  name: "fk_compra_usuario",
+	}),
 
-    unique("comprascursosinacademia_foliocompra_key").on(
-      table.foliocompra,
-    ),
+	unique("comprascursosinacademia_foliocompra_key").on(
+	  table.foliocompra,
+	),
 
-    check("chk_cantidad", sql`${table.cantidadcupos} > 0`),
+	check("chk_cantidad", sql`${table.cantidadcupos} > 0`),
 
-    check(
-      "chk_descuento",
-      sql`${table.descuento} >= 0 AND ${table.descuento} <= ${table.subtotal}`,
-    ),
+	check(
+	  "chk_descuento",
+	  sql`${table.descuento} >= 0 AND ${table.descuento} <= ${table.subtotal}`,
+	),
 
-    check(
-      "chk_precio",
-      sql`${table.preciounitario} >= 0`,
-    ),
+	check(
+	  "chk_precio",
+	  sql`${table.preciounitario} >= 0`,
+	),
 
-    check(
-      "chk_subtotal",
-      sql`${table.subtotal} >= 0`,
-    ),
+	check(
+	  "chk_subtotal",
+	  sql`${table.subtotal} >= 0`,
+	),
 
-    check(
-      "chk_total",
-      sql`${table.total} >= 0`,
-    ),
+	check(
+	  "chk_total",
+	  sql`${table.total} >= 0`,
+	),
 
-    check(
-      "chk_total_calculado",
-      sql`${table.total} = ${table.subtotal} - ${table.descuento}`,
-    ),
+	check(
+	  "chk_total_calculado",
+	  sql`${table.total} = ${table.subtotal} - ${table.descuento}`,
+	),
   ],
 );
 
@@ -686,13 +739,13 @@ export const inscripcionesCursosInAcademia = academia.table("inscripciones_curso
 }, (table) => [
 	index("idx_inscripciones_compra_participante").using("btree", table.compraParticipanteId.asc().nullsLast().op("int8_ops")),
 	index("idx_inscripciones_curso").using("btree", table.cursoId.asc().nullsLast().op("int4_ops")),
-	index("idx_inscripciones_curso_estado").using("btree", table.cursoId.asc().nullsLast().op("int4_ops"), table.estado.asc().nullsLast().op("int4_ops")),
+	index("idx_inscripciones_curso_estado").using("btree", table.cursoId.asc().nullsLast().op("text_ops"), table.estado.asc().nullsLast().op("int4_ops")),
 	index("idx_inscripciones_estado").using("btree", table.estado.asc().nullsLast().op("text_ops")),
 	index("idx_inscripciones_fecha").using("btree", table.fechaInscripcion.desc().nullsFirst().op("timestamp_ops")),
 	index("idx_inscripciones_origen").using("btree", table.origenInscripcion.asc().nullsLast().op("text_ops")),
 	index("idx_inscripciones_participante").using("btree", table.participanteId.asc().nullsLast().op("int8_ops")),
 	index("idx_inscripciones_usuario").using("btree", table.usuarioId.asc().nullsLast().op("int4_ops")),
-	uniqueIndex("uq_inscripcion_curso_participante").using("btree", table.cursoId.asc().nullsLast().op("int8_ops"), table.participanteId.asc().nullsLast().op("int4_ops")).where(sql`(participante_id IS NOT NULL)`),
+	uniqueIndex("uq_inscripcion_curso_participante").using("btree", table.cursoId.asc().nullsLast().op("int8_ops"), table.participanteId.asc().nullsLast().op("int8_ops")).where(sql`(participante_id IS NOT NULL)`),
 	uniqueIndex("uq_inscripciones_compra_participante").using("btree", table.compraParticipanteId.asc().nullsLast().op("int8_ops")).where(sql`(compra_participante_id IS NOT NULL)`),
 	foreignKey({
 			columns: [table.compraParticipanteId],
@@ -714,7 +767,6 @@ export const inscripcionesCursosInAcademia = academia.table("inscripciones_curso
 			foreignColumns: [usuariosInSeguridad.id],
 			name: "fk_inscripcion_usuario"
 		}).onDelete("cascade"),
-	unique("unique_inscripcion_curso_usuario").on(table.cursoId, table.usuarioId),
 	unique("uq_inscripcion_compra_participante").on(table.compraParticipanteId),
 	check("chk_inscripcion_origen_compra", sql`((origen_inscripcion)::text <> 'Compra'::text) OR (compra_participante_id IS NOT NULL)`),
 	check("chk_origen_inscripcion", sql`(origen_inscripcion)::text = ANY ((ARRAY['Compra'::character varying, 'Administrativa'::character varying, 'Sistema anterior'::character varying])::text[])`),
@@ -782,54 +834,6 @@ export const compraParticipantesInAcademia = academia.table("compra_participante
 	unique("uq_compra_numero_cupo").on(table.idCompra, table.numeroCupo),
 	check("chk_estado_compra_participante", sql`(estado)::text = ANY ((ARRAY['Registrado'::character varying, 'Confirmado'::character varying, 'Cancelado'::character varying, 'Inscrito'::character varying])::text[])`),
 	check("chk_numero_cupo", sql`numero_cupo > 0`),
-]);
-
-export const pagosCursosInAcademia = academia.table("pagos_cursos", {
-	idPago: bigserial("id_pago", { mode: "bigint" }).primaryKey().notNull(),
-	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
-	idCompra: bigint("id_compra", { mode: "number" }).notNull(),
-	idMetodoPago: smallint("id_metodo_pago").notNull(),
-	monto: numeric({ precision: 10, scale:  2 }).notNull(),
-	referencia: varchar({ length: 100 }),
-	rutaComprobante: text("ruta_comprobante"),
-	nombreArchivoOriginal: varchar("nombre_archivo_original", { length: 255 }),
-	tipoArchivo: varchar("tipo_archivo", { length: 100 }),
-	estado: varchar({ length: 20 }).default('Reportado').notNull(),
-	fechaPago: timestamp("fecha_pago", { mode: 'string' }).notNull(),
-	fechaReporte: timestamp("fecha_reporte", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
-	fechaValidacion: timestamp("fecha_validacion", { mode: 'string' }),
-	usuarioValida: integer("usuario_valida"),
-	motivoRechazo: text("motivo_rechazo"),
-	observaciones: text(),
-	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
-	updatedAt: timestamp("updated_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
-}, (table) => [
-	index("idx_pagos_cursos_compra").using("btree", table.idCompra.asc().nullsLast().op("int8_ops")),
-	index("idx_pagos_cursos_compra_estado").using("btree", table.idCompra.asc().nullsLast().op("int8_ops"), table.estado.asc().nullsLast().op("int8_ops")),
-	index("idx_pagos_cursos_estado").using("btree", table.estado.asc().nullsLast().op("text_ops")),
-	index("idx_pagos_cursos_fecha_reporte").using("btree", table.fechaReporte.asc().nullsLast().op("timestamp_ops")),
-	index("idx_pagos_cursos_metodo").using("btree", table.idMetodoPago.asc().nullsLast().op("int2_ops")),
-	index("idx_pagos_cursos_reportados").using("btree", table.fechaReporte.asc().nullsLast().op("timestamp_ops"), table.idPago.asc().nullsLast().op("timestamp_ops")).where(sql`((estado)::text = 'Reportado'::text)`),
-	index("idx_pagos_cursos_usuario_valida").using("btree", table.usuarioValida.asc().nullsLast().op("int4_ops")),
-	foreignKey({
-			columns: [table.idCompra],
-			foreignColumns: [comprascursosinacademiaInAcademia.idcompra],
-			name: "fk_pago_compra"
-		}).onDelete("restrict"),
-	foreignKey({
-			columns: [table.idMetodoPago],
-			foreignColumns: [metodosPagoCursosInAcademia.idMetodoPago],
-			name: "fk_pago_metodo"
-		}).onDelete("restrict"),
-	foreignKey({
-			columns: [table.usuarioValida],
-			foreignColumns: [usuariosInSeguridad.id],
-			name: "fk_pago_usuario_valida"
-		}).onDelete("set null"),
-	check("chk_pago_estado", sql`(estado)::text = ANY ((ARRAY['Reportado'::character varying, 'En revisión'::character varying, 'Aprobado'::character varying, 'Rechazado'::character varying, 'Cancelado'::character varying])::text[])`),
-	check("chk_pago_monto", sql`monto > (0)::numeric`),
-	check("chk_pago_motivo_rechazo", sql`((estado)::text <> 'Rechazado'::text) OR (motivo_rechazo IS NOT NULL)`),
-	check("chk_pago_validacion", sql`(fecha_validacion IS NULL) OR (fecha_validacion >= fecha_reporte)`),
 ]);
 
 export const metodosPagoCursosInAcademia = academia.table("metodos_pago_cursos", {

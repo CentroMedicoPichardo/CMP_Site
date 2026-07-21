@@ -8,8 +8,22 @@ import {
 } from "@/lib/validators/common";
 
 import type {
+  CanalComprobanteCurso,
   ReportarPagoCursoInput,
 } from "@/types/compras-cursos";
+
+const CANALES_COMPROBANTE: readonly CanalComprobanteCurso[] = [
+  "Imagen",
+  "URL",
+  "WhatsApp",
+  "Sin comprobante",
+];
+
+const TIPOS_IMAGEN_PERMITIDOS = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+] as const;
 
 function parseMonto(
   value: unknown
@@ -73,14 +87,17 @@ function parsePaymentDate(
 
   const now = Date.now();
 
-  if (parsed.getTime() > now + 5 * 60 * 1000) {
+  if (
+    parsed.getTime() >
+    now + 5 * 60 * 1000
+  ) {
     return null;
   }
 
   return parsed.toISOString();
 }
 
-function parseNullableUrl(
+function parseNullableHttpsUrl(
   value: unknown
 ): string | null {
   if (
@@ -107,17 +124,56 @@ function parseNullableUrl(
   try {
     const url = new URL(normalized);
 
+    if (url.protocol !== "https:") {
+      return null;
+    }
+
     if (
-      url.protocol !== "https:" &&
-      url.protocol !== "http:"
+      !url.hostname ||
+      url.username ||
+      url.password
     ) {
       return null;
     }
 
-    return normalized;
+    return url.toString();
   } catch {
     return null;
   }
+}
+
+function parseCanalComprobante(
+  value: unknown
+): CanalComprobanteCurso | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim();
+
+  const canal = CANALES_COMPROBANTE.find(
+    (item) => item === normalized
+  );
+
+  return canal ?? null;
+}
+
+function parseBoolean(
+  value: unknown
+): boolean | null {
+  if (typeof value !== "boolean") {
+    return null;
+  }
+
+  return value;
+}
+
+function esTipoImagenPermitido(
+  value: string
+): boolean {
+  return TIPOS_IMAGEN_PERMITIDOS.some(
+    (tipo) => tipo === value
+  );
 }
 
 export function validarReportarPagoCurso(
@@ -174,8 +230,18 @@ export function validarReportarPagoCurso(
       "La referencia debe tener máximo 100 caracteres";
   }
 
+  const canalComprobante =
+    parseCanalComprobante(
+      value.canalComprobante
+    );
+
+  if (!canalComprobante) {
+    fieldErrors.canalComprobante =
+      "El canal de comprobante no es válido";
+  }
+
   const rutaComprobante =
-    parseNullableUrl(
+    parseNullableHttpsUrl(
       value.rutaComprobante
     );
 
@@ -186,7 +252,7 @@ export function validarReportarPagoCurso(
     rutaComprobante === null
   ) {
     fieldErrors.rutaComprobante =
-      "La URL del comprobante no es válida";
+      "La URL del comprobante debe ser una dirección HTTPS válida";
   }
 
   const nombreArchivoOriginal =
@@ -221,6 +287,16 @@ export function validarReportarPagoCurso(
       "El tipo de archivo debe tener máximo 100 caracteres";
   }
 
+  const comprobanteConfirmado =
+    parseBoolean(
+      value.comprobanteConfirmado
+    );
+
+  if (comprobanteConfirmado === null) {
+    fieldErrors.comprobanteConfirmado =
+      "Debes indicar si confirmaste el envío del comprobante";
+  }
+
   const observaciones =
     parseNullableString(
       value.observaciones,
@@ -237,18 +313,110 @@ export function validarReportarPagoCurso(
       "Las observaciones deben tener máximo 1000 caracteres";
   }
 
+  if (canalComprobante === "Imagen") {
+    if (!rutaComprobante) {
+      fieldErrors.rutaComprobante =
+        "Debes cargar la imagen del comprobante";
+    }
+
+    if (!nombreArchivoOriginal) {
+      fieldErrors.nombreArchivoOriginal =
+        "No se recibió el nombre del archivo";
+    }
+
+    if (!tipoArchivo) {
+      fieldErrors.tipoArchivo =
+        "No se recibió el tipo del archivo";
+    } else if (
+      !esTipoImagenPermitido(
+        tipoArchivo
+      )
+    ) {
+      fieldErrors.tipoArchivo =
+        "La imagen debe ser JPG, PNG o WEBP";
+    }
+  }
+
+  if (canalComprobante === "URL") {
+    if (!rutaComprobante) {
+      fieldErrors.rutaComprobante =
+        "Debes proporcionar la URL del comprobante";
+    }
+
+    if (nombreArchivoOriginal) {
+      fieldErrors.nombreArchivoOriginal =
+        "El canal URL no debe incluir un nombre de archivo";
+    }
+
+    if (tipoArchivo) {
+      fieldErrors.tipoArchivo =
+        "El canal URL no debe incluir un tipo de archivo";
+    }
+  }
+
+  if (canalComprobante === "WhatsApp") {
+    if (comprobanteConfirmado !== true) {
+      fieldErrors.comprobanteConfirmado =
+        "Debes confirmar que ya enviaste el comprobante por WhatsApp";
+    }
+
+    if (rutaComprobante) {
+      fieldErrors.rutaComprobante =
+        "El canal WhatsApp no debe incluir una URL";
+    }
+
+    if (nombreArchivoOriginal) {
+      fieldErrors.nombreArchivoOriginal =
+        "El canal WhatsApp no debe incluir un archivo";
+    }
+
+    if (tipoArchivo) {
+      fieldErrors.tipoArchivo =
+        "El canal WhatsApp no debe incluir un tipo de archivo";
+    }
+  }
+
   if (
-    rutaComprobante === null &&
+    canalComprobante ===
+    "Sin comprobante"
+  ) {
+    if (rutaComprobante) {
+      fieldErrors.rutaComprobante =
+        "No debes incluir una URL cuando no hay comprobante";
+    }
+
+    if (nombreArchivoOriginal) {
+      fieldErrors.nombreArchivoOriginal =
+        "No debes incluir un archivo cuando no hay comprobante";
+    }
+
+    if (tipoArchivo) {
+      fieldErrors.tipoArchivo =
+        "No debes incluir un tipo de archivo cuando no hay comprobante";
+    }
+  }
+
+  if (
+    canalComprobante !== "Imagen" &&
     (
       nombreArchivoOriginal !== null ||
       tipoArchivo !== null
     )
   ) {
-    fieldErrors.rutaComprobante =
-      "Debes incluir la URL del comprobante cuando envías datos del archivo";
+    if (nombreArchivoOriginal !== null) {
+      fieldErrors.nombreArchivoOriginal =
+        "Los datos del archivo solo se permiten para comprobantes enviados como imagen";
+    }
+
+    if (tipoArchivo !== null) {
+      fieldErrors.tipoArchivo =
+        "El tipo de archivo solo se permite para comprobantes enviados como imagen";
+    }
   }
 
-  if (Object.keys(fieldErrors).length > 0) {
+  if (
+    Object.keys(fieldErrors).length > 0
+  ) {
     return {
       success: false,
       error:
@@ -262,12 +430,30 @@ export function validarReportarPagoCurso(
     data: {
       idMetodoPago:
         idMetodoPago as number,
-      monto: monto as string,
-      fechaPago: fechaPago as string,
+
+      monto:
+        monto as string,
+
+      fechaPago:
+        fechaPago as string,
+
       referencia,
+
+      canalComprobante:
+        canalComprobante as CanalComprobanteCurso,
+
       rutaComprobante,
+
       nombreArchivoOriginal,
+
       tipoArchivo,
+
+      comprobanteConfirmado:
+        comprobanteConfirmado as boolean,
+
+      // La fecha real se genera en el servidor.
+      fechaEnvioWhatsapp: null,
+
       observaciones,
     },
   };

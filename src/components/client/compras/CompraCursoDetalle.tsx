@@ -8,18 +8,23 @@ import {
   CheckCircle,
   Clock,
   CreditCard,
+  ExternalLink,
+  FileImage,
   FileText,
   Loader2,
   ReceiptText,
   RefreshCw,
   Send,
+  Smartphone,
   Users,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { ComprobanteCloudinaryUploader, type ComprobanteCloudinaryAsset } from "@/components/client/compras/ComprobanteCloudinaryUploader";
 import { getApiErrorMessage } from "@/types/api";
 import type {
+  CanalComprobanteCurso,
   CompraCursoDetalleResponse,
   MetodoPagoCurso,
   ReportarPagoCursoInput,
@@ -38,6 +43,8 @@ interface FormularioPago {
   rutaComprobante: string;
   nombreArchivoOriginal: string;
   tipoArchivo: string;
+  canalComprobante: CanalComprobanteCurso;
+  comprobanteConfirmado: boolean;
   observaciones: string;
 }
 
@@ -54,6 +61,8 @@ const INITIAL_FORM: FormularioPago = {
   rutaComprobante: "",
   nombreArchivoOriginal: "",
   tipoArchivo: "",
+  canalComprobante: "Sin comprobante",
+  comprobanteConfirmado: false,
   observaciones: "",
 };
 
@@ -181,6 +190,9 @@ export function CompraCursoDetalle({
   const [mensaje, setMensaje] =
     useState<MensajeEstado | null>(null);
 
+  const [comprobanteImagen, setComprobanteImagen] =
+    useState<ComprobanteCloudinaryAsset | null>(null);
+
   const [formData, setFormData] =
     useState<FormularioPago>({
       ...INITIAL_FORM,
@@ -207,6 +219,29 @@ export function CompraCursoDetalle({
       data,
       formData.idMetodoPago,
     ]);
+
+  const whatsappUrl = useMemo(() => {
+    if (!data) {
+      return null;
+    }
+
+    const telefono =
+      process.env.NEXT_PUBLIC_WHATSAPP_PAGOS?.replace(/\D/g, "") ?? "";
+
+    if (!telefono) {
+      return null;
+    }
+
+    const mensajeWhatsapp = [
+      "Hola, envío mi comprobante de pago.",
+      "",
+      `Folio de compra: ${data.compra.folioCompra}`,
+      `Curso: ${data.compra.tituloCurso}`,
+      `Monto reportado: ${formatMoney(formData.monto || "0")}`,
+    ].join("\n");
+
+    return `https://wa.me/${telefono}?text=${encodeURIComponent(mensajeWhatsapp)}`;
+  }, [data, formData.monto]);
 
   const cargarCompra =
     useCallback(async () => {
@@ -290,12 +325,53 @@ export function CompraCursoDetalle({
     setMensaje(null);
   };
 
+  const cambiarCanalComprobante = (
+    canal: CanalComprobanteCurso
+  ) => {
+    setComprobanteImagen(null);
+
+    setFormData((previous) => ({
+      ...previous,
+      canalComprobante: canal,
+      rutaComprobante: "",
+      nombreArchivoOriginal: "",
+      tipoArchivo: "",
+      comprobanteConfirmado: false,
+    }));
+
+    setMensaje(null);
+  };
+
+  const actualizarImagen = (
+    asset: ComprobanteCloudinaryAsset | null
+  ) => {
+    setComprobanteImagen(asset);
+
+    setFormData((previous) => ({
+      ...previous,
+      rutaComprobante: asset?.url ?? "",
+      nombreArchivoOriginal: asset?.nombreArchivo ?? "",
+      tipoArchivo: asset?.tipoArchivo ?? "",
+    }));
+
+    setMensaje(null);
+  };
+
   const reportarPago = async (
     event: React.FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
 
     if (!data) {
+      return;
+    }
+
+    if (data.compra.estado === "Expirada") {
+      setMensaje({
+        tipo: "error",
+        texto:
+          "La compra expiró y ya no admite reportes de pago.",
+      });
       return;
     }
 
@@ -317,16 +393,46 @@ export function CompraCursoDetalle({
     }
 
     if (
-      metodoSeleccionado
-        ?.requiereComprobante &&
+      metodoSeleccionado?.requiereComprobante &&
+      formData.canalComprobante === "Sin comprobante"
+    ) {
+      setMensaje({
+        tipo: "error",
+        texto: "Selecciona cómo enviaste el comprobante",
+      });
+      return;
+    }
+
+    if (
+      formData.canalComprobante === "Imagen" &&
+      !comprobanteImagen
+    ) {
+      setMensaje({
+        tipo: "error",
+        texto: "Carga la imagen del comprobante",
+      });
+      return;
+    }
+
+    if (
+      formData.canalComprobante === "URL" &&
       !formData.rutaComprobante.trim()
     ) {
       setMensaje({
         tipo: "error",
-        texto:
-          "Este método requiere un comprobante",
+        texto: "Ingresa la URL del comprobante",
       });
+      return;
+    }
 
+    if (
+      formData.canalComprobante === "WhatsApp" &&
+      !formData.comprobanteConfirmado
+    ) {
+      setMensaje({
+        tipo: "error",
+        texto: "Confirma que ya enviaste el comprobante por WhatsApp",
+      });
       return;
     }
 
@@ -350,6 +456,11 @@ export function CompraCursoDetalle({
           null,
         tipoArchivo:
           formData.tipoArchivo.trim() || null,
+        canalComprobante:
+          formData.canalComprobante,
+        comprobanteConfirmado:
+          formData.comprobanteConfirmado,
+        fechaEnvioWhatsapp: null,
         observaciones:
           formData.observaciones.trim() ||
           null,
@@ -394,6 +505,8 @@ export function CompraCursoDetalle({
         tipo: "success",
         texto: payload.message,
       });
+
+      setComprobanteImagen(null);
 
       setFormData({
         ...INITIAL_FORM,
@@ -469,7 +582,11 @@ export function CompraCursoDetalle({
   }
 
   const compra = data.compra;
+  const compraExpirada =
+    compra.estado === "Expirada";
+
   const puedeReportar =
+    !compraExpirada &&
     esCompraReportable(compra.estado) &&
     !data.resumenPago.pagoCompletoReportado;
 
@@ -505,7 +622,13 @@ export function CompraCursoDetalle({
                 Estado
               </p>
 
-              <p className="mt-1 text-lg font-semibold">
+              <p
+                className={`mt-1 text-lg font-semibold ${
+                  compraExpirada
+                    ? "text-red-100"
+                    : ""
+                }`}
+              >
                 {compra.estado}
               </p>
             </div>
@@ -527,6 +650,32 @@ export function CompraCursoDetalle({
             )}
 
             <p>{mensaje.texto}</p>
+          </div>
+        )}
+
+        {compraExpirada && (
+          <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">
+            <Clock className="mt-0.5 h-5 w-5 shrink-0" />
+
+            <div>
+              <p className="font-semibold">
+                El plazo de pago venció
+              </p>
+
+              <p className="mt-1 text-sm">
+                Esta compra fue marcada como expirada y sus cupos fueron liberados.
+                Ya no es posible enviar comprobantes ni reportar pagos.
+              </p>
+
+              <p className="mt-2 text-sm">
+                Fecha límite:{" "}
+                <span className="font-medium">
+                  {formatDate(
+                    compra.fechaLimitePago
+                  )}
+                </span>
+              </p>
+            </div>
           </div>
         )}
 
@@ -665,7 +814,14 @@ export function CompraCursoDetalle({
                           </p>
                         </div>
 
-                        <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-[#0A3D62]">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                            registro.estado ===
+                            "Cancelado"
+                              ? "bg-red-50 text-red-700"
+                              : "bg-blue-50 text-[#0A3D62]"
+                          }`}
+                        >
                           {registro.estado}
                         </span>
                       </div>
@@ -739,7 +895,26 @@ export function CompraCursoDetalle({
                 Reportar pago
               </h2>
 
-              {data.resumenPago
+              {compraExpirada ? (
+                <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">
+                  <Clock className="mb-2 h-6 w-6" />
+
+                  <p className="font-semibold">
+                    Compra expirada
+                  </p>
+
+                  <p className="mt-1 text-sm">
+                    El plazo para reportar el pago terminó el{" "}
+                    {formatDate(
+                      compra.fechaLimitePago
+                    )}.
+                  </p>
+
+                  <p className="mt-2 text-sm">
+                    Los participantes asociados fueron cancelados y no se aceptan nuevos comprobantes.
+                  </p>
+                </div>
+              ) : data.resumenPago
                 .pagoCompletoReportado ? (
                 <div className="mt-5 rounded-xl border border-green-200 bg-green-50 p-4 text-green-800">
                   <CheckCircle className="mb-2 h-6 w-6" />
@@ -882,35 +1057,127 @@ export function CompraCursoDetalle({
                     />
                   </div>
 
-                  <div>
-                    <label
-                      htmlFor="rutaComprobante"
-                      className="mb-1 block text-sm font-medium text-gray-700"
-                    >
-                      URL del comprobante
-                      {metodoSeleccionado
-                        ?.requiereComprobante
-                        ? " *"
-                        : ""}
-                    </label>
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">
+                        Canal del comprobante
+                        {metodoSeleccionado?.requiereComprobante ? " *" : ""}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Selecciona cómo entregarás la evidencia del pago.
+                      </p>
+                    </div>
 
-                    <input
-                      id="rutaComprobante"
-                      name="rutaComprobante"
-                      type="url"
-                      required={
-                        metodoSeleccionado
-                          ?.requiereComprobante ??
-                        false
-                      }
-                      value={
-                        formData.rutaComprobante
-                      }
-                      onChange={handleChange}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 outline-none focus:ring-2 focus:ring-[#0A3D62]"
-                      placeholder="https://..."
-                    />
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {[
+                        { value: "Imagen" as const, label: "Subir imagen", icon: FileImage },
+                        { value: "URL" as const, label: "Pegar URL", icon: ExternalLink },
+                        { value: "WhatsApp" as const, label: "WhatsApp", icon: Smartphone },
+                        ...(!metodoSeleccionado?.requiereComprobante
+                          ? [{ value: "Sin comprobante" as const, label: "Sin comprobante", icon: FileText }]
+                          : []),
+                      ].map((opcion) => {
+                        const Icon = opcion.icon;
+                        const seleccionado = formData.canalComprobante === opcion.value;
+
+                        return (
+                          <button
+                            key={opcion.value}
+                            type="button"
+                            onClick={() => cambiarCanalComprobante(opcion.value)}
+                            className={`flex items-center gap-2 rounded-lg border px-3 py-3 text-left text-sm font-medium transition ${
+                              seleccionado
+                                ? "border-[#0A3D62] bg-blue-50 text-[#0A3D62]"
+                                : "border-gray-200 text-gray-700 hover:bg-gray-50"
+                            }`}
+                          >
+                            <Icon size={17} />
+                            {opcion.label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
+
+                  {formData.canalComprobante === "Imagen" && (
+                    <ComprobanteCloudinaryUploader
+                      value={comprobanteImagen}
+                      onChange={actualizarImagen}
+                      disabled={reportando}
+                    />
+                  )}
+
+                  {formData.canalComprobante === "URL" && (
+                    <div>
+                      <label
+                        htmlFor="rutaComprobante"
+                        className="mb-1 block text-sm font-medium text-gray-700"
+                      >
+                        URL pública del comprobante
+                      </label>
+
+                      <input
+                        id="rutaComprobante"
+                        name="rutaComprobante"
+                        type="url"
+                        required
+                        value={formData.rutaComprobante}
+                        onChange={handleChange}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 outline-none focus:ring-2 focus:ring-[#0A3D62]"
+                        placeholder="https://..."
+                      />
+
+                      <p className="mt-1 text-xs text-gray-500">
+                        El enlace debe abrir sin solicitar permisos.
+                      </p>
+                    </div>
+                  )}
+
+                  {formData.canalComprobante === "WhatsApp" && (
+                    <div className="space-y-3 rounded-xl border border-green-200 bg-green-50 p-4">
+                      <div>
+                        <p className="font-semibold text-green-900">
+                          Enviar por WhatsApp
+                        </p>
+                        <p className="mt-1 text-sm text-green-800">
+                          Abre el chat, adjunta la captura y envía el mensaje prellenado.
+                        </p>
+                      </div>
+
+                      {whatsappUrl ? (
+                        <a
+                          href={whatsappUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-3 font-semibold text-white transition hover:bg-green-700"
+                        >
+                          <Smartphone size={18} />
+                          Abrir WhatsApp
+                        </a>
+                      ) : (
+                        <p className="rounded-lg bg-white p-3 text-sm text-red-700">
+                          Falta configurar NEXT_PUBLIC_WHATSAPP_PAGOS.
+                        </p>
+                      )}
+
+                      <label className="flex items-start gap-3 rounded-lg bg-white p-3">
+                        <input
+                          type="checkbox"
+                          checked={formData.comprobanteConfirmado}
+                          onChange={(event) =>
+                            setFormData((previous) => ({
+                              ...previous,
+                              comprobanteConfirmado: event.target.checked,
+                            }))
+                          }
+                          className="mt-1 h-4 w-4 rounded border-gray-300"
+                        />
+                        <span className="text-sm text-gray-700">
+                          Ya envié el comprobante por WhatsApp.
+                        </span>
+                      </label>
+                    </div>
+                  )}
 
                   <div>
                     <label

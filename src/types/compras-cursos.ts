@@ -21,6 +21,12 @@ export type EstadoCompra =
   | "Cancelada"
   | "Expirada";
 
+export type CanalComprobanteCurso =
+  | "Imagen"
+  | "URL"
+  | "WhatsApp"
+  | "Sin comprobante";
+
 export interface CrearParticipanteCursoInput {
   nombre: string;
   apellidoPaterno: string;
@@ -149,9 +155,15 @@ export interface ReportarPagoCursoInput {
   monto: string;
   fechaPago: string;
   referencia: string | null;
+
+  canalComprobante: CanalComprobanteCurso;
+
   rutaComprobante: string | null;
   nombreArchivoOriginal: string | null;
   tipoArchivo: string | null;
+
+  comprobanteConfirmado: boolean;
+  fechaEnvioWhatsapp: string | null;
   observaciones: string | null;
 }
 
@@ -160,14 +172,21 @@ export interface PagoCursoResumen {
   idCompra: number;
   idMetodoPago: number;
   metodoPago: string;
+
   monto: string;
+  fechaPago: string;
+  fechaReporte: string;
   referencia: string | null;
+
+  canalComprobante: CanalComprobanteCurso;
   rutaComprobante: string | null;
   nombreArchivoOriginal: string | null;
   tipoArchivo: string | null;
-  estado: EstadoPagoCurso | string;
-  fechaPago: string;
-  fechaReporte: string;
+  comprobanteConfirmado: boolean;
+  fechaEnvioWhatsapp: string | null;
+
+  estado: string;
+  motivoRechazo: string | null;
   observaciones: string | null;
 }
 

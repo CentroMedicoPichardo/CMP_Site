@@ -13,6 +13,9 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { withUserEmail } from "@/lib/db-with-user";
 import {
+  expirarComprasVencidas,
+} from "@/lib/compras-cursos/expirar-compras";
+import {
   compraParticipantes,
   comprasCursos,
   cursos,
@@ -263,67 +266,74 @@ export async function GET() {
     const filas = await withUserEmail(
       session.user.correo,
       async () =>
-        db
-          .select({
-            idCompra:
-              comprasCursos.idcompra,
-            folioCompra:
-              comprasCursos.foliocompra,
-            cursoId:
-              comprasCursos.idcurso,
-            tituloCurso:
-              cursos.tituloCurso,
-            cantidadCupos:
-              comprasCursos.cantidadcupos,
-            precioUnitario:
-              comprasCursos.preciounitario,
-            subtotal:
-              comprasCursos.subtotal,
-            descuento:
-              comprasCursos.descuento,
-            total:
-              comprasCursos.total,
-            estado:
-              estadosCompra.nombre,
-            fechaCompra:
-              comprasCursos.fechacompra,
-            fechaLimitePago:
-              comprasCursos.fechalimitepago,
-            observaciones:
-              comprasCursos.observaciones,
-          })
-          .from(comprasCursos)
-          .innerJoin(
-            cursos,
-            eq(
-              comprasCursos.idcurso,
-              cursos.idCurso
-            )
-          )
-          .innerJoin(
-            estadosCompra,
-            eq(
-              comprasCursos.idestadocompra,
-              estadosCompra.idestadocompra
-            )
-          )
-          .where(
-            eq(
-              comprasCursos.idusuario,
-              usuarioId
-            )
-          )
-          .orderBy(
-            desc(
-              comprasCursos.fechacompra
-            ),
-            desc(
-              comprasCursos.idcompra
-            )
-          )
-    );
+        db.transaction(async (tx) => {
+          await expirarComprasVencidas(
+            tx,
+            {
+              usuarioId,
+            }
+          );
 
-    const ahora = Date.now();
+          return tx
+            .select({
+              idCompra:
+                comprasCursos.idcompra,
+              folioCompra:
+                comprasCursos.foliocompra,
+              cursoId:
+                comprasCursos.idcurso,
+              tituloCurso:
+                cursos.tituloCurso,
+              cantidadCupos:
+                comprasCursos.cantidadcupos,
+              precioUnitario:
+                comprasCursos.preciounitario,
+              subtotal:
+                comprasCursos.subtotal,
+              descuento:
+                comprasCursos.descuento,
+              total:
+                comprasCursos.total,
+              estado:
+                estadosCompra.nombre,
+              fechaCompra:
+                comprasCursos.fechacompra,
+              fechaLimitePago:
+                comprasCursos.fechalimitepago,
+              observaciones:
+                comprasCursos.observaciones,
+            })
+            .from(comprasCursos)
+            .innerJoin(
+              cursos,
+              eq(
+                comprasCursos.idcurso,
+                cursos.idCurso
+              )
+            )
+            .innerJoin(
+              estadosCompra,
+              eq(
+                comprasCursos.idestadocompra,
+                estadosCompra.idestadocompra
+              )
+            )
+            .where(
+              eq(
+                comprasCursos.idusuario,
+                usuarioId
+              )
+            )
+            .orderBy(
+              desc(
+                comprasCursos.fechacompra
+              ),
+              desc(
+                comprasCursos.idcompra
+              )
+            );
+        })
+    );
 
     const compras: CompraCursoListaItem[] =
       filas.map((fila) => {
@@ -332,19 +342,6 @@ export async function GET() {
             fila.fechaLimitePago,
             "la fecha límite de pago"
           );
-
-        const fechaLimiteTimestamp =
-          new Date(
-            fechaLimitePago
-          ).getTime();
-
-        const pagoVencido =
-          fila.estado ===
-            ESTADO_PENDIENTE_PAGO &&
-          !Number.isNaN(
-            fechaLimiteTimestamp
-          ) &&
-          fechaLimiteTimestamp < ahora;
 
         return {
           idCompra:
@@ -378,7 +375,12 @@ export async function GET() {
           fechaLimitePago,
           observaciones:
             fila.observaciones,
-          pagoVencido,
+
+          // Después de ejecutar la expiración,
+          // una compra vencida ya aparece como
+          // "Expirada" y no como pendiente.
+          pagoVencido:
+            fila.estado === "Expirada",
         };
       });
 

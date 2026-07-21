@@ -8,8 +8,11 @@ import {
 } from "drizzle-orm";
 
 import { auth } from "@/lib/auth";
+import {
+  expirarComprasVencidas,
+} from "@/lib/compras-cursos/expirar-compras";
 import { db } from "@/lib/db";
-
+import { withUserEmail } from "@/lib/db-with-user";
 import {
   compraParticipantes,
   comprasCursos,
@@ -19,15 +22,12 @@ import {
   pagosCursos,
   participantes,
 } from "@/lib/schema";
-
-
-import type {
-  CompraCursoDetalleResponse,
-  SexoParticipante,
+import {
+  SEXOS_PARTICIPANTE,
+  type CanalComprobanteCurso,
+  type CompraCursoDetalleResponse,
+  type SexoParticipante,
 } from "@/types/compras-cursos";
-
-
-import { SEXOS_PARTICIPANTE } from "@/types/compras-cursos";
 
 interface CompraCursoRouteContext {
   params: Promise<{
@@ -100,6 +100,27 @@ function fechaToString(
   );
 }
 
+function fechaNullableToString(
+  value: string | Date | null
+): string | null {
+  if (value === null) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (
+    typeof value === "string" &&
+    value.trim().length > 0
+  ) {
+    return value;
+  }
+
+  return null;
+}
+
 function isSexoParticipante(
   value: unknown
 ): value is SexoParticipante {
@@ -128,13 +149,33 @@ function normalizarSexoParticipante(
   return value;
 }
 
+function parseCanalComprobante(
+  value: string
+): CanalComprobanteCurso {
+  switch (value) {
+    case "Imagen":
+    case "URL":
+    case "WhatsApp":
+    case "Sin comprobante":
+      return value;
+
+    default:
+      throw new CompraConsultaError(
+        "La base de datos contiene un canal de comprobante inválido",
+        500
+      );
+  }
+}
+
 function decimalToCents(
   value: string | number
 ): number {
   const normalized = String(value).trim();
 
   if (
-    !/^\d+(?:\.\d{1,2})?$/.test(normalized)
+    !/^\d+(?:\.\d{1,2})?$/.test(
+      normalized
+    )
   ) {
     throw new CompraConsultaError(
       "Se encontró un monto inválido",
@@ -241,387 +282,438 @@ export async function GET(
       );
     }
 
-    const comprasEncontradas = await db
-      .select({
-        idCompra:
-          comprasCursos.idcompra,
-        folioCompra:
-          comprasCursos.foliocompra,
-        usuarioId:
-          comprasCursos.idusuario,
-        cursoId:
-          comprasCursos.idcurso,
-        tituloCurso:
-          cursos.tituloCurso,
-        cantidadCupos:
-          comprasCursos.cantidadcupos,
-        precioUnitario:
-          comprasCursos.preciounitario,
-        subtotal:
-          comprasCursos.subtotal,
-        descuento:
-          comprasCursos.descuento,
-        total:
-          comprasCursos.total,
-        estado:
-          estadosCompra.nombre,
-        fechaCompra:
-          comprasCursos.fechacompra,
-        fechaLimitePago:
-          comprasCursos.fechalimitepago,
-        observaciones:
-          comprasCursos.observaciones,
-      })
-      .from(comprasCursos)
-      .innerJoin(
-        cursos,
-        eq(
-          comprasCursos.idcurso,
-          cursos.idCurso
-        )
-      )
-      .innerJoin(
-        estadosCompra,
-        eq(
-          comprasCursos.idestadocompra,
-          estadosCompra.idestadocompra
-        )
-      )
-      .where(
-        and(
-          eq(
-            comprasCursos.idcompra,
-            BigInt(compraId)
-          ),
-          eq(
-            comprasCursos.idusuario,
-            usuarioId
-          )
-        )
-      )
-      .limit(1);
+    const resultado = await withUserEmail(
+      session.user.correo,
+      async () =>
+        db.transaction(async (tx) => {
+          await expirarComprasVencidas(
+            tx,
+            {
+              usuarioId,
+              compraId,
+            }
+          );
 
-    const compraEncontrada =
-      comprasEncontradas[0];
-
-    if (!compraEncontrada) {
-      return NextResponse.json(
-        {
-          error: "Compra no encontrada",
-        },
-        { status: 404 }
-      );
-    }
-
-    const participantesEncontrados =
-      await db
-        .select({
-          idCompraParticipante:
-            compraParticipantes.idCompraParticipante,
-          numeroCupo:
-            compraParticipantes.numeroCupo,
-          estado:
-            compraParticipantes.estado,
-          observaciones:
-            compraParticipantes.observaciones,
-
-          idParticipante:
-            participantes.idParticipante,
-          participanteUsuarioId:
-            participantes.usuarioId,
-          nombre:
-            participantes.nombre,
-          apellidoPaterno:
-            participantes.apellidoPaterno,
-          apellidoMaterno:
-            participantes.apellidoMaterno,
-          fechaNacimiento:
-            participantes.fechaNacimiento,
-          sexo:
-            participantes.sexo,
-          telefono:
-            participantes.telefono,
-          correo:
-            participantes.correo,
-          activo:
-            participantes.activo,
-        })
-        .from(compraParticipantes)
-        .innerJoin(
-          participantes,
-          eq(
-            compraParticipantes.idParticipante,
-            participantes.idParticipante
-          )
-        )
-        .where(
-          eq(
-            compraParticipantes.idCompra,
-            compraId
-          )
-        )
-        .orderBy(
-          asc(
-            compraParticipantes.numeroCupo
-          )
-        );
-
-    if (
-      participantesEncontrados.length !==
-      compraEncontrada.cantidadCupos
-    ) {
-      throw new CompraConsultaError(
-        "La compra no contiene todos los participantes esperados",
-        500
-      );
-    }
-
-    const metodosPagoEncontrados =
-    await db
-        .select({
-        idMetodoPago:
-            metodosPagoCursos.idMetodoPago,
-        nombre:
-            metodosPagoCursos.nombre,
-        descripcion:
-            metodosPagoCursos.descripcion,
-        requiereComprobante:
-            metodosPagoCursos.requiereComprobante,
-        instrucciones:
-            metodosPagoCursos.instrucciones,
-        })
-        .from(metodosPagoCursos)
-        .where(
-        eq(
-            metodosPagoCursos.activo,
-            true
-        )
-        )
-        .orderBy(
-        asc(
-            metodosPagoCursos.idMetodoPago
-        )
-        );
-
-    const pagosEncontrados = await db
-        .select({
-            idPago:
-            pagosCursos.idPago,
-            idCompra:
-            pagosCursos.idCompra,
-            idMetodoPago:
-            pagosCursos.idMetodoPago,
-            metodoPago:
-            metodosPagoCursos.nombre,
-            monto:
-            pagosCursos.monto,
-            referencia:
-            pagosCursos.referencia,
-            rutaComprobante:
-            pagosCursos.rutaComprobante,
-            nombreArchivoOriginal:
-            pagosCursos.nombreArchivoOriginal,
-            tipoArchivo:
-            pagosCursos.tipoArchivo,
-            estado:
-            pagosCursos.estado,
-            fechaPago:
-            pagosCursos.fechaPago,
-            fechaReporte:
-            pagosCursos.fechaReporte,
-            observaciones:
-            pagosCursos.observaciones,
-        })
-        .from(pagosCursos)
-        .innerJoin(
-            metodosPagoCursos,
-            eq(
-            pagosCursos.idMetodoPago,
-            metodosPagoCursos.idMetodoPago
-            )
-        )
-        .where(
-            eq(
-            pagosCursos.idCompra,
-            compraId
-            )
-        )
-        .orderBy(
-            asc(pagosCursos.fechaReporte)
-        );
-
-    const totalCompraCents =
-    decimalToCents(
-        compraEncontrada.total
-    );
-
-    const totalReportadoCents =
-    pagosEncontrados
-        .filter((pago) =>
-        ESTADOS_PAGO_CONTABILIZABLES.some(
-            (estado) => estado === pago.estado
-        )
-        )
-        .reduce(
-        (total, pago) =>
-            total +
-            decimalToCents(pago.monto),
-        0
-        );
-
-    const saldoPendienteCents =
-    Math.max(
-        totalCompraCents -
-        totalReportadoCents,
-    0
-  );
-
-    const response: CompraCursoDetalleResponse =
-      {
-        compra: {
-          idCompra: idToSafeNumber(
-            compraEncontrada.idCompra,
-            "idCompra"
-          ),
-          folioCompra:
-            compraEncontrada.folioCompra,
-          cursoId:
-            compraEncontrada.cursoId,
-          tituloCurso:
-            compraEncontrada.tituloCurso,
-          cantidadCupos:
-            compraEncontrada.cantidadCupos,
-          precioUnitario:
-            compraEncontrada.precioUnitario,
-          subtotal:
-            compraEncontrada.subtotal,
-          descuento:
-            compraEncontrada.descuento,
-          total:
-            compraEncontrada.total,
-          estado:
-            compraEncontrada.estado,
-          fechaCompra: fechaToString(
-            compraEncontrada.fechaCompra,
-            "la fecha de compra"
-          ),
-          fechaLimitePago: fechaToString(
-            compraEncontrada.fechaLimitePago,
-            "la fecha límite de pago"
-          ),
-          observaciones:
-            compraEncontrada.observaciones,
-        },
-
-        participantes:
-          participantesEncontrados.map(
-            (registro) => ({
-              idCompraParticipante:
-                idToSafeNumber(
-                  registro.idCompraParticipante,
-                  "idCompraParticipante"
-                ),
-              numeroCupo:
-                registro.numeroCupo,
-              estado:
-                registro.estado,
-              observaciones:
-                registro.observaciones,
-
-              participante: {
-                idParticipante:
-                  idToSafeNumber(
-                    registro.idParticipante,
-                    "idParticipante"
-                  ),
-                usuarioId:
-                  registro.participanteUsuarioId,
-                nombre:
-                  registro.nombre,
-                apellidoPaterno:
-                  registro.apellidoPaterno,
-                apellidoMaterno:
-                  registro.apellidoMaterno,
-                fechaNacimiento:
-                  registro.fechaNacimiento,
-                sexo:
-                  normalizarSexoParticipante(
-                    registro.sexo
-                  ),
-                telefono:
-                  registro.telefono,
-                correo:
-                  registro.correo,
-                activo:
-                  registro.activo,
-              },
-            })
-          ),
-        metodosPago: metodosPagoEncontrados,
-        pagos: pagosEncontrados.map(
-            (pago) => ({
-                idPago: idToSafeNumber(
-                pago.idPago,
-                "idPago"
-                ),
+          const comprasEncontradas =
+            await tx
+              .select({
                 idCompra:
-                pago.idCompra,
-                idMetodoPago:
-                pago.idMetodoPago,
-                metodoPago:
-                pago.metodoPago,
-                monto:
-                pago.monto,
-                referencia:
-                pago.referencia,
-                rutaComprobante:
-                pago.rutaComprobante,
-                nombreArchivoOriginal:
-                pago.nombreArchivoOriginal,
-                tipoArchivo:
-                pago.tipoArchivo,
+                  comprasCursos.idcompra,
+                folioCompra:
+                  comprasCursos.foliocompra,
+                usuarioId:
+                  comprasCursos.idusuario,
+                cursoId:
+                  comprasCursos.idcurso,
+                tituloCurso:
+                  cursos.tituloCurso,
+                cantidadCupos:
+                  comprasCursos.cantidadcupos,
+                precioUnitario:
+                  comprasCursos.preciounitario,
+                subtotal:
+                  comprasCursos.subtotal,
+                descuento:
+                  comprasCursos.descuento,
+                total:
+                  comprasCursos.total,
                 estado:
-                pago.estado,
-                fechaPago:
-                fechaToString(
-                    pago.fechaPago,
-                    "la fecha del pago"
-                ),
-                fechaReporte:
-                fechaToString(
-                    pago.fechaReporte,
-                    "la fecha del reporte"
-                ),
+                  estadosCompra.nombre,
+                fechaCompra:
+                  comprasCursos.fechacompra,
+                fechaLimitePago:
+                  comprasCursos.fechalimitepago,
                 observaciones:
-                pago.observaciones,
-            })
-            ),
+                  comprasCursos.observaciones,
+              })
+              .from(comprasCursos)
+              .innerJoin(
+                cursos,
+                eq(
+                  comprasCursos.idcurso,
+                  cursos.idCurso
+                )
+              )
+              .innerJoin(
+                estadosCompra,
+                eq(
+                  comprasCursos.idestadocompra,
+                  estadosCompra.idestadocompra
+                )
+              )
+              .where(
+                and(
+                  eq(
+                    comprasCursos.idcompra,
+                    BigInt(compraId)
+                  ),
+                  eq(
+                    comprasCursos.idusuario,
+                    usuarioId
+                  )
+                )
+              )
+              .limit(1);
+
+          const compraEncontrada =
+            comprasEncontradas[0];
+
+          if (!compraEncontrada) {
+            throw new CompraConsultaError(
+              "Compra no encontrada",
+              404
+            );
+          }
+
+          const participantesEncontrados =
+            await tx
+              .select({
+                idCompraParticipante:
+                  compraParticipantes.idCompraParticipante,
+                numeroCupo:
+                  compraParticipantes.numeroCupo,
+                estado:
+                  compraParticipantes.estado,
+                observaciones:
+                  compraParticipantes.observaciones,
+
+                idParticipante:
+                  participantes.idParticipante,
+                participanteUsuarioId:
+                  participantes.usuarioId,
+                nombre:
+                  participantes.nombre,
+                apellidoPaterno:
+                  participantes.apellidoPaterno,
+                apellidoMaterno:
+                  participantes.apellidoMaterno,
+                fechaNacimiento:
+                  participantes.fechaNacimiento,
+                sexo:
+                  participantes.sexo,
+                telefono:
+                  participantes.telefono,
+                correo:
+                  participantes.correo,
+                activo:
+                  participantes.activo,
+              })
+              .from(compraParticipantes)
+              .innerJoin(
+                participantes,
+                eq(
+                  compraParticipantes.idParticipante,
+                  participantes.idParticipante
+                )
+              )
+              .where(
+                eq(
+                  compraParticipantes.idCompra,
+                  compraId
+                )
+              )
+              .orderBy(
+                asc(
+                  compraParticipantes.numeroCupo
+                )
+              );
+
+          if (
+            participantesEncontrados.length !==
+            compraEncontrada.cantidadCupos
+          ) {
+            throw new CompraConsultaError(
+              "La compra no contiene todos los participantes esperados",
+              500
+            );
+          }
+
+          const metodosPagoEncontrados =
+            await tx
+              .select({
+                idMetodoPago:
+                  metodosPagoCursos.idMetodoPago,
+                nombre:
+                  metodosPagoCursos.nombre,
+                descripcion:
+                  metodosPagoCursos.descripcion,
+                requiereComprobante:
+                  metodosPagoCursos.requiereComprobante,
+                instrucciones:
+                  metodosPagoCursos.instrucciones,
+              })
+              .from(metodosPagoCursos)
+              .where(
+                eq(
+                  metodosPagoCursos.activo,
+                  true
+                )
+              )
+              .orderBy(
+                asc(
+                  metodosPagoCursos.idMetodoPago
+                )
+              );
+
+          const pagosEncontrados =
+            await tx
+              .select({
+                idPago:
+                  pagosCursos.idPago,
+                idCompra:
+                  pagosCursos.idCompra,
+                idMetodoPago:
+                  pagosCursos.idMetodoPago,
+                metodoPago:
+                  metodosPagoCursos.nombre,
+                monto:
+                  pagosCursos.monto,
+                referencia:
+                  pagosCursos.referencia,
+                rutaComprobante:
+                  pagosCursos.rutaComprobante,
+                nombreArchivoOriginal:
+                  pagosCursos.nombreArchivoOriginal,
+                tipoArchivo:
+                  pagosCursos.tipoArchivo,
+                canalComprobante:
+                  pagosCursos.canalComprobante,
+                comprobanteConfirmado:
+                  pagosCursos.comprobanteConfirmado,
+                fechaEnvioWhatsapp:
+                  pagosCursos.fechaEnvioWhatsapp,
+                estado:
+                  pagosCursos.estado,
+                fechaPago:
+                  pagosCursos.fechaPago,
+                fechaReporte:
+                  pagosCursos.fechaReporte,
+                motivoRechazo:
+                  pagosCursos.motivoRechazo,
+                observaciones:
+                  pagosCursos.observaciones,
+              })
+              .from(pagosCursos)
+              .innerJoin(
+                metodosPagoCursos,
+                eq(
+                  pagosCursos.idMetodoPago,
+                  metodosPagoCursos.idMetodoPago
+                )
+              )
+              .where(
+                eq(
+                  pagosCursos.idCompra,
+                  compraId
+                )
+              )
+              .orderBy(
+                asc(
+                  pagosCursos.fechaReporte
+                )
+              );
+
+          const totalCompraCents =
+            decimalToCents(
+              compraEncontrada.total
+            );
+
+          const totalReportadoCents =
+            pagosEncontrados
+              .filter((pago) =>
+                ESTADOS_PAGO_CONTABILIZABLES.some(
+                  (estado) =>
+                    estado === pago.estado
+                )
+              )
+              .reduce(
+                (total, pago) =>
+                  total +
+                  decimalToCents(
+                    pago.monto
+                  ),
+                0
+              );
+
+          const saldoPendienteCents =
+            Math.max(
+              totalCompraCents -
+                totalReportadoCents,
+              0
+            );
+
+          const response:
+            CompraCursoDetalleResponse = {
+            compra: {
+              idCompra:
+                idToSafeNumber(
+                  compraEncontrada.idCompra,
+                  "idCompra"
+                ),
+              folioCompra:
+                compraEncontrada.folioCompra,
+              cursoId:
+                compraEncontrada.cursoId,
+              tituloCurso:
+                compraEncontrada.tituloCurso,
+              cantidadCupos:
+                compraEncontrada.cantidadCupos,
+              precioUnitario:
+                compraEncontrada.precioUnitario,
+              subtotal:
+                compraEncontrada.subtotal,
+              descuento:
+                compraEncontrada.descuento,
+              total:
+                compraEncontrada.total,
+              estado:
+                compraEncontrada.estado,
+              fechaCompra:
+                fechaToString(
+                  compraEncontrada.fechaCompra,
+                  "la fecha de compra"
+                ),
+              fechaLimitePago:
+                fechaToString(
+                  compraEncontrada.fechaLimitePago,
+                  "la fecha límite de pago"
+                ),
+              observaciones:
+                compraEncontrada.observaciones,
+            },
+
+            participantes:
+              participantesEncontrados.map(
+                (registro) => ({
+                  idCompraParticipante:
+                    idToSafeNumber(
+                      registro.idCompraParticipante,
+                      "idCompraParticipante"
+                    ),
+                  numeroCupo:
+                    registro.numeroCupo,
+                  estado:
+                    registro.estado,
+                  observaciones:
+                    registro.observaciones,
+
+                  participante: {
+                    idParticipante:
+                      idToSafeNumber(
+                        registro.idParticipante,
+                        "idParticipante"
+                      ),
+                    usuarioId:
+                      registro.participanteUsuarioId,
+                    nombre:
+                      registro.nombre,
+                    apellidoPaterno:
+                      registro.apellidoPaterno,
+                    apellidoMaterno:
+                      registro.apellidoMaterno,
+                    fechaNacimiento:
+                      registro.fechaNacimiento,
+                    sexo:
+                      normalizarSexoParticipante(
+                        registro.sexo
+                      ),
+                    telefono:
+                      registro.telefono,
+                    correo:
+                      registro.correo,
+                    activo:
+                      registro.activo,
+                  },
+                })
+              ),
+
+            metodosPago:
+              metodosPagoEncontrados,
+
+            pagos:
+              pagosEncontrados.map(
+                (pago) => ({
+                  idPago:
+                    idToSafeNumber(
+                      pago.idPago,
+                      "idPago"
+                    ),
+                  idCompra:
+                    pago.idCompra,
+                  idMetodoPago:
+                    pago.idMetodoPago,
+                  metodoPago:
+                    pago.metodoPago,
+                  monto:
+                    pago.monto,
+                  referencia:
+                    pago.referencia,
+                  rutaComprobante:
+                    pago.rutaComprobante,
+                  nombreArchivoOriginal:
+                    pago.nombreArchivoOriginal,
+                  tipoArchivo:
+                    pago.tipoArchivo,
+                  canalComprobante:
+                    parseCanalComprobante(
+                      pago.canalComprobante
+                    ),
+                  comprobanteConfirmado:
+                    pago.comprobanteConfirmado,
+                  fechaEnvioWhatsapp:
+                    fechaNullableToString(
+                      pago.fechaEnvioWhatsapp
+                    ),
+                  estado:
+                    pago.estado,
+                  fechaPago:
+                    fechaToString(
+                      pago.fechaPago,
+                      "la fecha del pago"
+                    ),
+                  fechaReporte:
+                    fechaToString(
+                      pago.fechaReporte,
+                      "la fecha del reporte"
+                    ),
+                  motivoRechazo:
+                    pago.motivoRechazo,
+                  observaciones:
+                    pago.observaciones,
+                })
+              ),
 
             resumenPago: {
-            totalCompra:
+              totalCompra:
                 centsToDecimal(
-                totalCompraCents
+                  totalCompraCents
                 ),
-            totalReportado:
+              totalReportado:
                 centsToDecimal(
-                totalReportadoCents
+                  totalReportadoCents
                 ),
-            saldoPendiente:
+              saldoPendiente:
                 centsToDecimal(
-                saldoPendienteCents
+                  saldoPendienteCents
                 ),
-            pagoCompletoReportado:
+              pagoCompletoReportado:
                 saldoPendienteCents === 0,
             },
-      };
+          };
 
+          return response;
+        })
+    );
 
-    return NextResponse.json(response, {
-      headers: {
-        "Cache-Control":
-          "private, no-store, max-age=0",
-      },
-    });
+    return NextResponse.json(
+      resultado,
+      {
+        headers: {
+          "Cache-Control":
+            "private, no-store, max-age=0",
+        },
+      }
+    );
   } catch (error: unknown) {
     console.error(
       "Error consultando compra de curso:",
@@ -629,7 +721,8 @@ export async function GET(
     );
 
     if (
-      error instanceof CompraConsultaError
+      error instanceof
+      CompraConsultaError
     ) {
       return NextResponse.json(
         {

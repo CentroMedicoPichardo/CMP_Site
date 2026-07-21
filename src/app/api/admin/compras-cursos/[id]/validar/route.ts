@@ -148,12 +148,31 @@ function parseInput(
         "Debes indicar el motivo del rechazo",
     };
   }
+  const comprobantesWhatsappRevisadosRaw =
+  value.comprobantesWhatsappRevisados;
+
+  if (
+    comprobantesWhatsappRevisadosRaw !==
+      undefined &&
+    typeof comprobantesWhatsappRevisadosRaw !==
+      "boolean"
+  ) {
+    return {
+      success: false,
+      error:
+        "La confirmación de comprobantes de WhatsApp no es válida",
+    };
+  }
+
+  const comprobantesWhatsappRevisados =
+    comprobantesWhatsappRevisadosRaw === true;
 
   return {
     success: true,
     data: {
       accion,
       observaciones,
+      comprobantesWhatsappRevisados,
     },
   };
 }
@@ -542,12 +561,21 @@ export async function POST(
                 .select({
                   idPago:
                     pagosCursos.idPago,
+
                   monto:
                     pagosCursos.monto,
+
                   estado:
                     pagosCursos.estado,
+
                   metodoPago:
                     metodosPagoCursos.nombre,
+
+                  canalComprobante:
+                    pagosCursos.canalComprobante,
+
+                  comprobanteConfirmado:
+                    pagosCursos.comprobanteConfirmado,
                 })
                 .from(pagosCursos)
                 .innerJoin(
@@ -576,6 +604,24 @@ export async function POST(
               if (pagos.length === 0) {
                 throw new ValidacionCompraError(
                   "La compra no tiene pagos reportados",
+                  409
+                );
+              }
+              const pagosWhatsappPendientes =
+                pagos.filter(
+                  (pago) =>
+                    pago.canalComprobante ===
+                      "WhatsApp" &&
+                    !pago.comprobanteConfirmado
+                );
+
+              if (
+                pagosWhatsappPendientes.length > 0 &&
+                !parsed.data
+                  .comprobantesWhatsappRevisados
+              ) {
+                throw new ValidacionCompraError(
+                  "Debes confirmar que localizaste y revisaste los comprobantes enviados por WhatsApp",
                   409
                 );
               }
@@ -685,12 +731,18 @@ export async function POST(
                 .update(pagosCursos)
                 .set({
                   estado: "Aprobado",
+
                   usuarioValida:
                     adminId,
+
                   fechaValidacion:
                     sql`CURRENT_TIMESTAMP`,
+
                   motivoRechazo:
                     null,
+
+                  comprobanteConfirmado:
+                    true,
                 })
                 .where(
                   and(

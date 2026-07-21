@@ -4,6 +4,9 @@ import { asc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { requireApiRole } from "@/lib/auth";
+import {
+  expirarComprasVencidas,
+} from "@/lib/compras-cursos/expirar-compras";
 import { db } from "@/lib/db";
 import {
   compraParticipantes,
@@ -19,6 +22,7 @@ import type {
   CompraCursoAdminDetalleResponse,
 } from "@/types/admin-compras-cursos";
 import type {
+  CanalComprobanteCurso,
   CompraParticipanteResumen,
   MetodoPagoCurso,
   PagoCursoResumen,
@@ -46,6 +50,23 @@ function isSexoParticipante(
     value === "Otro" ||
     value === "Prefiere no indicar"
   );
+}
+
+function parseCanalComprobante(
+  value: string
+): CanalComprobanteCurso {
+  switch (value) {
+    case "Imagen":
+    case "URL":
+    case "WhatsApp":
+    case "Sin comprobante":
+      return value;
+
+    default:
+      throw new Error(
+        `Canal de comprobante inválido: ${value}`
+      );
+  }
 }
 
 function idToSafeNumber(
@@ -129,6 +150,40 @@ export async function GET(
   const compraIdBigInt = BigInt(compraId);
 
   try {
+    const [compraPropietaria] = await db
+      .select({
+        usuarioId:
+          comprasCursos.idusuario,
+      })
+      .from(comprasCursos)
+      .where(
+        eq(
+          comprasCursos.idcompra,
+          compraIdBigInt
+        )
+      )
+      .limit(1);
+
+    if (!compraPropietaria) {
+      return NextResponse.json(
+        {
+          error: "Compra no encontrada",
+        },
+        { status: 404 }
+      );
+    }
+
+    await db.transaction(async (tx) => {
+      await expirarComprasVencidas(
+        tx,
+        {
+          usuarioId:
+            compraPropietaria.usuarioId,
+          compraId,
+        }
+      );
+    });
+
     const [compra] = await db
       .select({
         idCompra:
@@ -248,8 +303,8 @@ export async function GET(
       )
       .where(
         eq(
-        compraParticipantes.idCompra,
-        compraId
+          compraParticipantes.idCompra,
+          compraId
         )
       )
       .orderBy(
@@ -364,12 +419,20 @@ export async function GET(
           pagosCursos.nombreArchivoOriginal,
         tipoArchivo:
           pagosCursos.tipoArchivo,
+        canalComprobante:
+          pagosCursos.canalComprobante,
+        comprobanteConfirmado:
+          pagosCursos.comprobanteConfirmado,
+        fechaEnvioWhatsapp:
+          pagosCursos.fechaEnvioWhatsapp,
         estado:
           pagosCursos.estado,
         fechaPago:
           pagosCursos.fechaPago,
         fechaReporte:
           pagosCursos.fechaReporte,
+        motivoRechazo:
+          pagosCursos.motivoRechazo,
         observaciones:
           pagosCursos.observaciones,
       })
@@ -383,8 +446,8 @@ export async function GET(
       )
       .where(
         eq(
-        pagosCursos.idCompra,
-        compraId
+          pagosCursos.idCompra,
+          compraId
         )
       )
       .orderBy(
@@ -423,6 +486,19 @@ export async function GET(
           fila.nombreArchivoOriginal,
         tipoArchivo:
           fila.tipoArchivo,
+        canalComprobante:
+          parseCanalComprobante(
+            fila.canalComprobante
+          ),
+        comprobanteConfirmado:
+          fila.comprobanteConfirmado,
+        fechaEnvioWhatsapp:
+          fila.fechaEnvioWhatsapp
+            ? fechaToString(
+                fila.fechaEnvioWhatsapp,
+                "la fecha de envío por WhatsApp"
+              )
+            : null,
         estado:
           fila.estado,
         fechaPago:
@@ -435,6 +511,8 @@ export async function GET(
             fila.fechaReporte,
             "la fecha del reporte"
           ),
+        motivoRechazo:
+          fila.motivoRechazo,
         observaciones:
           fila.observaciones,
       }));

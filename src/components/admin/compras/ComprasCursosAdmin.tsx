@@ -4,10 +4,12 @@
 import {
   AlertCircle,
   CalendarClock,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   FileSearch,
   Filter,
+  History,
   Loader2,
   RefreshCw,
   Search,
@@ -42,9 +44,9 @@ const PAGINATION_INITIAL:
 const RESUMEN_INITIAL:
   ResumenComprasCursosAdmin = {
     total: 0,
-    conPagoReportado: 0,
-    enValidacion: 0,
-    sinPagoRelacionado: 0,
+    pendientesRevision: 0,
+    aprobadas: 0,
+    expiradas: 0,
     montoReportado: "0.00",
   };
 
@@ -102,7 +104,9 @@ function formatCurrency(value: string): string {
   }).format(amount);
 }
 
-function formatDate(value: string | null): string {
+function formatDate(
+  value: string | null
+): string {
   if (!value) {
     return "Sin reporte";
   }
@@ -123,12 +127,19 @@ function getEstadoClassName(
   estado: string
 ): string {
   switch (estado) {
+    case "Pendiente de pago":
+      return "border-gray-200 bg-gray-50 text-gray-700";
     case "Pago reportado":
       return "border-amber-200 bg-amber-50 text-amber-700";
-
     case "En validación":
       return "border-blue-200 bg-blue-50 text-blue-700";
-
+    case "Pago validado":
+    case "Inscripciones generadas":
+      return "border-green-200 bg-green-50 text-green-700";
+    case "Rechazada":
+    case "Cancelada":
+    case "Expirada":
+      return "border-red-200 bg-red-50 text-red-700";
     default:
       return "border-gray-200 bg-gray-50 text-gray-700";
   }
@@ -142,12 +153,12 @@ export function ComprasCursosAdmin() {
     useState(PAGINATION_INITIAL);
   const [resumen, setResumen] =
     useState(RESUMEN_INITIAL);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] =
+    useState(true);
   const [actualizando, setActualizando] =
     useState(false);
-  const [error, setError] = useState<string | null>(
-    null
-  );
+  const [error, setError] =
+    useState<string | null>(null);
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] =
@@ -158,7 +169,8 @@ export function ComprasCursosAdmin() {
     );
   const [searchInput, setSearchInput] =
     useState("");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] =
+    useState("");
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -220,7 +232,8 @@ export function ComprasCursosAdmin() {
           );
         }
 
-        const result = parseResponse(payload);
+        const result =
+          parseResponse(payload);
 
         if (!result) {
           throw new Error(
@@ -280,7 +293,7 @@ export function ComprasCursosAdmin() {
             size={22}
             className="animate-spin"
           />
-          Cargando compras pendientes...
+          Cargando historial de compras...
         </div>
       </div>
     );
@@ -296,13 +309,11 @@ export function ComprasCursosAdmin() {
             </p>
 
             <h1 className="text-2xl font-bold md:text-3xl">
-              Pagos de cursos
+              Compras y pagos de cursos
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm text-blue-100">
-              Los pagos más recientes aparecen primero.
-              Usa los filtros para localizar compras sin
-              cargar todos los registros a la vez.
+              Consulta la bandeja de revisión y el historial completo de compras aprobadas, rechazadas, canceladas o expiradas.
             </p>
           </div>
 
@@ -330,29 +341,33 @@ export function ComprasCursosAdmin() {
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <section className="grid grid-cols-2 gap-4 xl:grid-cols-5">
         <ResumenCard
           label="Resultados"
           value={String(resumen.total)}
           icon={<FileSearch size={20} />}
         />
-
         <ResumenCard
-          label="Con pago"
+          label="Por revisar"
           value={String(
-            resumen.conPagoReportado
-          )}
-          icon={<WalletCards size={20} />}
-        />
-
-        <ResumenCard
-          label="En validación"
-          value={String(
-            resumen.enValidacion
+            resumen.pendientesRevision
           )}
           icon={<CalendarClock size={20} />}
         />
-
+        <ResumenCard
+          label="Aprobadas"
+          value={String(
+            resumen.aprobadas
+          )}
+          icon={<CheckCircle2 size={20} />}
+        />
+        <ResumenCard
+          label="Expiradas"
+          value={String(
+            resumen.expiradas
+          )}
+          icon={<History size={20} />}
+        />
         <ResumenCard
           label="Monto reportado"
           value={formatCurrency(
@@ -398,7 +413,7 @@ export function ComprasCursosAdmin() {
               htmlFor="filtro-compras"
               className="mb-2 block text-sm font-medium text-gray-700"
             >
-              Filtro
+              Estado o categoría
             </label>
 
             <div className="relative">
@@ -416,19 +431,28 @@ export function ComprasCursosAdmin() {
                       .value as FiltroComprasCursosAdmin
                   )
                 }
-                className="min-w-52 appearance-none rounded-xl border border-gray-300 bg-white py-2.5 pl-10 pr-8 text-gray-900 outline-none focus:border-transparent focus:ring-2 focus:ring-[#0A3D62]"
+                className="min-w-64 appearance-none rounded-xl border border-gray-300 bg-white py-2.5 pl-10 pr-8 text-gray-900 outline-none focus:border-transparent focus:ring-2 focus:ring-[#0A3D62]"
               >
                 <option value="todos">
-                  Todos
+                  Todas
                 </option>
-                <option value="con_pago">
-                  Con pago reportado
+                <option value="pendientes_revision">
+                  Por atender
                 </option>
-                <option value="en_validacion">
-                  En validación
+                <option value="pendiente_pago">
+                  Esperando pago
                 </option>
-                <option value="sin_pago">
-                  Sin pago relacionado
+                <option value="inscripciones_generadas">
+                  Completadas
+                </option>
+                <option value="rechazada">
+                  Rechazadas
+                </option>
+                <option value="cancelada">
+                  Canceladas
+                </option>
+                <option value="expirada">
+                  Expiradas
                 </option>
               </select>
             </div>
@@ -481,7 +505,8 @@ export function ComprasCursosAdmin() {
         </div>
       )}
 
-      {!error && compras.length === 0 ? (
+      {!error &&
+      compras.length === 0 ? (
         <section className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-12 text-center">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-blue-50 text-[#0A3D62]">
             <FileSearch size={26} />
@@ -492,8 +517,7 @@ export function ComprasCursosAdmin() {
           </h2>
 
           <p className="mx-auto mt-2 max-w-md text-sm text-gray-600">
-            Cambia el filtro o la búsqueda para consultar
-            otros registros.
+            Cambia el filtro o la búsqueda para consultar otros registros.
           </p>
         </section>
       ) : (
@@ -596,6 +620,15 @@ function CompraAdminCard({
   const tienePago =
     compra.cantidadPagos > 0;
 
+  const estadoFinal =
+    [
+      "Pago validado",
+      "Inscripciones generadas",
+      "Rechazada",
+      "Cancelada",
+      "Expirada",
+    ].includes(compra.estado);
+
   return (
     <article className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       <div className="flex flex-col gap-5 p-5 xl:flex-row xl:items-start xl:justify-between">
@@ -648,7 +681,7 @@ function CompraAdminCard({
               icon={<Users size={17} />}
               label="Cupos"
               value={`${compra.cantidadCupos}`}
-              secondary={`${compra.cantidadPagos} pago(s) reportado(s)`}
+              secondary={`${compra.cantidadPagos} pago(s) relacionado(s)`}
             />
 
             <DatoCompra
@@ -678,9 +711,15 @@ function CompraAdminCard({
         <div className="shrink-0">
           <Link
             href={`/compras-cursos/${compra.idCompra}`}
-            className="inline-flex w-full items-center justify-center rounded-xl bg-[#0A3D62] px-5 py-2.5 font-semibold text-white transition hover:bg-[#1A4F7A] xl:w-auto"
+            className={`inline-flex w-full items-center justify-center rounded-xl px-5 py-2.5 font-semibold transition xl:w-auto ${
+              estadoFinal
+                ? "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                : "bg-[#0A3D62] text-white hover:bg-[#1A4F7A]"
+            }`}
           >
-            Revisar compra
+            {estadoFinal
+              ? "Ver historial"
+              : "Revisar compra"}
           </Link>
         </div>
       </div>
