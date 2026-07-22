@@ -1,100 +1,328 @@
-// src/components/admin/medicos/MedicosSearchBar.tsx
-'use client';
+"use client";
 
-import { Search, RefreshCw, Filter } from 'lucide-react';
-import { useState } from 'react';
-import { mutate } from 'swr';
+import { useState } from "react";
+import { mutate } from "swr";
+
+import {
+  Filter,
+  RefreshCw,
+  Search,
+  X,
+} from "lucide-react";
 
 interface MedicosSearchBarProps {
   searchTerm: string;
   onSearchChange: (value: string) => void;
-  filterActivo: boolean | 'todos';
-  onFilterChange: (value: boolean | 'todos') => void;
-  onRefresh?: () => void;
+  filterActivo: boolean | "todos";
+  onFilterChange: (
+    value: boolean | "todos",
+  ) => void;
+  onRefresh?: () => Promise<void> | void;
 }
 
-export function MedicosSearchBar({ 
-  searchTerm, 
-  onSearchChange, 
-  filterActivo, 
+type ValorFiltro =
+  | "todos"
+  | "true"
+  | "false";
+
+function cn(
+  ...clases: Array<
+    string | false | null | undefined
+  >
+): string {
+  return clases.filter(Boolean).join(" ");
+}
+
+export function MedicosSearchBar({
+  searchTerm,
+  onSearchChange,
+  filterActivo,
   onFilterChange,
-  onRefresh
+  onRefresh,
 }: MedicosSearchBarProps) {
-  const [refreshing, setRefreshing] = useState(false);
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  const valorFiltro: ValorFiltro =
+    filterActivo === "todos"
+      ? "todos"
+      : filterActivo
+        ? "true"
+        : "false";
+
+  const hayBusqueda =
+    searchTerm.trim().length > 0;
+
+  const hayFiltroEstado =
+    filterActivo !== "todos";
+
+  const filtroEstadoTexto =
+    filterActivo === "todos"
+      ? ""
+      : filterActivo
+        ? "Solo activos"
+        : "Solo inactivos";
+
+  const cambiarFiltroEstado = (
+    valor: ValorFiltro,
+  ) => {
+    if (valor === "todos") {
+      onFilterChange("todos");
+      return;
+    }
+
+    onFilterChange(valor === "true");
+  };
+
+  const limpiarBusqueda = () => {
+    onSearchChange("");
+  };
+
+  const limpiarFiltroEstado = () => {
+    onFilterChange("todos");
+  };
+
+  const limpiarTodo = () => {
+    onSearchChange("");
+    onFilterChange("todos");
+  };
 
   const handleRefresh = async () => {
+    if (refreshing) {
+      return;
+    }
+
     setRefreshing(true);
+
     try {
-      await mutate('/api/medicos?admin=true', undefined, { revalidate: true });
-      if (onRefresh) onRefresh();
-      setTimeout(() => setRefreshing(false), 500);
-    } catch (error) {
-      console.error('Error al refrescar:', error);
+      await mutate(
+        "/api/medicos?admin=true",
+        undefined,
+        {
+          revalidate: true,
+        },
+      );
+
+      await Promise.resolve(
+        onRefresh?.(),
+      );
+    } catch (error: unknown) {
+      console.error(
+        "Error al actualizar médicos:",
+        error,
+      );
+    } finally {
       setRefreshing(false);
     }
   };
 
   return (
-    <div className="mb-8 space-y-4">
-      {/* Fila superior: Buscador + Filtro + Botón refresh */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Buscador - ocupa más espacio */}
-        <div className="relative flex-1 min-w-[300px]">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#0A3D62]" size={20} />
-          <input
-            type="text"
-            placeholder="Buscar por nombre, especialidad o hospital..."
-            className="w-full pl-12 pr-4 py-4 bg-white border-2 border-[#FFC300]/30 rounded-xl focus:outline-none focus:border-[#FFC300] focus:ring-4 focus:ring-[#FFC300]/20 transition-all duration-300 text-gray-800 placeholder-gray-400 text-base shadow-md"
-            value={searchTerm}
-            onChange={(e) => onSearchChange(e.target.value)}
-          />
+    <section className="my-6 rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="p-4 sm:p-5">
+        <div className="mb-4">
+          <h2 className="text-sm font-extrabold text-[#0A3D62]">
+            Buscar y filtrar médicos
+          </h2>
+
+          <p className="mt-1 text-xs leading-5 text-gray-500">
+            Localiza médicos por nombre,
+            especialidad o lugar de atención.
+          </p>
         </div>
 
-        {/* Filtro */}
-        <div className="flex items-center gap-2 bg-[#FFF9E6] px-4 py-3 rounded-xl border border-[#FFC300]/30 min-w-[200px]">
-          <Filter size={18} className="text-[#0A3D62]" />
-          <select
-            className="flex-1 bg-transparent border-none focus:outline-none text-gray-700 font-medium cursor-pointer"
-            value={filterActivo as string}
-            onChange={(e) => onFilterChange(e.target.value === 'todos' ? 'todos' : e.target.value === 'true')}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_240px_auto] lg:items-end">
+          <div className="min-w-0">
+            <label
+              htmlFor="buscar-medicos"
+              className="mb-2 block text-xs font-extrabold text-[#0A3D62]"
+            >
+              Búsqueda
+            </label>
+
+            <div className="relative">
+              <Search
+                size={18}
+                className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
+                aria-hidden="true"
+              />
+
+              <input
+                id="buscar-medicos"
+                type="search"
+                value={searchTerm}
+                onChange={(event) => {
+                  onSearchChange(
+                    event.target.value,
+                  );
+                }}
+                placeholder="Nombre, especialidad, hospital o clínica"
+                className="min-h-11 w-full rounded-xl border border-gray-200 bg-[#F8FAFC] pl-10 pr-11 text-sm font-medium text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-[#FFC300] focus:bg-white focus:ring-4 focus:ring-[#FFC300]/15"
+              />
+
+              {hayBusqueda && (
+                <button
+                  type="button"
+                  onClick={limpiarBusqueda}
+                  className="absolute right-2.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC300]"
+                  aria-label="Limpiar búsqueda"
+                  title="Limpiar búsqueda"
+                >
+                  <X
+                    size={15}
+                    aria-hidden="true"
+                  />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label
+              htmlFor="filtro-estado-medicos"
+              className="mb-2 block text-xs font-extrabold text-[#0A3D62]"
+            >
+              Estado
+            </label>
+
+            <div className="relative">
+              <Filter
+                size={16}
+                className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#0A3D62]"
+                aria-hidden="true"
+              />
+
+              <select
+                id="filtro-estado-medicos"
+                value={valorFiltro}
+                onChange={(event) => {
+                  cambiarFiltroEstado(
+                    event.target
+                      .value as ValorFiltro,
+                  );
+                }}
+                className={cn(
+                  "min-h-11 w-full cursor-pointer appearance-none rounded-xl border bg-white pl-10 pr-9 text-sm font-semibold text-gray-700 outline-none transition focus:border-[#FFC300] focus:ring-4 focus:ring-[#FFC300]/15",
+                  hayFiltroEstado
+                    ? "border-[#FFC300] bg-[#FFF9E6]"
+                    : "border-gray-200",
+                )}
+              >
+                <option value="todos">
+                  Todos los médicos
+                </option>
+
+                <option value="true">
+                  Solo activos
+                </option>
+
+                <option value="false">
+                  Solo inactivos
+                </option>
+              </select>
+
+              <span
+                className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-gray-400"
+                aria-hidden="true"
+              >
+                ▾
+              </span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              void handleRefresh();
+            }}
+            disabled={refreshing}
+            aria-busy={refreshing}
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#0A3D62] px-5 py-2 text-xs font-extrabold text-white shadow-sm transition-colors hover:bg-[#061C2E] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC300] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500 disabled:shadow-none lg:w-auto"
           >
-            <option value="todos">Todos los médicos</option>
-            <option value="true">Activos</option>
-            <option value="false">Inactivos</option>
-          </select>
+            <RefreshCw
+              size={16}
+              className={cn(
+                refreshing &&
+                  "animate-spin",
+              )}
+              aria-hidden="true"
+            />
+
+            {refreshing
+              ? "Actualizando..."
+              : "Actualizar"}
+          </button>
         </div>
 
-        {/* Botón de refresh - solo icono */}
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className={`
-            flex items-center justify-center w-14 h-14
-            bg-gradient-to-r from-[#FFC300] to-[#FFD700] 
-            text-[#0A3D62] rounded-xl shadow-md
-            hover:from-[#0A3D62] hover:to-[#1A4F7A] hover:text-white
-            transition-all duration-300 group
-            disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:from-[#FFC300] disabled:hover:to-[#FFD700] disabled:hover:text-[#0A3D62]
-          `}
-          title="Refrescar lista de médicos"
-        >
-          <RefreshCw 
-            size={22} 
-            className={`
-              text-[#0A3D62] group-hover:text-white
-              transition-all duration-300
-              ${refreshing ? 'animate-spin' : ''}
-            `} 
-          />
-        </button>
+        {(hayBusqueda ||
+          hayFiltroEstado) && (
+          <div className="mt-4 flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                Filtros aplicados
+              </span>
+
+              {hayBusqueda && (
+                <span className="inline-flex max-w-full items-center gap-2 rounded-full border border-[#0A3D62]/15 bg-[#F2F7FA] px-3 py-1.5 text-[11px] font-bold text-[#0A3D62]">
+                  <Search
+                    size={12}
+                    className="shrink-0"
+                    aria-hidden="true"
+                  />
+
+                  <span className="min-w-0 break-words">
+                    “{searchTerm.trim()}”
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={limpiarBusqueda}
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-[#0A3D62] hover:text-white"
+                    aria-label="Eliminar filtro de búsqueda"
+                  >
+                    <X
+                      size={11}
+                      aria-hidden="true"
+                    />
+                  </button>
+                </span>
+              )}
+
+              {hayFiltroEstado && (
+                <span className="inline-flex items-center gap-2 rounded-full border border-[#FFC300]/35 bg-[#FFF9E6] px-3 py-1.5 text-[11px] font-bold text-[#0A3D62]">
+                  <Filter
+                    size={12}
+                    aria-hidden="true"
+                  />
+
+                  {filtroEstadoTexto}
+
+                  <button
+                    type="button"
+                    onClick={
+                      limpiarFiltroEstado
+                    }
+                    className="flex h-5 w-5 items-center justify-center rounded-full transition-colors hover:bg-[#0A3D62] hover:text-white"
+                    aria-label="Eliminar filtro de estado"
+                  >
+                    <X
+                      size={11}
+                      aria-hidden="true"
+                    />
+                  </button>
+                </span>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={limpiarTodo}
+              className="self-start text-xs font-extrabold text-red-600 transition-colors hover:text-red-700 sm:self-auto"
+            >
+              Limpiar todo
+            </button>
+          </div>
+        )}
       </div>
-
-      {/* Resultados de búsqueda */}
-      {searchTerm && (
-        <div className="text-sm text-gray-500 bg-[#FFF9E6] px-4 py-2 rounded-lg border border-[#FFC300]/30">
-          Mostrando resultados para: <span className="font-semibold text-[#0A3D62]">"{searchTerm}"</span>
-        </div>
-      )}
-    </div>
+    </section>
   );
 }

@@ -1,4 +1,3 @@
-// src/app/(admin)/backups/page.tsx
 "use client";
 
 import {
@@ -30,6 +29,12 @@ interface RespuestaError {
   detail?: string;
 }
 
+interface RespuestaListaBackups {
+  backups?: Backup[];
+  error?: string;
+  detail?: string;
+}
+
 interface RespuestaGenerarBackup {
   success?: boolean;
   message?: string;
@@ -50,16 +55,25 @@ interface RespuestaGenerarBackup {
   detail?: string;
 }
 
+const ESTADISTICAS_INICIALES: BackupStatsType = {
+  total: 0,
+  completos: 0,
+  parciales: 0,
+  espacioTotal: "0 KB",
+  ultimoBackup: null,
+  promedioTamaño: "0 KB",
+};
+
 function obtenerNombreDesdeContentDisposition(
   contentDisposition: string | null,
-  id: string
-) {
+  id: string,
+): string {
   if (!contentDisposition) {
     return `backup-${id}.sql.gz`;
   }
 
   const coincidencia = contentDisposition.match(
-    /filename="?([^";]+)"?/i
+    /filename="?([^";]+)"?/i,
   );
 
   return (
@@ -68,73 +82,103 @@ function obtenerNombreDesdeContentDisposition(
   );
 }
 
+function obtenerTamañoNumerico(
+  tamaño: string,
+): number {
+  const valor = Number.parseFloat(tamaño);
+
+  return Number.isFinite(valor)
+    ? valor
+    : 0;
+}
+
 function calcularEstadisticas(
-  listaBackups: Backup[]
+  listaBackups: Backup[],
 ): BackupStatsType {
   const completos = listaBackups.filter(
-    (backup) => backup.tipo === "completo"
+    (backup) =>
+      backup.tipo === "completo",
   ).length;
 
   const parciales = listaBackups.filter(
-    (backup) => backup.tipo === "parcial"
+    (backup) =>
+      backup.tipo === "parcial",
   ).length;
 
   const totalSizeKB = listaBackups.reduce(
-    (acumulado, backup) => {
-      const tamaño = Number.parseFloat(backup.tamaño);
-
-      return acumulado +
-        (Number.isFinite(tamaño) ? tamaño : 0);
-    },
-    0
+    (acumulado, backup) =>
+      acumulado +
+      obtenerTamañoNumerico(
+        backup.tamaño,
+      ),
+    0,
   );
 
   return {
     total: listaBackups.length,
     completos,
     parciales,
-    espacioTotal: `${totalSizeKB.toFixed(2)} KB`,
+    espacioTotal: `${totalSizeKB.toFixed(
+      2,
+    )} KB`,
     ultimoBackup:
       listaBackups[0]?.fecha ?? null,
     promedioTamaño:
       listaBackups.length > 0
         ? `${(
-            totalSizeKB / listaBackups.length
+            totalSizeKB /
+            listaBackups.length
           ).toFixed(2)} KB`
         : "0 KB",
   };
 }
 
+function formatearUltimaActualizacion(
+  fecha: Date | null,
+): string {
+  if (!fecha) {
+    return "Sin actualizar";
+  }
+
+  return `Actualizado a las ${fecha.toLocaleTimeString(
+    "es-MX",
+    {
+      hour: "2-digit",
+      minute: "2-digit",
+    },
+  )}`;
+}
+
 export default function AdminBackupsPage() {
-  const [backups, setBackups] = useState<Backup[]>(
-    []
-  );
+  const [backups, setBackups] =
+    useState<Backup[]>([]);
 
   const [stats, setStats] =
-    useState<BackupStatsType>({
-      total: 0,
-      completos: 0,
-      parciales: 0,
-      espacioTotal: "0 KB",
-      ultimoBackup: null,
-      promedioTamaño: "0 KB",
-    });
+    useState<BackupStatsType>(
+      ESTADISTICAS_INICIALES,
+    );
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] =
+    useState(true);
+
   const [refreshing, setRefreshing] =
     useState(false);
+
   const [generating, setGenerating] =
     useState(false);
 
-  const [error, setError] = useState<
-    string | null
-  >(null);
+  const [error, setError] =
+    useState<string | null>(null);
 
-  const [ultimaActualizacion, setUltimaActualizacion] =
-    useState<Date | null>(null);
+  const [
+    ultimaActualizacion,
+    setUltimaActualizacion,
+  ] = useState<Date | null>(null);
 
   const loadBackups = useCallback(
-    async (mostrarCargaInicial = false) => {
+    async (
+      mostrarCargaInicial = false,
+    ) => {
       if (mostrarCargaInicial) {
         setLoading(true);
       } else {
@@ -147,55 +191,69 @@ export default function AdminBackupsPage() {
           {
             method: "GET",
             cache: "no-store",
-          }
+          },
         );
 
-        const data = (await response
-          .json()
-          .catch(() => null)) as
-          | {
-              backups?: Backup[];
-              error?: string;
-              detail?: string;
-            }
-          | null;
+        const textoRespuesta =
+          await response.text();
+
+        let data:
+          | RespuestaListaBackups
+          | null = null;
+
+        if (textoRespuesta) {
+          try {
+            data = JSON.parse(
+              textoRespuesta,
+            ) as RespuestaListaBackups;
+          } catch {
+            data = null;
+          }
+        }
 
         if (!response.ok) {
           throw new Error(
             data?.detail ||
               data?.error ||
-              "No se pudieron obtener los respaldos"
+              "No se pudieron obtener los respaldos",
           );
         }
 
-        const listaBackups = Array.isArray(
-          data?.backups
-        )
-          ? data.backups
-          : [];
+        const listaBackups =
+          Array.isArray(data?.backups)
+            ? data.backups
+            : [];
 
         setBackups(listaBackups);
+
         setStats(
-          calcularEstadisticas(listaBackups)
+          calcularEstadisticas(
+            listaBackups,
+          ),
         );
-        setUltimaActualizacion(new Date());
-      } catch (errorDesconocido) {
+
+        setUltimaActualizacion(
+          new Date(),
+        );
+      } catch (
+        errorDesconocido: unknown
+      ) {
         console.error(
           "[BACKUP][FRONTEND] Error cargando respaldos:",
-          errorDesconocido
+          errorDesconocido,
         );
 
         setError(
           errorDesconocido instanceof Error
             ? errorDesconocido.message
-            : "No se pudieron cargar los respaldos"
+            : "No se pudieron cargar los respaldos",
         );
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    []
+    [],
   );
 
   useEffect(() => {
@@ -203,34 +261,38 @@ export default function AdminBackupsPage() {
   }, [loadBackups]);
 
   const descargarBackupPorId = async (
-    id: string
+    id: string,
   ) => {
-    console.log(
-      "[BACKUP][FRONTEND] Descargando respaldo",
-      {
-        id,
-      }
-    );
-
     const response = await fetch(
       `/api/backups/${id}`,
       {
         method: "GET",
         cache: "no-store",
-      }
+      },
     );
 
     if (!response.ok) {
-      const data = (await response
-        .json()
-        .catch(() => null)) as
+      const textoRespuesta =
+        await response.text();
+
+      let data:
         | RespuestaError
-        | null;
+        | null = null;
+
+      if (textoRespuesta) {
+        try {
+          data = JSON.parse(
+            textoRespuesta,
+          ) as RespuestaError;
+        } catch {
+          data = null;
+        }
+      }
 
       throw new Error(
         data?.detail ||
           data?.error ||
-          "No se pudo descargar el respaldo"
+          "No se pudo descargar el respaldo",
       );
     }
 
@@ -238,16 +300,16 @@ export default function AdminBackupsPage() {
 
     if (blob.size === 0) {
       throw new Error(
-        "El archivo descargado está vacío"
+        "El archivo descargado está vacío",
       );
     }
 
     const nombreArchivo =
       obtenerNombreDesdeContentDisposition(
         response.headers.get(
-          "Content-Disposition"
+          "Content-Disposition",
         ),
-        id
+        id,
       );
 
     const urlTemporal =
@@ -264,103 +326,88 @@ export default function AdminBackupsPage() {
     enlace.remove();
 
     window.setTimeout(() => {
-      window.URL.revokeObjectURL(urlTemporal);
+      window.URL.revokeObjectURL(
+        urlTemporal,
+      );
     }, 1_000);
-
-    console.log(
-      "[BACKUP][FRONTEND] Descarga terminada",
-      {
-        id,
-        nombreArchivo,
-        tamañoBytes: blob.size,
-      }
-    );
   };
 
   const handleGenerateBackup = async (
-    tipo: TipoBackup
+    tipo: TipoBackup,
   ) => {
     setGenerating(true);
     setError(null);
 
     try {
-      console.log(
-        "[BACKUP][FRONTEND] Solicitando generación",
-        {
-          tipo,
-        }
-      );
-
       const response = await fetch(
         "/api/backups",
         {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
           },
           cache: "no-store",
           body: JSON.stringify({
             tipo,
           }),
-        }
+        },
       );
 
-      const data = (await response
-        .json()
-        .catch(() => null)) as
+      const textoRespuesta =
+        await response.text();
+
+      let data:
         | RespuestaGenerarBackup
-        | null;
+        | null = null;
 
-      console.log(
-        "[BACKUP][FRONTEND] Respuesta de generación",
-        {
-          status: response.status,
-          data,
+      if (textoRespuesta) {
+        try {
+          data = JSON.parse(
+            textoRespuesta,
+          ) as RespuestaGenerarBackup;
+        } catch {
+          data = null;
         }
-      );
+      }
 
       if (!response.ok) {
         throw new Error(
           data?.detail ||
             data?.error ||
-            "No se pudo generar el respaldo"
+            "No se pudo generar el respaldo",
         );
       }
 
-      const backupId = data?.backup?.id;
+      const backupId =
+        data?.backup?.id;
 
       if (
         typeof backupId !== "string" &&
         typeof backupId !== "number"
       ) {
         throw new Error(
-          "La API no devolvió el ID del respaldo generado"
+          "La API no devolvió el ID del respaldo generado",
         );
       }
 
       await loadBackups();
 
       await descargarBackupPorId(
-        String(backupId)
+        String(backupId),
       );
-
-      console.log(
-        "[BACKUP][FRONTEND] Respaldo generado correctamente",
-        {
-          id: backupId,
-          resumen: data?.resumen,
-        }
-      );
-    } catch (errorDesconocido) {
+    } catch (
+      errorDesconocido: unknown
+    ) {
       console.error(
         "[BACKUP][FRONTEND] Error generando respaldo:",
-        errorDesconocido
+        errorDesconocido,
       );
 
       setError(
         errorDesconocido instanceof Error
           ? errorDesconocido.message
-          : "Error al generar el respaldo"
+          : "Error al generar el respaldo",
       );
     } finally {
       setGenerating(false);
@@ -368,11 +415,12 @@ export default function AdminBackupsPage() {
   };
 
   const handleDeleteBackup = async (
-    id: string
+    id: string,
   ) => {
-    const confirmado = window.confirm(
-      "¿Estás seguro de eliminar este respaldo? Esta acción no se puede deshacer."
-    );
+    const confirmado =
+      window.confirm(
+        "¿Estás seguro de eliminar este respaldo? Esta acción no se puede deshacer.",
+      );
 
     if (!confirmado) {
       return;
@@ -386,46 +434,60 @@ export default function AdminBackupsPage() {
         {
           method: "DELETE",
           cache: "no-store",
-        }
+        },
       );
 
-      const data = (await response
-        .json()
-        .catch(() => null)) as
+      const textoRespuesta =
+        await response.text();
+
+      let data:
         | RespuestaError
-        | null;
+        | null = null;
+
+      if (textoRespuesta) {
+        try {
+          data = JSON.parse(
+            textoRespuesta,
+          ) as RespuestaError;
+        } catch {
+          data = null;
+        }
+      }
 
       if (!response.ok) {
         throw new Error(
           data?.detail ||
             data?.error ||
-            "No se pudo eliminar el respaldo"
+            "No se pudo eliminar el respaldo",
         );
       }
 
       await loadBackups();
-    } catch (errorDesconocido) {
+    } catch (
+      errorDesconocido: unknown
+    ) {
       console.error(
         "[BACKUP][FRONTEND] Error eliminando respaldo:",
-        errorDesconocido
+        errorDesconocido,
       );
 
       setError(
         errorDesconocido instanceof Error
           ? errorDesconocido.message
-          : "Error al eliminar el respaldo"
+          : "Error al eliminar el respaldo",
       );
     }
   };
 
   const handleDownloadBackup = async (
-    id: string
+    id: string,
   ) => {
     setError(null);
 
     try {
       const respaldo = backups.find(
-        (backup) => backup.id === id
+        (backup) =>
+          backup.id === id,
       );
 
       if (
@@ -433,130 +495,146 @@ export default function AdminBackupsPage() {
         !respaldo.disponible
       ) {
         throw new Error(
-          "Este respaldo pertenece al sistema anterior y su archivo no está disponible."
+          "Este respaldo pertenece al sistema anterior y su archivo no está disponible.",
         );
       }
 
       await descargarBackupPorId(id);
-    } catch (errorDesconocido) {
+    } catch (
+      errorDesconocido: unknown
+    ) {
       console.error(
         "[BACKUP][FRONTEND] Error descargando respaldo:",
-        errorDesconocido
+        errorDesconocido,
       );
 
       setError(
         errorDesconocido instanceof Error
           ? errorDesconocido.message
-          : "Error al descargar el respaldo"
+          : "Error al descargar el respaldo",
       );
     }
   };
 
   if (loading) {
     return (
-      <div className="flex min-h-[70vh] flex-col items-center justify-center gap-4 bg-gradient-to-b from-slate-50 to-white">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-lg">
-          <Loader2
-            className="animate-spin text-[#0A3D62]"
-            size={42}
-          />
-        </div>
+      <div className="flex min-h-[70vh] items-center justify-center px-4">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <span className="flex h-16 w-16 items-center justify-center rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <Loader2
+              size={30}
+              className="animate-spin text-[#0A3D62]"
+              aria-hidden="true"
+            />
+          </span>
 
-        <div className="text-center">
-          <p className="font-semibold text-slate-700">
-            Cargando respaldos
-          </p>
+          <div>
+            <p className="text-sm font-extrabold text-[#0A3D62]">
+              Cargando respaldos
+            </p>
 
-          <p className="mt-1 text-sm text-slate-500">
-            Consultando el historial del sistema
-          </p>
+            <p className="mt-1 text-xs text-gray-500">
+              Consultando el historial
+              del sistema
+            </p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-amber-50/40">
+    <div className="min-h-screen bg-[#F7FAFC]">
       <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
         <BackupsHeader />
 
-        <section className="mb-6 mt-6 rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-sm backdrop-blur sm:p-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-[#0A3D62]">
-                Resumen de respaldos
-              </h2>
-
-              <div className="mt-1 flex items-center gap-2 text-sm text-slate-500">
-                <Clock3 size={15} />
-
-                <span>
-                  {ultimaActualizacion
-                    ? `Actualizado a las ${ultimaActualizacion.toLocaleTimeString(
-                        "es-MX",
-                        {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        }
-                      )}`
-                    : "Sin actualizar"}
-                </span>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setError(null);
-                void loadBackups();
-              }}
-              disabled={
-                refreshing || generating
-              }
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#0A3D62]/20 bg-white px-4 py-2.5 text-sm font-semibold text-[#0A3D62] shadow-sm transition hover:border-[#0A3D62]/40 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <RefreshCw
-                size={16}
-                className={
-                  refreshing
-                    ? "animate-spin"
-                    : ""
-                }
+        <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#EAF2F8] text-[#0A3D62]">
+              <Clock3
+                size={17}
+                aria-hidden="true"
               />
+            </span>
 
-              {refreshing
-                ? "Actualizando..."
-                : "Actualizar historial"}
-            </button>
+            <div className="min-w-0">
+              <p className="text-xs font-extrabold text-[#0A3D62]">
+                Estado del historial
+              </p>
+
+              <p className="mt-0.5 text-[11px] leading-4 text-gray-500">
+                {formatearUltimaActualizacion(
+                  ultimaActualizacion,
+                )}
+              </p>
+            </div>
           </div>
-        </section>
+
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              void loadBackups();
+            }}
+            disabled={
+              refreshing ||
+              generating
+            }
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[#0A3D62]/20 bg-white px-4 py-2 text-xs font-extrabold text-[#0A3D62] transition-colors hover:border-[#0A3D62]/40 hover:bg-[#F8FAFC] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RefreshCw
+              size={15}
+              className={
+                refreshing
+                  ? "animate-spin"
+                  : ""
+              }
+              aria-hidden="true"
+            />
+
+            {refreshing
+              ? "Actualizando..."
+              : "Actualizar historial"}
+          </button>
+        </div>
 
         {error && (
           <div
             role="alert"
-            className="mb-6 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700 shadow-sm"
+            className="mb-5 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-red-700 shadow-sm"
           >
-            <div className="mt-0.5 rounded-full bg-red-100 p-2">
-              <AlertCircle size={18} />
-            </div>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-red-700">
+              <AlertCircle
+                size={17}
+                aria-hidden="true"
+              />
+            </span>
 
-            <div>
-              <p className="font-semibold">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-extrabold">
                 Ocurrió un problema
               </p>
 
-              <p className="mt-1 text-sm text-red-600">
+              <p className="mt-1 break-words text-xs leading-5 text-red-600">
                 {error}
               </p>
             </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                setError(null)
+              }
+              className="shrink-0 text-xs font-extrabold underline underline-offset-2"
+            >
+              Cerrar
+            </button>
           </div>
         )}
 
-        <section className="mb-8">
-          <BackupStats stats={stats} />
-        </section>
+        <BackupStats stats={stats} />
 
-        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px] xl:gap-8">
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <main className="min-w-0">
             <BackupTable
               backups={backups}
@@ -569,7 +647,7 @@ export default function AdminBackupsPage() {
             />
           </main>
 
-          <aside className="xl:sticky xl:top-24">
+          <aside className="min-w-0 xl:sticky xl:top-24">
             <BackupGenerator
               onGenerate={
                 handleGenerateBackup
@@ -579,7 +657,7 @@ export default function AdminBackupsPage() {
           </aside>
         </div>
 
-        <footer className="mt-8 rounded-2xl border border-slate-200 bg-white/80 px-5 py-4 text-center text-sm text-slate-500 shadow-sm">
+        <footer className="mt-6 rounded-xl border border-gray-200 bg-white px-4 py-3 text-center text-[11px] leading-5 text-gray-500 shadow-sm">
           Los respaldos permanecen almacenados
           hasta que sean eliminados manualmente.
         </footer>

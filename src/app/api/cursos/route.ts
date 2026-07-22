@@ -1,7 +1,11 @@
-// src/app/api/cursos/route.ts
-
 import { NextResponse } from "next/server";
-import { and, desc, eq, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 
 import { requireApiRole } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -20,6 +24,9 @@ import {
 import { validarCrearCurso } from "@/lib/validators/cursos";
 import type { CrearCursoInput } from "@/types/cursos";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const cursoSelect = {
   idCurso: cursos.idCurso,
   tituloCurso: cursos.tituloCurso,
@@ -34,17 +41,22 @@ const cursoSelect = {
       ' ',
       COALESCE(${instructores.apellidoMaterno}, '')
     ))`.as("instructor_nombre"),
-  instructorEspecialidad: instructores.especialidad,
+  instructorEspecialidad:
+    instructores.especialidad,
 
   idCategoria: cursos.idCategoria,
-  categoriaNombre: categoriasCursos.nombreCategoria,
+  categoriaNombre:
+    categoriasCursos.nombreCategoria,
 
   idUbicacion: cursos.idUbicacion,
-  ubicacionNombre: ubicacionesCursos.nombreUbicacion,
-  ubicacionDireccion: ubicacionesCursos.direccionCompleta,
+  ubicacionNombre:
+    ubicacionesCursos.nombreUbicacion,
+  ubicacionDireccion:
+    ubicacionesCursos.direccionCompleta,
 
   idModalidad: cursos.idModalidad,
-  modalidadNombre: modalidades.nombreModalidad,
+  modalidadNombre:
+    modalidades.nombreModalidad,
 
   fechaInicio: cursos.fechaInicio,
   fechaFin: cursos.fechaFin,
@@ -55,54 +67,142 @@ const cursoSelect = {
   cuposOcupados: cursos.cuposOcupados,
 
   costo: cursos.costo,
-  urlImagenPortada: cursos.urlImagenPortada,
+  urlImagenPortada:
+    cursos.urlImagenPortada,
   activo: cursos.activo,
 
   createdAt: cursos.createdAt,
   updatedAt: cursos.updatedAt,
 };
 
+interface CambiarEstadoCursoInput {
+  idCurso: number;
+  activo: boolean;
+}
+
+function esObjeto(
+  valor: unknown,
+): valor is Record<string, unknown> {
+  return (
+    typeof valor === "object" &&
+    valor !== null &&
+    !Array.isArray(valor)
+  );
+}
+
 function validationErrorResponse<T>(
-  result: Extract<ValidationResult<T>, { success: false }>
+  result: Extract<
+    ValidationResult<T>,
+    { success: false }
+  >,
 ) {
   return NextResponse.json(
     {
       error: result.error,
       details: result.fieldErrors,
     },
-    { status: 400 }
+    { status: 400 },
   );
 }
 
-function databaseErrorResponse(error: unknown) {
+function databaseErrorResponse(
+  error: unknown,
+) {
   if (hasPostgresCode(error, "23503")) {
     return NextResponse.json(
       {
         error:
           "El instructor, la categoría, la modalidad o la ubicación seleccionada no existe",
       },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
   if (hasPostgresCode(error, "23505")) {
     return NextResponse.json(
       {
-        error: "Ya existe un curso con esos datos",
+        error:
+          "Ya existe un curso con esos datos",
       },
-      { status: 409 }
+      { status: 409 },
     );
   }
 
   return null;
 }
 
-export async function GET(request: Request) {
+function validarCambiarEstadoCurso(
+  body: unknown,
+):
+  | {
+      success: true;
+      data: CambiarEstadoCursoInput;
+    }
+  | {
+      success: false;
+      error: string;
+    } {
+  if (!esObjeto(body)) {
+    return {
+      success: false,
+      error:
+        "El cuerpo de la solicitud no es válido",
+    };
+  }
+
+  const idCurso = Number(body.idCurso);
+  const activo = body.activo;
+
+  if (
+    !Number.isInteger(idCurso) ||
+    idCurso <= 0
+  ) {
+    return {
+      success: false,
+      error:
+        "El identificador del curso no es válido",
+    };
+  }
+
+  if (typeof activo !== "boolean") {
+    return {
+      success: false,
+      error:
+        "El estado del curso debe ser verdadero o falso",
+    };
+  }
+
+  return {
+    success: true,
+    data: {
+      idCurso,
+      activo,
+    },
+  };
+}
+
+/**
+ * GET /api/cursos
+ *
+ * Público:
+ * GET /api/cursos
+ * Solo devuelve cursos visibles.
+ *
+ * Administrador:
+ * GET /api/cursos?admin=true
+ * Devuelve cursos visibles y ocultos.
+ */
+export async function GET(
+  request: Request,
+) {
   try {
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = new URL(
+      request.url,
+    );
 
     const isAdmin =
-      searchParams.get("admin") === "true";
+      searchParams.get("admin") ===
+      "true";
 
     if (isAdmin) {
       const { error } =
@@ -117,16 +217,26 @@ export async function GET(request: Request) {
       searchParams.get("modalidadId");
 
     const dirigidoA =
-      searchParams.get("dirigidoA")?.trim() ?? "";
+      searchParams
+        .get("dirigidoA")
+        ?.trim() ?? "";
 
     const filtros: SQL[] = [];
 
+    /*
+     * Los usuarios públicos solamente pueden
+     * consultar cursos visibles.
+     */
     if (!isAdmin) {
-      filtros.push(eq(cursos.activo, true));
+      filtros.push(
+        eq(cursos.activo, true),
+      );
     }
 
     if (modalidadIdParam) {
-      const modalidadId = Number(modalidadIdParam);
+      const modalidadId = Number(
+        modalidadIdParam,
+      );
 
       if (
         !Number.isInteger(modalidadId) ||
@@ -137,17 +247,22 @@ export async function GET(request: Request) {
             error:
               "El identificador de modalidad no es válido",
           },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
       filtros.push(
-        eq(cursos.idModalidad, modalidadId)
+        eq(
+          cursos.idModalidad,
+          modalidadId,
+        ),
       );
     }
 
     if (dirigidoA) {
-      filtros.push(eq(cursos.dirigidoA, dirigidoA));
+      filtros.push(
+        eq(cursos.dirigidoA, dirigidoA),
+      );
     }
 
     const data = await db
@@ -157,54 +272,71 @@ export async function GET(request: Request) {
         instructores,
         eq(
           cursos.idInstructor,
-          instructores.idInstructor
-        )
+          instructores.idInstructor,
+        ),
       )
       .leftJoin(
         categoriasCursos,
         eq(
           cursos.idCategoria,
-          categoriasCursos.idCategoria
-        )
+          categoriasCursos.idCategoria,
+        ),
       )
       .leftJoin(
         ubicacionesCursos,
         eq(
           cursos.idUbicacion,
-          ubicacionesCursos.idUbicacion
-        )
+          ubicacionesCursos.idUbicacion,
+        ),
       )
       .leftJoin(
         modalidades,
         eq(
           cursos.idModalidad,
-          modalidades.idModalidad
-        )
+          modalidades.idModalidad,
+        ),
       )
       .where(
         filtros.length > 0
           ? and(...filtros)
-          : undefined
+          : undefined,
       )
-      .orderBy(desc(cursos.idCurso));
+      .orderBy(
+        desc(cursos.idCurso),
+      );
 
-    return NextResponse.json(data);
+    return NextResponse.json(data, {
+      status: 200,
+      headers: {
+        "Cache-Control":
+          "private, no-store, max-age=0, must-revalidate",
+      },
+    });
   } catch (error: unknown) {
     console.error(
       "Error en GET cursos:",
-      error
+      error,
     );
 
     return NextResponse.json(
       {
-        error: "Error al obtener cursos",
+        error:
+          "Error al obtener cursos",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
-export async function POST(request: Request) {
+/**
+ * POST /api/cursos
+ *
+ * Crea un nuevo curso.
+ * Requiere rol de administrador.
+ */
+export async function POST(
+  request: Request,
+) {
   const { session, error } =
     await requireApiRole("admin");
 
@@ -217,24 +349,28 @@ export async function POST(request: Request) {
       {
         error: "No autenticado",
       },
-      { status: 401 }
+      { status: 401 },
     );
   }
 
   try {
-    const body: unknown = await request.json();
+    const body: unknown =
+      await request.json();
 
     const validation =
       validarCrearCurso(body);
 
     if (!validation.success) {
-      return validationErrorResponse(validation);
+      return validationErrorResponse(
+        validation,
+      );
     }
 
     const input: CrearCursoInput =
       validation.data;
 
-    const userEmail = session.user.correo;
+    const userEmail =
+      session.user.correo;
 
     const nuevo = await withUserEmail(
       userEmail,
@@ -242,20 +378,29 @@ export async function POST(request: Request) {
         db
           .insert(cursos)
           .values({
-            tituloCurso: input.tituloCurso,
-            descripcion: input.descripcion,
+            tituloCurso:
+              input.tituloCurso,
+            descripcion:
+              input.descripcion,
 
-            idInstructor: input.idInstructor,
-            idCategoria: input.idCategoria,
-            idUbicacion: input.idUbicacion,
-            idModalidad: input.idModalidad,
+            idInstructor:
+              input.idInstructor,
+            idCategoria:
+              input.idCategoria,
+            idUbicacion:
+              input.idUbicacion,
+            idModalidad:
+              input.idModalidad,
 
-            fechaInicio: input.fechaInicio,
+            fechaInicio:
+              input.fechaInicio,
             fechaFin: input.fechaFin,
             horario: input.horario,
-            dirigidoA: input.dirigidoA,
+            dirigidoA:
+              input.dirigidoA,
 
-            cupoMaximo: input.cupoMaximo,
+            cupoMaximo:
+              input.cupoMaximo,
             cuposOcupados: 0,
 
             costo: input.costo,
@@ -265,21 +410,32 @@ export async function POST(request: Request) {
             activo: true,
           })
           .returning({
-            idCurso: cursos.idCurso,
-            tituloCurso: cursos.tituloCurso,
-            descripcion: cursos.descripcion,
+            idCurso:
+              cursos.idCurso,
+            tituloCurso:
+              cursos.tituloCurso,
+            descripcion:
+              cursos.descripcion,
 
-            idInstructor: cursos.idInstructor,
-            idCategoria: cursos.idCategoria,
-            idUbicacion: cursos.idUbicacion,
-            idModalidad: cursos.idModalidad,
+            idInstructor:
+              cursos.idInstructor,
+            idCategoria:
+              cursos.idCategoria,
+            idUbicacion:
+              cursos.idUbicacion,
+            idModalidad:
+              cursos.idModalidad,
 
-            fechaInicio: cursos.fechaInicio,
-            fechaFin: cursos.fechaFin,
+            fechaInicio:
+              cursos.fechaInicio,
+            fechaFin:
+              cursos.fechaFin,
             horario: cursos.horario,
-            dirigidoA: cursos.dirigidoA,
+            dirigidoA:
+              cursos.dirigidoA,
 
-            cupoMaximo: cursos.cupoMaximo,
+            cupoMaximo:
+              cursos.cupoMaximo,
             cuposOcupados:
               cursos.cuposOcupados,
 
@@ -288,9 +444,11 @@ export async function POST(request: Request) {
               cursos.urlImagenPortada,
             activo: cursos.activo,
 
-            createdAt: cursos.createdAt,
-            updatedAt: cursos.updatedAt,
-          })
+            createdAt:
+              cursos.createdAt,
+            updatedAt:
+              cursos.updatedAt,
+          }),
     );
 
     const cursoCreado = nuevo[0];
@@ -298,20 +456,21 @@ export async function POST(request: Request) {
     if (!cursoCreado) {
       return NextResponse.json(
         {
-          error: "No se pudo crear el curso",
+          error:
+            "No se pudo crear el curso",
         },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
     return NextResponse.json(
       cursoCreado,
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error: unknown) {
     console.error(
       "Error en POST cursos:",
-      error
+      error,
     );
 
     const databaseResponse =
@@ -323,9 +482,191 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       {
-        error: "Error al crear curso",
+        error:
+          "Error al crear curso",
       },
-      { status: 500 }
+      { status: 500 },
+    );
+  }
+}
+
+/**
+ * PATCH /api/cursos
+ *
+ * Muestra u oculta un curso.
+ *
+ * Body:
+ * {
+ *   "idCurso": 1,
+ *   "activo": false
+ * }
+ */
+export async function PATCH(
+  request: Request,
+) {
+  const { session, error } =
+    await requireApiRole("admin");
+
+  if (error) {
+    return error;
+  }
+
+  if (!session) {
+    return NextResponse.json(
+      {
+        error: "No autenticado",
+      },
+      { status: 401 },
+    );
+  }
+
+  try {
+    const body: unknown =
+      await request.json();
+
+    const validacion =
+      validarCambiarEstadoCurso(body);
+
+    if (!validacion.success) {
+      return NextResponse.json(
+        {
+          error: validacion.error,
+        },
+        { status: 400 },
+      );
+    }
+
+    const { idCurso, activo } =
+      validacion.data;
+
+    const cursoExistente =
+      await db
+        .select({
+          idCurso: cursos.idCurso,
+          tituloCurso:
+            cursos.tituloCurso,
+          activo: cursos.activo,
+        })
+        .from(cursos)
+        .where(
+          eq(
+            cursos.idCurso,
+            idCurso,
+          ),
+        )
+        .limit(1);
+
+    if (!cursoExistente[0]) {
+      return NextResponse.json(
+        {
+          error:
+            "No se encontró el curso solicitado",
+        },
+        { status: 404 },
+      );
+    }
+
+    /*
+     * Si ya tiene el estado solicitado,
+     * devolvemos una respuesta correcta sin
+     * ejecutar un UPDATE innecesario.
+     */
+    if (
+      cursoExistente[0].activo ===
+      activo
+    ) {
+      return NextResponse.json(
+        {
+          message: activo
+            ? "El curso ya se encuentra visible"
+            : "El curso ya se encuentra oculto",
+          curso: cursoExistente[0],
+        },
+        { status: 200 },
+      );
+    }
+
+    const resultado =
+      await withUserEmail(
+        session.user.correo,
+        async () =>
+          db
+            .update(cursos)
+            .set({
+              activo,
+              updatedAt:
+                sql`CURRENT_TIMESTAMP`,
+            })
+            .where(
+              eq(
+                cursos.idCurso,
+                idCurso,
+              ),
+            )
+            .returning({
+              idCurso:
+                cursos.idCurso,
+              tituloCurso:
+                cursos.tituloCurso,
+              activo: cursos.activo,
+              updatedAt:
+                cursos.updatedAt,
+            }),
+      );
+
+    const cursoActualizado =
+      resultado[0];
+
+    if (!cursoActualizado) {
+      return NextResponse.json(
+        {
+          error:
+            "No fue posible actualizar el curso",
+        },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json(
+      {
+        message: activo
+          ? "El curso ahora está visible"
+          : "El curso ahora está oculto",
+        curso: cursoActualizado,
+      },
+      { status: 200 },
+    );
+  } catch (error: unknown) {
+    console.error(
+      "Error en PATCH cursos:",
+      error,
+    );
+
+    const databaseResponse =
+      databaseErrorResponse(error);
+
+    if (databaseResponse) {
+      return databaseResponse;
+    }
+
+    if (
+      error instanceof SyntaxError
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "El cuerpo de la solicitud no contiene un JSON válido",
+        },
+        { status: 400 },
+      );
+    }
+
+    return NextResponse.json(
+      {
+        error:
+          "No fue posible actualizar la visibilidad del curso",
+      },
+      { status: 500 },
     );
   }
 }

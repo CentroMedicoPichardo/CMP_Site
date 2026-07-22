@@ -9,7 +9,6 @@ import { Footer } from "@/components/layout/Footer";
 import { SWRProvider } from "@/lib/swr-provider";
 
 import { ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
 
 import "./globals.css";
 

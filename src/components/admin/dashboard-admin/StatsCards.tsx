@@ -1,83 +1,327 @@
-// src/components/admin/dashboard-admin/StatsCards.tsx
-'use client';
+"use client";
 
-import { Users, BookOpen, Ticket, DollarSign, TrendingUp } from 'lucide-react';
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  Ban,
+  BadgeCheck,
+  BookOpen,
+  CircleMinus,
+  CircleX,
+  Clock3,
+  Ticket,
+  Users,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react";
+
+import type {
+  DashboardStats,
+  TendenciaDashboard,
+  TendenciasDashboard,
+} from "@/types/dashboard-admin";
 
 interface StatsCardsProps {
-  stats?: {
-    totalUsuarios: number;
-    totalCursos: number;
-    totalInscripciones: number;
-    ingresosTotales: number;
-    cursosActivos: number;
-    usuariosNuevosMes: number;
-    tasaOcupacion: number;
-  };
+  stats?: DashboardStats;
+  tendencias?: TendenciasDashboard;
 }
 
-export function StatsCards({ stats }: StatsCardsProps) {
-  const defaultStats = {
-    totalUsuarios: 0,
-    totalCursos: 0,
-    totalInscripciones: 0,
-    ingresosTotales: 0,
-    cursosActivos: 0,
-    usuariosNuevosMes: 0,
-    tasaOcupacion: 0
-  };
+interface StatCard {
+  id: string;
+  titulo: string;
+  valor: string;
+  descripcion: string;
+  icono: LucideIcon;
+  estiloIcono: string;
+  tendencia?: TendenciaDashboard;
+}
 
-  const s = stats || defaultStats;
+const FORMATEADOR_NUMERO =
+  new Intl.NumberFormat("es-MX");
 
-  const cards = [
+const FORMATEADOR_MONEDA =
+  new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+function numeroSeguro(
+  valor: number | undefined,
+): number {
+  return typeof valor === "number" &&
+    Number.isFinite(valor)
+    ? valor
+    : 0;
+}
+
+function formatearNumero(
+  valor: number | undefined,
+): string {
+  return FORMATEADOR_NUMERO.format(
+    numeroSeguro(valor),
+  );
+}
+
+function formatearMoneda(
+  valor: number | undefined,
+): string {
+  return FORMATEADOR_MONEDA.format(
+    numeroSeguro(valor),
+  );
+}
+
+function obtenerTextoTendencia(
+  tendencia: TendenciaDashboard,
+): string {
+  const porcentaje = Math.abs(
+    tendencia.porcentaje,
+  ).toLocaleString("es-MX", {
+    maximumFractionDigits: 1,
+  });
+
+  if (tendencia.direccion === "igual") {
+    return "Sin cambios frente al periodo anterior";
+  }
+
+  return `${porcentaje}% frente al periodo anterior`;
+}
+
+function Tendencia({
+  tendencia,
+}: {
+  tendencia?: TendenciaDashboard;
+}) {
+  if (!tendencia) {
+    return (
+      <span className="mt-2 flex items-center gap-1.5 text-xs text-gray-400">
+        <CircleMinus
+          size={14}
+          aria-hidden="true"
+        />
+
+        Dato acumulado
+      </span>
+    );
+  }
+
+  if (tendencia.direccion === "sube") {
+    return (
+      <span className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
+        <ArrowUpRight
+          size={14}
+          aria-hidden="true"
+        />
+
+        {obtenerTextoTendencia(
+          tendencia,
+        )}
+      </span>
+    );
+  }
+
+  if (tendencia.direccion === "baja") {
+    return (
+      <span className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-red-600">
+        <ArrowDownRight
+          size={14}
+          aria-hidden="true"
+        />
+
+        {obtenerTextoTendencia(
+          tendencia,
+        )}
+      </span>
+    );
+  }
+
+  return (
+    <span className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-gray-500">
+      <CircleMinus
+        size={14}
+        aria-hidden="true"
+      />
+
+      {obtenerTextoTendencia(
+        tendencia,
+      )}
+    </span>
+  );
+}
+
+export function StatsCards({
+  stats,
+  tendencias,
+}: StatsCardsProps) {
+  const pagosPendientes =
+    numeroSeguro(
+      stats?.pagosReportados,
+    ) +
+    numeroSeguro(
+      stats?.pagosEnRevision,
+    );
+
+  const cards: StatCard[] = [
     {
-      title: 'Usuarios Totales',
-      value: s.totalUsuarios,
-      icon: Users,
-      color: 'text-blue-600',
-      bg: 'bg-blue-50',
-      cambio: `+${s.usuariosNuevosMes} nuevos`
+      id: "usuarios",
+      titulo: "Usuarios totales",
+      valor: formatearNumero(
+        stats?.totalUsuarios,
+      ),
+      descripcion: `${formatearNumero(
+        stats?.usuariosNuevosPeriodo ??
+          stats?.usuariosNuevosMes,
+      )} nuevos en el periodo`,
+      icono: Users,
+      estiloIcono:
+        "bg-blue-50 text-blue-700",
+      tendencia:
+        tendencias?.usuariosNuevos,
     },
     {
-      title: 'Cursos Activos',
-      value: s.cursosActivos,
-      icon: BookOpen,
-      color: 'text-green-600',
-      bg: 'bg-green-50',
-      cambio: `${s.totalCursos} totales`
+      id: "cursos",
+      titulo: "Cursos activos",
+      valor: formatearNumero(
+        stats?.cursosActivos,
+      ),
+      descripcion: `${formatearNumero(
+        stats?.totalCursos,
+      )} cursos registrados`,
+      icono: BookOpen,
+      estiloIcono:
+        "bg-emerald-50 text-emerald-700",
     },
     {
-      title: 'Inscripciones',
-      value: s.totalInscripciones,
-      icon: Ticket,
-      color: 'text-purple-600',
-      bg: 'bg-purple-50',
-      cambio: `${s.tasaOcupacion}% ocupación`
+      id: "inscripciones",
+      titulo: "Inscripciones",
+      valor: formatearNumero(
+        stats?.totalInscripciones,
+      ),
+      descripcion: `${formatearNumero(
+        stats?.inscripcionesPeriodo,
+      )} durante el periodo`,
+      icono: Ticket,
+      estiloIcono:
+        "bg-violet-50 text-violet-700",
+      tendencia:
+        tendencias?.inscripciones,
     },
     {
-      title: 'Ingresos',
-      value: `$${s.ingresosTotales.toLocaleString()}`,
-      icon: DollarSign,
-      color: 'text-orange-600',
-      bg: 'bg-orange-50',
-      cambio: 'totales'
-    }
+      id: "monto-reportado",
+      titulo: "Monto reportado",
+      valor: formatearMoneda(
+        stats?.montoReportado,
+      ),
+      descripcion:
+        "Aprobado, reportado y en revisión",
+      icono: Wallet,
+      estiloIcono:
+        "bg-sky-50 text-sky-700",
+    },
+    {
+      id: "aprobados",
+      titulo: "Ingresos aprobados",
+      valor: formatearMoneda(
+        stats?.ingresosTotales,
+      ),
+      descripcion: `${formatearNumero(
+        stats?.pagosAprobados,
+      )} pagos aprobados`,
+      icono: BadgeCheck,
+      estiloIcono:
+        "bg-green-50 text-green-700",
+      tendencia: tendencias?.ingresos,
+    },
+    {
+      id: "por-revisar",
+      titulo: "Monto por revisar",
+      valor: formatearMoneda(
+        stats?.montoPorRevisar,
+      ),
+      descripcion: `${formatearNumero(
+        pagosPendientes,
+      )} pagos pendientes`,
+      icono: Clock3,
+      estiloIcono:
+        "bg-amber-50 text-amber-700",
+    },
+    {
+      id: "rechazados",
+      titulo: "Monto rechazado",
+      valor: formatearMoneda(
+        stats?.montoRechazado,
+      ),
+      descripcion: `${formatearNumero(
+        stats?.pagosRechazados,
+      )} pagos rechazados`,
+      icono: CircleX,
+      estiloIcono:
+        "bg-red-50 text-red-700",
+    },
+    {
+      id: "cancelados",
+      titulo: "Monto cancelado",
+      valor: formatearMoneda(
+        stats?.montoCancelado,
+      ),
+      descripcion: `${formatearNumero(
+        stats?.pagosCancelados,
+      )} pagos cancelados`,
+      icono: Ban,
+      estiloIcono:
+        "bg-gray-100 text-gray-600",
+    },
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-      {cards.map((card, idx) => (
-        <div key={idx} className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow">
-          <div className="flex items-center justify-between mb-4">
-            <div className={`p-3 rounded-xl ${card.bg}`}>
-              <card.icon className={card.color} size={24} />
+    <section
+      className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
+      aria-label="Resumen general del dashboard"
+    >
+      {cards.map((card) => {
+        const Icono = card.icono;
+
+        return (
+          <article
+            key={card.id}
+            className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-500">
+                  {card.titulo}
+                </p>
+
+                <p className="mt-2 truncate text-2xl font-extrabold text-[#0A3D62]">
+                  {card.valor}
+                </p>
+              </div>
+
+              <span
+                className={[
+                  "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
+                  card.estiloIcono,
+                ].join(" ")}
+              >
+                <Icono
+                  size={21}
+                  strokeWidth={1.9}
+                  aria-hidden="true"
+                />
+              </span>
             </div>
-            <TrendingUp size={20} className="text-green-500" />
-          </div>
-          <h3 className="text-2xl font-bold text-gray-800">{card.value}</h3>
-          <p className="text-sm text-gray-500 mt-1">{card.title}</p>
-          <p className="text-xs text-gray-400 mt-2">{card.cambio}</p>
-        </div>
-      ))}
-    </div>
+
+            <p className="mt-3 text-xs text-gray-500">
+              {card.descripcion}
+            </p>
+
+            <Tendencia
+              tendencia={card.tendencia}
+            />
+          </article>
+        );
+      })}
+    </section>
   );
 }
