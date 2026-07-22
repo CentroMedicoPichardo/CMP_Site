@@ -31,6 +31,7 @@ import {
   WalletCards,
   FileArchive,
   ShoppingBag,
+  ClipboardCheck,
 } from "lucide-react";
 import { SidebarItem } from '@/types/sidebar.types';
 import { adminRoutes, clienteRoutes, publicRoutes } from './routes';
@@ -143,6 +144,14 @@ export const adminSidebarItems: SidebarItem[] = [
         href: adminRoutes.comprasCursos,
         icon: WalletCards,
         description: "Validar compras y pagos de cursos",
+      },
+      {
+        label: "Gestión académica",
+        href:
+          adminRoutes.gestionAcademica,
+        icon: ClipboardCheck,
+        description:
+          "Sesiones, alumnos y asistencia",
       },
       {
         label: "Quiénes Somos",

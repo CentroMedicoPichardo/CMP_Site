@@ -1,4 +1,4 @@
-// src/app/(admin)/cursos/page.tsx
+// src/app/(admin)/cursos-admin/page.tsx
 'use client';
 
 import { useState, useCallback } from 'react';

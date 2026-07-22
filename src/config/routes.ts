@@ -1,5 +1,5 @@
 // src/config/routes.ts
-// Rutas públicas del sitio
+
 export const publicRoutes = {
   home: "/",
   servicios: "/servicios",
@@ -40,17 +40,19 @@ export const adminRoutes = {
   rendimiento: "/monitoreo/rendimiento",
   backups: "/backups",
   configuracion: "/configuracion",
-  // ========== SABER PEDIÁTRICO ==========
   saberPediatricoArticulos: "/saber-pediatrico/articulos",
   saberPediatricoVideos: "/saber-pediatrico/videos",
   saberPediatricoDocumentos: "/saber-pediatrico/documentos",
   saberPediatricoEncuestas: "/saber-pediatrico/encuestas",
-  // ========== CURSOS DASHBOARD ==========
   cursosDashboard: (id: number) => `/cursos-admin/${id}/dashboard`,
   comprasCursos: "/compras-cursos",
-};
+  gestionAcademica: "/gestion-academica",
+  gestionAcademicaCurso: (id: number) =>
+    `/gestion-academica/cursos/${id}`,
+  gestionAcademicaAsistencia: (id: number) =>
+    `/gestion-academica/sesiones/${id}/asistencia`,
+} as const;
 
-// Estructura para menús
 export const navigationItems = [
   { label: "Inicio", href: publicRoutes.home },
   { label: "Servicios", href: publicRoutes.servicios },
