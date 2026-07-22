@@ -280,6 +280,8 @@ export async function GET() {
                 comprasCursos.idcompra,
               folioCompra:
                 comprasCursos.foliocompra,
+              usuarioId:
+                comprasCursos.idusuario,
               cursoId:
                 comprasCursos.idcurso,
               tituloCurso:
@@ -351,6 +353,8 @@ export async function GET() {
             ),
           folioCompra:
             fila.folioCompra,
+          usuarioId:
+            fila.usuarioId,
           cursoId:
             fila.cursoId,
           tituloCurso:
@@ -1051,6 +1055,7 @@ export async function POST(
               idCompra,
               folioCompra:
                 compraInsertada.folioCompra,
+              usuarioId,
               cursoId:
                 curso.idCurso,
               tituloCurso:
