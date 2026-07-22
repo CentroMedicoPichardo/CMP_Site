@@ -1,85 +1,241 @@
-// src/app/(admin)/saber-pediatrico/layout.tsx
 "use client";
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { Container } from '@/components/ui/Container';
-import { FileText, Youtube, FileArchive, FileQuestion } from 'lucide-react';
+import type { ReactNode } from "react";
 
-const tabs = [
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+import {
+  BookOpenText,
+  ClipboardList,
+  FileText,
+  FolderArchive,
+  LibraryBig,
+  Video,
+} from "lucide-react";
+
+interface SaberPediatricoLayoutProps {
+  children: ReactNode;
+}
+
+const TABS = [
   {
     label: "Artículos",
     href: "/saber-pediatrico/articulos",
-    icon: FileText,
-    description: "Gestionar artículos educativos"
+    description: "Contenido educativo",
+    tipo: "articulo" as const,
   },
   {
     label: "Videos",
     href: "/saber-pediatrico/videos",
-    icon: Youtube,
-    description: "Gestionar videos de YouTube"
+    description: "Material audiovisual",
+    tipo: "video" as const,
   },
   {
     label: "Documentos",
     href: "/saber-pediatrico/documentos",
-    icon: FileArchive,
-    description: "Gestionar documentos descargables"
+    description: "Archivos descargables",
+    tipo: "documento" as const,
   },
   {
     label: "Encuestas",
     href: "/saber-pediatrico/encuestas",
-    icon: FileQuestion,
-    description: "Gestionar encuestas"
-  }
+    description: "Formularios externos",
+    tipo: "encuesta" as const,
+  },
 ];
+
+type TipoTab =
+  (typeof TABS)[number]["tipo"];
+
+function cn(
+  ...clases: Array<
+    string | false | null | undefined
+  >
+): string {
+  return clases.filter(Boolean).join(" ");
+}
+
+function IconoTab({
+  tipo,
+  size = 18,
+}: {
+  tipo: TipoTab;
+  size?: number;
+}) {
+  if (tipo === "video") {
+    return (
+      <Video
+        size={size}
+        aria-hidden="true"
+      />
+    );
+  }
+
+  if (tipo === "documento") {
+    return (
+      <FolderArchive
+        size={size}
+        aria-hidden="true"
+      />
+    );
+  }
+
+  if (tipo === "encuesta") {
+    return (
+      <ClipboardList
+        size={size}
+        aria-hidden="true"
+      />
+    );
+  }
+
+  return (
+    <FileText
+      size={size}
+      aria-hidden="true"
+    />
+  );
+}
 
 export default function SaberPediatricoLayout({
   children,
-}: {
-  children: React.ReactNode;
-}) {
+}: SaberPediatricoLayoutProps) {
   const pathname = usePathname();
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-lg border-l-4 border-[#FFC300]">
-          <div>
-            <h1 className="text-2xl font-bold text-[#0A3D62]">Saber Pediátrico</h1>
-            <p className="text-gray-600 mt-1">Gestión de contenido educativo para padres y cuidadores</p>
+    <div className="mx-auto w-full max-w-7xl p-4 sm:p-6">
+      <header className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div
+          className="h-1 w-full bg-[#FFC300]"
+          aria-hidden="true"
+        />
+
+        <div className="flex flex-col gap-5 p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#0A3D62] text-[#FFC300] shadow-sm">
+              <BookOpenText
+                size={23}
+                strokeWidth={1.9}
+                aria-hidden="true"
+              />
+            </span>
+
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">
+                Administración de contenido
+              </p>
+
+              <h1 className="mt-1 whitespace-normal break-words text-xl font-extrabold leading-tight text-[#0A3D62] sm:text-2xl">
+                Saber Pediátrico
+              </h1>
+
+              <p className="mt-2 max-w-2xl whitespace-normal break-words text-sm leading-6 text-gray-500">
+                Gestiona el contenido educativo
+                dirigido a padres, familiares y
+                cuidadores.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex min-h-14 items-center gap-3 rounded-xl border border-gray-200 bg-[#F8FAFC] px-4 py-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-[#0A3D62] shadow-sm">
+              <LibraryBig
+                size={17}
+                strokeWidth={1.9}
+                aria-hidden="true"
+              />
+            </span>
+
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                Módulo institucional
+              </p>
+
+              <p className="mt-0.5 whitespace-normal break-words text-sm font-extrabold text-[#0A3D62]">
+                Biblioteca educativa
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Tabs de navegación */}
-        <div className="mt-6 border-b border-gray-200">
-          <nav className="flex flex-wrap gap-1">
-            {tabs.map((tab) => {
-              const isActive = pathname === tab.href;
-              const Icon = tab.icon;
-              return (
-                <Link
-                  key={tab.href}
-                  href={tab.href}
-                  className={`
-                    flex items-center gap-2 px-5 py-3 rounded-t-xl transition-all duration-200
-                    ${isActive 
-                      ? 'bg-white text-[#0A3D62] border-t-2 border-l-2 border-r-2 border-gray-200 border-b-white -mb-px' 
-                      : 'text-gray-500 hover:text-[#0A3D62] hover:bg-gray-50'
-                    }
-                  `}
-                >
-                  <Icon size={18} className={isActive ? 'text-[#FFC300]' : ''} />
-                  <span className="font-medium">{tab.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
-      </div>
+        <nav
+          aria-label="Secciones de Saber Pediátrico"
+          className="border-t border-gray-100 bg-[#F8FAFC] px-3 py-3 sm:px-5"
+        >
+          <div className="overflow-x-auto">
+            <div className="flex min-w-max gap-2">
+              {TABS.map((tab) => {
+                const isActive =
+                  pathname === tab.href ||
+                  pathname.startsWith(
+                    `${tab.href}/`,
+                  );
 
-      {/* Contenido de la página */}
-      {children}
+                return (
+                  <Link
+                    key={tab.href}
+                    href={tab.href}
+                    aria-current={
+                      isActive
+                        ? "page"
+                        : undefined
+                    }
+                    className={cn(
+                      "group relative flex min-h-14 min-w-40 items-center gap-3 rounded-xl border px-4 py-2.5 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC300] focus-visible:ring-offset-2",
+                      isActive
+                        ? "border-[#0A3D62] bg-[#0A3D62] text-white shadow-sm"
+                        : "border-gray-200 bg-white text-gray-600 hover:border-[#FFC300] hover:bg-[#FFF9E6] hover:text-[#0A3D62]",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors",
+                        isActive
+                          ? "bg-white/10 text-[#FFC300]"
+                          : "bg-[#EAF2F8] text-[#0A3D62] group-hover:bg-[#FFC300]",
+                      )}
+                    >
+                      <IconoTab
+                        tipo={tab.tipo}
+                        size={17}
+                      />
+                    </span>
+
+                    <span className="min-w-0">
+                      <span className="block whitespace-normal break-words text-xs font-extrabold">
+                        {tab.label}
+                      </span>
+
+                      <span
+                        className={cn(
+                          "mt-0.5 block whitespace-normal break-words text-[10px] font-semibold",
+                          isActive
+                            ? "text-white/65"
+                            : "text-gray-400",
+                        )}
+                      >
+                        {tab.description}
+                      </span>
+                    </span>
+
+                    {isActive && (
+                      <span
+                        className="absolute inset-x-4 bottom-0 h-0.5 rounded-full bg-[#FFC300]"
+                        aria-hidden="true"
+                      />
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </nav>
+      </header>
+
+      <main className="mt-6 min-w-0">
+        {children}
+      </main>
     </div>
   );
 }
