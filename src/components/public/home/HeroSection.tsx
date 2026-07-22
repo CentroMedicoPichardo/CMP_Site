@@ -1,144 +1,242 @@
-// src/components/public/home/HeroSection.tsx
-import Link from 'next/link';
-import Image from 'next/image';
-import { Heart, Stethoscope, Calendar, Users, Clock, MapPin } from 'lucide-react';
-import { Container } from '@/components/ui/Container';
-import { Button } from '@/components/ui/Button';
-import { publicRoutes } from '@/config/routes';
+import Image from "next/image";
+import Link from "next/link";
+import {
+  ArrowRight,
+  Clock3,
+  HeartPulse,
+  MapPinned,
+  ShieldCheck,
+  Stethoscope,
+  UsersRound,
+} from "lucide-react";
+
+import { Container } from "@/components/ui/Container";
+import { publicRoutes } from "@/config/routes";
+
+const indicadores = [
+  {
+    valor: "15+",
+    texto: "Años de experiencia",
+  },
+  {
+    valor: "8",
+    texto: "Especialidades",
+  },
+  {
+    valor: "24/7",
+    texto: "Atención de urgencias",
+  },
+];
 
 export function HeroSection() {
   return (
-    <section className="relative bg-gradient-to-br from-[#0A3D62] via-[#0A3D62] to-[#1A4F7A] text-white overflow-hidden">
-      {/* Imagen de fondo semi-transparente - Capa más baja */}
-      <div className="absolute inset-0 z-0">
+    <section className="relative isolate overflow-hidden bg-[#061C2E] text-white">
+      {/* Imagen principal */}
+      <div className="absolute inset-0 -z-30">
         <Image
           src="/herodoctorniños.png"
-          alt="Doctor atendiendo niños"
+          alt="Médico brindando atención pediátrica"
           fill
-          className="object-cover opacity-30"
           priority
+          sizes="100vw"
+          className="object-cover object-[62%_center] sm:object-[68%_center] lg:object-center"
         />
       </div>
 
-      {/* Overlay oscuro para mejorar legibilidad - Capa media */}
-      <div className="absolute inset-0 z-[1] bg-black/40"></div>
+      {/* Capas de contraste */}
+      <div
+        className="absolute inset-0 -z-20 bg-[#061C2E]/35"
+        aria-hidden="true"
+      />
 
-      {/* Patrón de fondo con burbujas decorativas - Capa superior de decoración */}
-      <div className="absolute inset-0 z-[2] pointer-events-none">
-        <div className="absolute top-0 -left-4 w-72 h-72 bg-[#FFC300] rounded-full mix-blend-multiply filter blur-xl animate-blob opacity-30"></div>
-        <div className="absolute top-0 -right-4 w-72 h-72 bg-[#2D6A9F] rounded-full mix-blend-multiply filter blur-xl animate-blob animation-delay-2000 opacity-30"></div>
-        <div className="absolute -bottom-8 left-20 w-72 h-72 bg-[#FFC300] rounded-full mix-blend-multiply filter blur-xl animate-blob animation-delay-4000 opacity-30"></div>
-      </div>
+      <div
+        className="absolute inset-0 -z-20 bg-gradient-to-r from-[#061C2E]/98 via-[#0A3D62]/90 to-[#0A3D62]/20"
+        aria-hidden="true"
+      />
 
-      {/* Patrón de puntos médicos decorativo */}
-      <div className="absolute inset-0 z-[2] opacity-10 pointer-events-none">
-        <div className="absolute inset-0" style={{
-          backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 1px)`,
-          backgroundSize: '40px 40px'
-        }}></div>
-      </div>
+      <div
+        className="absolute inset-0 -z-20 bg-gradient-to-t from-[#061C2E]/75 via-transparent to-[#061C2E]/25"
+        aria-hidden="true"
+      />
+
+      {/* Decoración */}
+      <div
+        className="pointer-events-none absolute -left-20 top-10 -z-10 h-52 w-52 rounded-full bg-[#FFC300]/15 blur-3xl"
+        aria-hidden="true"
+      />
+
+      <div
+        className="pointer-events-none absolute -right-20 bottom-0 -z-10 h-56 w-56 rounded-full bg-white/10 blur-3xl"
+        aria-hidden="true"
+      />
+
+      <div
+        className="absolute inset-0 -z-10 opacity-20 [background-image:radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.3)_1px,transparent_0)] [background-size:34px_34px]"
+        aria-hidden="true"
+      />
 
       <Container>
-        <div className="relative z-10 py-20 md:py-28">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            {/* Contenido izquierdo */}
-            <div className="space-y-6">
-              <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full">
-                <Heart size={16} className="text-[#FFC300]" />
-                <span className="text-sm font-medium">Atención pediátrica de excelencia</span>
-              </div>
-              
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight">
-                Bienvenido al{' '}
-                <span className="text-[#FFC300] block mt-2">Centro Médico Pichardo</span>
-              </h1>
-              
-              <p className="text-xl text-white/90 leading-relaxed max-w-xl">
-                Atención pediátrica de excelencia liderada por el{' '}
-                <strong className="text-[#FFC300]">Dr. Francisco Javier Moreno Pichardo</strong>.
-              </p>
+        <div className="relative py-11 sm:py-14 lg:py-16">
+          <div className="max-w-3xl text-center sm:text-left">
+            {/* Etiqueta */}
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-white backdrop-blur-md">
+              <HeartPulse
+                size={13}
+                className="text-[#FFC300]"
+                strokeWidth={2}
+                aria-hidden="true"
+              />
 
-              <div className="flex flex-wrap gap-4 pt-4">
-                <Link href={publicRoutes.servicios}>
-                  <Button className="bg-[#FFC300] hover:bg-[#FFD700] text-[#0A3D62] font-semibold px-8 py-4 text-lg rounded-xl shadow-lg shadow-[#FFC300]/20 hover:shadow-xl transition-all">
-                    <Heart size={20} className="mr-2" />
-                    Nuestros Servicios
-                  </Button>
-                </Link>
-                <Link href={publicRoutes.directorioMedico}>
-                  <Button variant="outline" className="border-2 border-white text-white hover:bg-white/10 px-8 py-4 text-lg rounded-xl">
-                    <Stethoscope size={20} className="mr-2" />
-                    Directorio Médico
-                  </Button>
-                </Link>
+              Atención pediátrica de excelencia
+            </span>
+
+            {/* Título */}
+            <h1 className="mt-4 text-3xl font-extrabold leading-[1.1] tracking-tight sm:text-4xl lg:text-5xl">
+              Cuidamos la salud de quienes más{" "}
+              <span className="relative inline-block text-[#FFC300]">
+                amas
+                <span
+                  className="absolute -bottom-1 left-0 h-0.5 w-full rounded-full bg-[#FFC300]/60"
+                  aria-hidden="true"
+                />
+              </span>
+            </h1>
+
+            {/* Descripción */}
+            <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-white/80 sm:mx-0 sm:text-base lg:text-lg lg:leading-7">
+              Bienvenido al Centro Médico Pichardo. Atención
+              pediátrica cercana, profesional y humana, liderada por
+              el Dr. Francisco Javier Moreno Pichardo.
+            </p>
+
+            {/* Acciones */}
+            <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row sm:justify-start">
+              <Link
+                href={publicRoutes.servicios}
+                className="group inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#FFC300] px-5 py-3 text-sm font-extrabold text-[#0A3D62] shadow-[0_10px_25px_rgba(255,195,0,0.2)] transition-all hover:bg-[#FFD84D] focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0A3D62]"
+              >
+                <HeartPulse
+                  size={17}
+                  strokeWidth={2}
+                  aria-hidden="true"
+                />
+
+                Nuestros servicios
+
+                <ArrowRight
+                  size={16}
+                  className="transition-transform group-hover:translate-x-0.5"
+                  aria-hidden="true"
+                />
+              </Link>
+
+              <Link
+                href={publicRoutes.directorioMedico}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/35 bg-white/10 px-5 py-3 text-sm font-bold text-white backdrop-blur-sm transition-colors hover:border-white/60 hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC300]"
+              >
+                <Stethoscope
+                  size={17}
+                  strokeWidth={1.9}
+                  aria-hidden="true"
+                />
+
+                Directorio médico
+              </Link>
+            </div>
+
+            {/* Indicadores */}
+            <div className="mt-7 grid grid-cols-3 gap-2.5 sm:max-w-2xl sm:gap-3">
+              {indicadores.map((indicador) => (
+                <div
+                  key={indicador.texto}
+                  className="rounded-xl border border-white/15 bg-white/10 px-2 py-3 text-center backdrop-blur-md sm:px-3 sm:text-left"
+                >
+                  <p className="text-xl font-extrabold leading-none text-[#FFC300] sm:text-2xl">
+                    {indicador.valor}
+                  </p>
+
+                  <p className="mt-1 text-[9px] font-semibold leading-4 text-white/65 sm:text-[11px]">
+                    {indicador.texto}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {/* Información rápida */}
+            <div className="mt-4 flex flex-col gap-2 rounded-2xl border border-white/15 bg-[#061C2E]/45 p-3 backdrop-blur-md sm:max-w-2xl sm:flex-row sm:items-center sm:gap-4">
+              <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#FFC300] text-[#0A3D62]">
+                  <Clock3
+                    size={15}
+                    strokeWidth={1.9}
+                    aria-hidden="true"
+                  />
+                </span>
+
+                <div className="min-w-0 text-left">
+                  <p className="text-[9px] font-bold uppercase tracking-[0.13em] text-white/50">
+                    Horario
+                  </p>
+
+                  <p className="truncate text-xs font-semibold text-white/90">
+                    Lun–Vie 8:00–20:00 · Sáb 8:00–14:00
+                  </p>
+                </div>
               </div>
 
-              {/* Stats rápidas */}
-              <div className="grid grid-cols-3 gap-6 pt-8">
-                <div className="text-center lg:text-left">
-                  <div className="text-3xl font-bold text-[#FFC300]">15+</div>
-                  <div className="text-sm text-white/70">Años de experiencia</div>
-                </div>
-                <div className="text-center lg:text-left">
-                  <div className="text-3xl font-bold text-[#FFC300]">8</div>
-                  <div className="text-sm text-white/70">Especialidades</div>
-                </div>
-                <div className="text-center lg:text-left">
-                  <div className="text-3xl font-bold text-[#FFC300]">24/7</div>
-                  <div className="text-sm text-white/70">Urgencias</div>
+              <div
+                className="hidden h-8 w-px bg-white/15 sm:block"
+                aria-hidden="true"
+              />
+
+              <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-[#FFC300]">
+                  <MapPinned
+                    size={15}
+                    strokeWidth={1.9}
+                    aria-hidden="true"
+                  />
+                </span>
+
+                <div className="min-w-0 text-left">
+                  <p className="text-[9px] font-bold uppercase tracking-[0.13em] text-white/50">
+                    Ubicación
+                  </p>
+
+                  <p className="truncate text-xs font-semibold text-white/90">
+                    Huejutla de Reyes, Hidalgo
+                  </p>
                 </div>
               </div>
 
-              {/* Información de contacto rápida */}
-              <div className="flex flex-col sm:flex-row gap-4 pt-4 text-sm text-white/80">
-                <div className="flex items-center gap-2">
-                  <Clock size={16} className="text-[#FFC300]" />
-                  <span>Lun-Vie: 8am-8pm | Sáb: 8am-2pm</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <MapPin size={16} className="text-[#FFC300]" />
-                  <span>Huejutla, Hidalgo</span>
-                </div>
-              </div>
+              <ShieldCheck
+                size={18}
+                className="hidden shrink-0 text-emerald-400 sm:block"
+                strokeWidth={1.9}
+                aria-hidden="true"
+              />
             </div>
           </div>
         </div>
       </Container>
 
-      {/* Ola decorativa inferior */}
-      <div className="absolute bottom-0 left-0 right-0 z-10">
-        <svg viewBox="0 0 1440 120" className="relative block w-full h-[60px] text-white" preserveAspectRatio="none">
-          <path d="M0,32L48,37.3C96,43,192,53,288,58.7C384,64,480,64,576,58.7C672,53,768,43,864,42.7C960,43,1056,53,1152,58.7C1248,64,1344,64,1392,64L1440,64L1440,120L1392,120C1344,120,1248,120,1152,120C1056,120,960,120,864,120C768,120,672,120,576,120C480,120,384,120,288,120C192,120,96,120,48,120L0,120Z" 
-            fill="currentColor" fillOpacity="1"></path>
-        </svg>
-      </div>
+      {/* Acabado inferior */}
+      <div
+        className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-transparent via-[#FFC300] to-transparent"
+        aria-hidden="true"
+      />
 
-      {/* Animaciones CSS */}
-      <style jsx>{`
-        @keyframes blob {
-          0% {
-            transform: translate(0px, 0px) scale(1);
-          }
-          33% {
-            transform: translate(30px, -50px) scale(1.1);
-          }
-          66% {
-            transform: translate(-20px, 20px) scale(0.9);
-          }
-          100% {
-            transform: translate(0px, 0px) scale(1);
-          }
-        }
-        .animate-blob {
-          animation: blob 7s infinite;
-        }
-        .animation-delay-2000 {
-          animation-delay: 2s;
-        }
-        .animation-delay-4000 {
-          animation-delay: 4s;
-        }
-      `}</style>
+      <div
+        className="absolute bottom-0 right-5 hidden items-center gap-2 rounded-t-xl border-x border-t border-white/10 bg-[#061C2E]/70 px-4 py-2 text-[10px] font-semibold text-white/65 backdrop-blur-md lg:flex"
+        aria-hidden="true"
+      >
+        <UsersRound
+          size={14}
+          className="text-[#FFC300]"
+        />
+
+        Atención cercana para toda la familia
+      </div>
     </section>
   );
 }

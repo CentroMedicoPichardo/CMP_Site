@@ -1,17 +1,38 @@
-// src/components/public/auth/RegisterForm.tsx
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Mail, Lock, Eye, EyeOff, Loader2, User, Phone, CheckCircle, XCircle, Calendar, Users } from 'lucide-react';
-import axios from 'axios';
-import { toast } from 'react-toastify';
-import { RegisterSocialButtons } from './RegisterSocialButtons';
-import { VerifyCodeForm } from './VerifyCodeForm';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import Link from "next/link";
+import {
+  CalendarDays,
+  CheckCircle2,
+  ChevronDown,
+  Eye,
+  EyeOff,
+  Loader2,
+  LockKeyhole,
+  Mail,
+  Phone,
+  ShieldCheck,
+  UserPlus,
+  UserRound,
+  UsersRound,
+  XCircle,
+} from "lucide-react";
+import axios from "axios";
+import { toast } from "react-toastify";
+
+import { RegisterSocialButtons } from "./RegisterSocialButtons";
+import { VerifyCodeForm } from "./VerifyCodeForm";
 
 interface RegisterFormProps {
-  onRegistroExitoso?: () => void; // 👈 Nueva prop
+  onRegistroExitoso?: () => void;
 }
 
 interface RegisterData {
@@ -19,7 +40,7 @@ interface RegisterData {
   apellidoPaterno: string;
   apellidoMaterno: string;
   edad: string;
-  sexo: 'masculino' | 'femenino' | 'otro' | '';
+  sexo: "masculino" | "femenino" | "otro" | "";
   correo: string;
   telefono: string;
   contrasena: string;
@@ -39,361 +60,677 @@ interface Errores {
   terminos?: string;
 }
 
-export function RegisterForm({ onRegistroExitoso }: RegisterFormProps = {}) {
-  const router = useRouter();
-  const [registerData, setRegisterData] = useState<RegisterData>({
-    nombre: '',
-    apellidoPaterno: '',
-    apellidoMaterno: '',
-    edad: '',
-    sexo: '',
-    correo: '',
-    telefono: '',
-    contrasena: '',
-    confirmarContrasena: ''
-  });
-  const [errores, setErrores] = useState<Errores>({});
-  const [mostrarContrasena, setMostrarContrasena] = useState(false);
-  const [mostrarConfirmContrasena, setMostrarConfirmContrasena] = useState(false);
-  const [cargando, setCargando] = useState(false);
-  const [passwordStrength, setPasswordStrength] = useState(0);
-  const [isPasswordValid, setIsPasswordValid] = useState(false);
-  const [aceptaTerminos, setAceptaTerminos] = useState(false);
-  const [emailDisponible, setEmailDisponible] = useState<boolean | null>(null);
-  const [verificandoEmail, setVerificandoEmail] = useState(false);
-  const [step, setStep] = useState<'form' | 'verify'>('form');
-  const [emailRegistro, setEmailRegistro] = useState('');
-  const [nombreRegistro, setNombreRegistro] = useState('');
+interface CheckEmailResponse {
+  disponible?: boolean;
+}
 
-  // Estados para campos enfocados
-  const [nombreFocused, setNombreFocused] = useState(false);
-  const [apellidoPaternoFocused, setApellidoPaternoFocused] = useState(false);
-  const [apellidoMaternoFocused, setApellidoMaternoFocused] = useState(false);
-  const [edadFocused, setEdadFocused] = useState(false);
-  const [sexoFocused, setSexoFocused] = useState(false);
-  const [telefonoFocused, setTelefonoFocused] = useState(false);
-  const [correoFocused, setCorreoFocused] = useState(false);
-  const [passwordFocused, setPasswordFocused] = useState(false);
-  const [confirmFocused, setConfirmFocused] = useState(false);
+interface SendOtpResponse {
+  success?: boolean;
+  message?: string;
+}
 
-  // Verificar si el correo ya está registrado (debounce)
+interface ApiErrorResponse {
+  message?: string;
+  error?: string;
+}
+
+interface RequisitoContrasena {
+  etiqueta: string;
+  cumple: boolean;
+}
+
+const ERROR_CORREO_REGISTRADO =
+  "Este correo ya está registrado.";
+
+const SECUENCIAS_NUMERICAS = [
+  "012",
+  "123",
+  "234",
+  "345",
+  "456",
+  "567",
+  "678",
+  "789",
+  "890",
+];
+
+const SECUENCIAS_LETRAS = [
+  "abc",
+  "bcd",
+  "cde",
+  "def",
+  "efg",
+  "fgh",
+  "ghi",
+  "hij",
+  "ijk",
+  "jkl",
+  "klm",
+  "lmn",
+  "mno",
+  "nop",
+  "opq",
+  "pqr",
+  "qrs",
+  "rst",
+  "stu",
+  "tuv",
+  "uvw",
+  "vwx",
+  "wxy",
+  "xyz",
+];
+
+const FORMULARIO_INICIAL: RegisterData = {
+  nombre: "",
+  apellidoPaterno: "",
+  apellidoMaterno: "",
+  edad: "",
+  sexo: "",
+  correo: "",
+  telefono: "",
+  contrasena: "",
+  confirmarContrasena: "",
+};
+
+function cn(
+  ...clases: Array<string | false | null | undefined>
+): string {
+  return clases.filter(Boolean).join(" ");
+}
+
+function esCorreoValido(correo: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo);
+}
+
+function esNombreValido(valor: string): boolean {
+  return /^[\p{L}\s'-]+$/u.test(valor);
+}
+
+function tieneSecuenciaNumerica(
+  password: string,
+): boolean {
+  return SECUENCIAS_NUMERICAS.some((secuencia) =>
+    password.includes(secuencia),
+  );
+}
+
+function tieneSecuenciaLetras(
+  password: string,
+): boolean {
+  const passwordMinuscula =
+    password.toLocaleLowerCase("es-MX");
+
+  return SECUENCIAS_LETRAS.some((secuencia) =>
+    passwordMinuscula.includes(secuencia),
+  );
+}
+
+function analizarContrasena(password: string) {
+  const requisitos: RequisitoContrasena[] = [
+    {
+      etiqueta: "Mínimo 8 caracteres",
+      cumple: password.length >= 8,
+    },
+    {
+      etiqueta: "Una letra mayúscula",
+      cumple: /[A-Z]/.test(password),
+    },
+    {
+      etiqueta: "Una letra minúscula",
+      cumple: /[a-z]/.test(password),
+    },
+    {
+      etiqueta: "Un número",
+      cumple: /[0-9]/.test(password),
+    },
+    {
+      etiqueta: "Un carácter especial",
+      cumple: /[^a-zA-Z0-9]/.test(password),
+    },
+    {
+      etiqueta: "Sin secuencias numéricas",
+      cumple: !tieneSecuenciaNumerica(password),
+    },
+    {
+      etiqueta: "Sin secuencias de letras",
+      cumple: !tieneSecuenciaLetras(password),
+    },
+    {
+      etiqueta: "Sin 4 caracteres repetidos",
+      cumple: !/(.)\1{3,}/.test(password),
+    },
+  ];
+
+  const errores = requisitos
+    .filter((requisito) => !requisito.cumple)
+    .map((requisito) => requisito.etiqueta);
+
+  let puntos = 0;
+
+  if (password.length >= 8) puntos += 1;
+  if (/[a-z]/.test(password)) puntos += 1;
+  if (/[A-Z]/.test(password)) puntos += 1;
+  if (/[0-9]/.test(password)) puntos += 1;
+  if (/[^a-zA-Z0-9]/.test(password)) puntos += 1;
+
+  if (
+    tieneSecuenciaNumerica(password) ||
+    tieneSecuenciaLetras(password) ||
+    /(.)\1{3,}/.test(password)
+  ) {
+    puntos = Math.max(puntos - 1, 0);
+  }
+
+  let nivel = 0;
+
+  if (password) {
+    if (puntos <= 2) {
+      nivel = 1;
+    } else if (puntos === 3) {
+      nivel = 2;
+    } else if (puntos === 4) {
+      nivel = 3;
+    } else {
+      nivel = 4;
+    }
+  }
+
+  return {
+    requisitos,
+    errores,
+    esValida: errores.length === 0,
+    nivel,
+  };
+}
+
+function obtenerFortaleza(nivel: number) {
+  if (nivel === 1) {
+    return {
+      texto: "Muy débil",
+      textoClase: "text-red-600",
+      barraClase: "bg-red-500",
+    };
+  }
+
+  if (nivel === 2) {
+    return {
+      texto: "Débil",
+      textoClase: "text-orange-600",
+      barraClase: "bg-orange-500",
+    };
+  }
+
+  if (nivel === 3) {
+    return {
+      texto: "Buena",
+      textoClase: "text-amber-600",
+      barraClase: "bg-amber-500",
+    };
+  }
+
+  if (nivel === 4) {
+    return {
+      texto: "Fuerte",
+      textoClase: "text-emerald-600",
+      barraClase: "bg-emerald-500",
+    };
+  }
+
+  return {
+    texto: "",
+    textoClase: "text-gray-400",
+    barraClase: "bg-gray-200",
+  };
+}
+
+export function RegisterForm({
+  onRegistroExitoso,
+}: RegisterFormProps = {}) {
+  const [registerData, setRegisterData] =
+    useState<RegisterData>(FORMULARIO_INICIAL);
+
+  const [errores, setErrores] =
+    useState<Errores>({});
+
+  const [
+    mostrarContrasena,
+    setMostrarContrasena,
+  ] = useState(false);
+
+  const [
+    mostrarConfirmContrasena,
+    setMostrarConfirmContrasena,
+  ] = useState(false);
+
+  const [aceptaTerminos, setAceptaTerminos] =
+    useState(false);
+
+  const [emailDisponible, setEmailDisponible] =
+    useState<boolean | null>(null);
+
+  const [verificandoEmail, setVerificandoEmail] =
+    useState(false);
+
+  const [cargando, setCargando] =
+    useState(false);
+
+  const [step, setStep] =
+    useState<"form" | "verify">("form");
+
+  const [emailRegistro, setEmailRegistro] =
+    useState("");
+
+  const analisisContrasena = useMemo(
+    () =>
+      analizarContrasena(
+        registerData.contrasena,
+      ),
+    [registerData.contrasena],
+  );
+
+  const fortaleza = obtenerFortaleza(
+    analisisContrasena.nivel,
+  );
+
+  const contrasenasCoinciden =
+    Boolean(registerData.confirmarContrasena) &&
+    registerData.contrasena ===
+      registerData.confirmarContrasena;
+
   useEffect(() => {
-    const delayDebounce = setTimeout(() => {
-      if (registerData.correo && /\S+@\S+\.\S+/.test(registerData.correo)) {
-        console.log("🔍 Verificando disponibilidad del email:", registerData.correo);
-        verificarEmailDisponible();
-      } else {
-        setEmailDisponible(null);
-      }
-    }, 500);
+    const correo = registerData.correo
+      .trim()
+      .toLocaleLowerCase("es-MX");
 
-    return () => clearTimeout(delayDebounce);
+    setEmailDisponible(null);
+    setVerificandoEmail(false);
+
+    if (!esCorreoValido(correo)) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const timer = window.setTimeout(async () => {
+      setVerificandoEmail(true);
+
+      try {
+        const respuesta =
+          await axios.get<CheckEmailResponse>(
+            "/api/auth/check-email",
+            {
+              params: {
+                email: correo,
+              },
+              signal: controller.signal,
+            },
+          );
+
+        const disponible =
+          respuesta.data.disponible === true;
+
+        setEmailDisponible(disponible);
+
+        if (!disponible) {
+          setErrores((actual) => ({
+            ...actual,
+            correo: ERROR_CORREO_REGISTRADO,
+          }));
+
+          return;
+        }
+
+        setErrores((actual) => {
+          if (
+            actual.correo !==
+            ERROR_CORREO_REGISTRADO
+          ) {
+            return actual;
+          }
+
+          return {
+            ...actual,
+            correo: undefined,
+          };
+        });
+      } catch (error: unknown) {
+        if (
+          axios.isCancel(error) ||
+          controller.signal.aborted
+        ) {
+          return;
+        }
+
+        console.error(
+          "Error al verificar el correo:",
+          error,
+        );
+
+        setEmailDisponible(null);
+      } finally {
+        if (!controller.signal.aborted) {
+          setVerificandoEmail(false);
+        }
+      }
+    }, 550);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
   }, [registerData.correo]);
 
-  const verificarEmailDisponible = async () => {
-    setVerificandoEmail(true);
-    try {
-      console.log("📡 GET /api/auth/check-email?email=", registerData.correo);
-      const res = await axios.get(`/api/auth/check-email?email=${encodeURIComponent(registerData.correo)}`);
-      console.log("📥 Respuesta check-email:", res.data);
-      setEmailDisponible(res.data.disponible);
-      if (!res.data.disponible) {
-        setErrores(prev => ({ ...prev, correo: 'Este correo ya está registrado' }));
-      } else {
-        setErrores(prev => ({ ...prev, correo: undefined }));
-      }
-    } catch (error) {
-      console.error('❌ Error verificando email:', error);
+  const handleChange = (
+    event: ChangeEvent<
+      HTMLInputElement | HTMLSelectElement
+    >,
+  ) => {
+    const nombre =
+      event.target.name as keyof RegisterData;
+
+    let valor = event.target.value;
+
+    if (nombre === "telefono") {
+      valor = valor
+        .replace(/\D/g, "")
+        .slice(0, 10);
+    }
+
+    if (nombre === "edad") {
+      valor = valor
+        .replace(/\D/g, "")
+        .slice(0, 3);
+    }
+
+    setRegisterData((actual) => ({
+      ...actual,
+      [nombre]: valor,
+    }));
+
+    setErrores((actual) => ({
+      ...actual,
+      [nombre]: undefined,
+    }));
+
+    if (nombre === "correo") {
       setEmailDisponible(null);
-    } finally {
-      setVerificandoEmail(false);
     }
   };
 
-  // Función de validación de contraseña completa
-  const validatePassword = (password: string): { isValid: boolean; errors: string[] } => {
-    const errors: string[] = [];
-    
-    if (password.length < 8) errors.push('Mínimo 8 caracteres');
-    if (!/[A-Z]/.test(password)) errors.push('Al menos una letra mayúscula');
-    if (!/[a-z]/.test(password)) errors.push('Al menos una letra minúscula');
-    if (!/[0-9]/.test(password)) errors.push('Al menos un número');
-    if (!/[^a-zA-Z0-9]/.test(password)) errors.push('Al menos un carácter especial (!@#$%^&*)');
-    
-    const numberSequences = ['123', '234', '345', '456', '567', '678', '789', '890', '012'];
-    for (const seq of numberSequences) {
-      if (password.includes(seq)) {
-        errors.push(`No se permiten secuencias de números (${seq})`);
-        break;
-      }
-    }
-    
-    const letterSequences = ['abc', 'bcd', 'cde', 'def', 'efg', 'fgh', 'ghi', 'hij', 'ijk', 'jkl', 'klm', 'lmn', 'mno', 'nop', 'opq', 'pqr', 'qrs', 'rst', 'stu', 'tuv', 'uvw', 'vwx', 'wxy', 'xyz'];
-    const passwordLower = password.toLowerCase();
-    for (const seq of letterSequences) {
-      if (passwordLower.includes(seq)) {
-        errors.push(`No se permiten secuencias de letras (${seq})`);
-        break;
-      }
-    }
-    
-    if (/(.)\1{3,}/.test(password)) errors.push('No se permiten más de 3 caracteres repetidos');
-    
-    return { isValid: errors.length === 0, errors };
-  };
-
-  const calculatePasswordStrength = (password: string) => {
-    let strength = 0;
-    if (password.length >= 8) strength++;
-    if (/[a-z]/.test(password)) strength++;
-    if (/[A-Z]/.test(password)) strength++;
-    if (/[0-9]/.test(password)) strength++;
-    if (/[^a-zA-Z0-9]/.test(password)) strength++;
-    setPasswordStrength(Math.min(strength, 4));
-    
-    const validation = validatePassword(password);
-    setIsPasswordValid(validation.isValid);
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    
-    if (name === 'telefono') {
-      const soloNumeros = value.replace(/[^0-9]/g, '');
-      setRegisterData({ ...registerData, [name]: soloNumeros });
-    } else {
-      setRegisterData({ ...registerData, [name]: value });
-    }
-    
-    if (errores[name as keyof RegisterData]) {
-      setErrores({ ...errores, [name]: '' });
-    }
-
-    if (name === 'contrasena') {
-      calculatePasswordStrength(value);
-    }
-  };
-
-  const validateForm = () => {
+  const validarFormulario = (): Errores => {
     const nuevosErrores: Errores = {};
 
-    if (!registerData.nombre) nuevosErrores.nombre = 'Ingresa tu nombre';
-    else if (registerData.nombre.length < 2) nuevosErrores.nombre = 'El nombre debe tener al menos 2 caracteres';
-    else if (!/^[a-zA-ZáéíóúñÑ\s]+$/.test(registerData.nombre)) nuevosErrores.nombre = 'El nombre solo puede contener letras';
+    const nombre = registerData.nombre.trim();
+    const apellidoPaterno =
+      registerData.apellidoPaterno.trim();
+    const apellidoMaterno =
+      registerData.apellidoMaterno.trim();
+    const correo = registerData.correo
+      .trim()
+      .toLocaleLowerCase("es-MX");
 
-    if (!registerData.apellidoPaterno) nuevosErrores.apellidoPaterno = 'Ingresa tu apellido paterno';
-    else if (registerData.apellidoPaterno.length < 2) nuevosErrores.apellidoPaterno = 'Apellido paterno inválido';
-    else if (!/^[a-zA-ZáéíóúñÑ\s]+$/.test(registerData.apellidoPaterno)) nuevosErrores.apellidoPaterno = 'Apellido paterno solo puede contener letras';
-
-    if (!registerData.apellidoMaterno) nuevosErrores.apellidoMaterno = 'Ingresa tu apellido materno';
-    else if (registerData.apellidoMaterno.length < 2) nuevosErrores.apellidoMaterno = 'Apellido materno inválido';
-    else if (!/^[a-zA-ZáéíóúñÑ\s]+$/.test(registerData.apellidoMaterno)) nuevosErrores.apellidoMaterno = 'Apellido materno solo puede contener letras';
-
-    if (!registerData.edad) nuevosErrores.edad = 'Ingresa tu edad';
-    else {
-      const edadNum = parseInt(registerData.edad);
-      if (isNaN(edadNum)) nuevosErrores.edad = 'Edad inválida';
-      else if (edadNum < 18) nuevosErrores.edad = 'Debes ser mayor de 18 años para registrarte';
-      else if (edadNum > 100) nuevosErrores.edad = 'Edad máxima 100 años';
+    if (!nombre) {
+      nuevosErrores.nombre =
+        "Ingresa tu nombre.";
+    } else if (nombre.length < 2) {
+      nuevosErrores.nombre =
+        "Debe tener al menos 2 caracteres.";
+    } else if (!esNombreValido(nombre)) {
+      nuevosErrores.nombre =
+        "Utiliza únicamente letras.";
     }
 
-    if (!registerData.sexo) nuevosErrores.sexo = 'Selecciona tu sexo';
+    if (!apellidoPaterno) {
+      nuevosErrores.apellidoPaterno =
+        "Ingresa tu apellido paterno.";
+    } else if (apellidoPaterno.length < 2) {
+      nuevosErrores.apellidoPaterno =
+        "El apellido es demasiado corto.";
+    } else if (
+      !esNombreValido(apellidoPaterno)
+    ) {
+      nuevosErrores.apellidoPaterno =
+        "Utiliza únicamente letras.";
+    }
 
-    if (!registerData.telefono) nuevosErrores.telefono = 'Ingresa tu teléfono';
-    else if (!/^[0-9]{10}$/.test(registerData.telefono)) nuevosErrores.telefono = 'Teléfono inválido (debe tener 10 dígitos)';
+    if (!apellidoMaterno) {
+      nuevosErrores.apellidoMaterno =
+        "Ingresa tu apellido materno.";
+    } else if (apellidoMaterno.length < 2) {
+      nuevosErrores.apellidoMaterno =
+        "El apellido es demasiado corto.";
+    } else if (
+      !esNombreValido(apellidoMaterno)
+    ) {
+      nuevosErrores.apellidoMaterno =
+        "Utiliza únicamente letras.";
+    }
 
-    if (!registerData.correo) nuevosErrores.correo = 'Ingresa tu correo';
-    else if (!/\S+@\S+\.\S+/.test(registerData.correo)) nuevosErrores.correo = 'Correo inválido';
-    else if (emailDisponible === false) nuevosErrores.correo = 'Este correo ya está registrado';
-
-    if (!registerData.contrasena) {
-      nuevosErrores.contrasena = 'Ingresa una contraseña';
+    if (!registerData.edad) {
+      nuevosErrores.edad =
+        "Ingresa tu edad.";
     } else {
-      const passwordValidation = validatePassword(registerData.contrasena);
-      if (!passwordValidation.isValid) {
-        nuevosErrores.contrasena = passwordValidation.errors[0];
+      const edad = Number(registerData.edad);
+
+      if (!Number.isInteger(edad)) {
+        nuevosErrores.edad =
+          "Ingresa una edad válida.";
+      } else if (edad < 18) {
+        nuevosErrores.edad =
+          "Debes ser mayor de 18 años.";
+      } else if (edad > 100) {
+        nuevosErrores.edad =
+          "La edad máxima es 100 años.";
       }
     }
 
-    if (!registerData.confirmarContrasena) nuevosErrores.confirmarContrasena = 'Confirma tu contraseña';
-    else if (registerData.contrasena !== registerData.confirmarContrasena) {
-      nuevosErrores.confirmarContrasena = 'Las contraseñas no coinciden';
+    if (!registerData.sexo) {
+      nuevosErrores.sexo =
+        "Selecciona una opción.";
+    }
+
+    if (!registerData.telefono) {
+      nuevosErrores.telefono =
+        "Ingresa tu teléfono.";
+    } else if (
+      !/^\d{10}$/.test(registerData.telefono)
+    ) {
+      nuevosErrores.telefono =
+        "Debe contener 10 dígitos.";
+    }
+
+    if (!correo) {
+      nuevosErrores.correo =
+        "Ingresa tu correo electrónico.";
+    } else if (!esCorreoValido(correo)) {
+      nuevosErrores.correo =
+        "Ingresa un correo válido.";
+    } else if (emailDisponible === false) {
+      nuevosErrores.correo =
+        ERROR_CORREO_REGISTRADO;
+    }
+
+    if (!registerData.contrasena) {
+      nuevosErrores.contrasena =
+        "Ingresa una contraseña.";
+    } else if (!analisisContrasena.esValida) {
+      nuevosErrores.contrasena =
+        analisisContrasena.errores[0];
+    }
+
+    if (!registerData.confirmarContrasena) {
+      nuevosErrores.confirmarContrasena =
+        "Confirma tu contraseña.";
+    } else if (!contrasenasCoinciden) {
+      nuevosErrores.confirmarContrasena =
+        "Las contraseñas no coinciden.";
     }
 
     if (!aceptaTerminos) {
-      nuevosErrores.terminos = 'Debes aceptar los términos y condiciones';
+      nuevosErrores.terminos =
+        "Debes aceptar los términos y condiciones.";
     }
 
     return nuevosErrores;
   };
 
-  // Enviar código OTP
   const enviarCodigoOTP = async () => {
-    try {
-      console.log("📤 POST /api/auth/send-otp - Enviando código a:", registerData.correo);
-      const otpRes = await axios.post('/api/auth/send-otp', {
-        email: registerData.correo,
-        nombre: `${registerData.nombre} ${registerData.apellidoPaterno}`
-      });
+    const correo = registerData.correo
+      .trim()
+      .toLocaleLowerCase("es-MX");
 
-      console.log("📥 Respuesta send-otp:", otpRes.data);
+    const nombreCompleto = [
+      registerData.nombre.trim(),
+      registerData.apellidoPaterno.trim(),
+    ]
+      .filter(Boolean)
+      .join(" ");
 
-      if (otpRes.data.success) {
-        setEmailRegistro(registerData.correo);
-        setNombreRegistro(`${registerData.nombre} ${registerData.apellidoPaterno}`);
-        setStep('verify');
-        console.log("✅ Step cambiado a 'verify'");
-        toast.success('Código enviado a tu correo');
-      } else {
-        console.error("❌ send-otp no tuvo éxito:", otpRes.data);
-        toast.error(otpRes.data.message || 'Error al enviar código');
-      }
-    } catch (error: any) {
-      console.error('❌ Error enviando OTP:', error);
-      if (error.response) {
-        console.error("📥 Respuesta error:", error.response.data);
-        toast.error(error.response.data.error || error.response.data.message || 'Error al enviar código');
-      } else {
-        toast.error('Error de conexión');
-      }
-      throw error;
+    const respuesta =
+      await axios.post<SendOtpResponse>(
+        "/api/auth/send-otp",
+        {
+          email: correo,
+          nombre: nombreCompleto,
+        },
+      );
+
+    if (!respuesta.data.success) {
+      throw new Error(
+        respuesta.data.message ||
+          "No fue posible enviar el código.",
+      );
     }
+
+    setEmailRegistro(correo);
+    setStep("verify");
+
+    toast.success(
+      "Enviamos un código de verificación a tu correo.",
+    );
   };
 
-// En RegisterForm.tsx, modifica handleFinalRegister
-
- const handleFinalRegister = async (codigo: string) => {
-    console.log("🔐 handleFinalRegister llamado con código:", codigo);
-    
+  const handleFinalRegister = async (
+    codigo: string,
+  ) => {
     try {
       setCargando(true);
-      
-      const datosRegistro = {
+
+      await axios.post("/api/auth/register", {
         codigoVerificacion: codigo,
-        nombre: registerData.nombre,
-        apellidoPaterno: registerData.apellidoPaterno,
-        apellidoMaterno: registerData.apellidoMaterno,
+        nombre: registerData.nombre.trim(),
+        apellidoPaterno:
+          registerData.apellidoPaterno.trim(),
+        apellidoMaterno:
+          registerData.apellidoMaterno.trim(),
         edad: registerData.edad,
         sexo: registerData.sexo,
         telefono: registerData.telefono,
-        correo: registerData.correo,
+        correo: registerData.correo
+          .trim()
+          .toLocaleLowerCase("es-MX"),
         contrasena: registerData.contrasena,
-      };
-      
-      const res = await axios.post('/api/auth/register', datosRegistro);
-      
-      console.log("✅ Registro exitoso!");
-      
-      toast.success('¡Cuenta creada exitosamente!');
-      
-      // 👈 Llamar al callback para cambiar a login
-      if (onRegistroExitoso) {
-        onRegistroExitoso();
+      });
+
+      toast.success(
+        "¡Tu cuenta fue creada correctamente!",
+      );
+
+      onRegistroExitoso?.();
+    } catch (error: unknown) {
+      console.error(
+        "Error al completar el registro:",
+        error,
+      );
+
+      if (
+        axios.isAxiosError<ApiErrorResponse>(
+          error,
+        )
+      ) {
+        toast.error(
+          error.response?.data?.message ||
+            error.response?.data?.error ||
+            "No fue posible crear la cuenta.",
+        );
+
+        return;
       }
 
-    } catch (error: any) {
-      console.error('❌ Error registro:', error);
-      if (error.response) {
-        toast.error(error.response.data.message || 'Error en el registro');
-      } else {
-        toast.error('Error de conexión');
-      }
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Ocurrió un error inesperado.",
+      );
     } finally {
       setCargando(false);
     }
   };
-  // Submit del formulario
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
 
-    console.log("📝 handleSubmit - Validando formulario...");
+  const handleSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
 
-    const nuevosErrores = validateForm();
-    if (Object.keys(nuevosErrores).length > 0) {
-      console.log("❌ Errores de validación:", nuevosErrores);
-      setErrores(nuevosErrores);
+    if (cargando) {
       return;
     }
 
-    console.log("✅ Formulario válido. Enviando OTP...");
+    const nuevosErrores =
+      validarFormulario();
+
+    if (
+      Object.keys(nuevosErrores).length > 0
+    ) {
+      setErrores(nuevosErrores);
+
+      toast.error(
+        "Revisa los campos marcados antes de continuar.",
+      );
+
+      return;
+    }
 
     try {
       setCargando(true);
       await enviarCodigoOTP();
-      console.log("✅ OTP enviado correctamente");
-    } catch (error) {
-      console.error("❌ Error en handleSubmit:", error);
+    } catch (error: unknown) {
+      console.error(
+        "Error al enviar el código OTP:",
+        error,
+      );
+
+      if (
+        axios.isAxiosError<ApiErrorResponse>(
+          error,
+        )
+      ) {
+        toast.error(
+          error.response?.data?.message ||
+            error.response?.data?.error ||
+            "No fue posible enviar el código.",
+        );
+
+        return;
+      }
+
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No fue posible enviar el código.",
+      );
     } finally {
       setCargando(false);
     }
   };
 
-  const getPasswordStrengthColor = () => {
-    if (passwordStrength === 0) return 'bg-gray-200';
-    if (passwordStrength === 1) return 'bg-red-500';
-    if (passwordStrength === 2) return 'bg-orange-500';
-    if (passwordStrength === 3) return 'bg-yellow-500';
-    return 'bg-green-500';
-  };
-
-  const getPasswordStrengthText = () => {
-    if (passwordStrength === 0) return '';
-    if (passwordStrength === 1) return 'Muy débil';
-    if (passwordStrength === 2) return 'Débil';
-    if (passwordStrength === 3) return 'Buena';
-    return 'Fuerte';
-  };
-
-  // Componente de requisitos de contraseña
-  const PasswordRequirements = () => {
-    const requirements = [
-      { label: 'Mínimo 8 caracteres', test: (p: string) => p.length >= 8 },
-      { label: 'Al menos una mayúscula', test: (p: string) => /[A-Z]/.test(p) },
-      { label: 'Al menos una minúscula', test: (p: string) => /[a-z]/.test(p) },
-      { label: 'Al menos un número', test: (p: string) => /[0-9]/.test(p) },
-      { label: 'Al menos un carácter especial (!@#$%^&*)', test: (p: string) => /[^a-zA-Z0-9]/.test(p) },
-      { label: 'Sin secuencias de números (123, 234, etc.)', test: (p: string) => {
-        const seq = ['123', '234', '345', '456', '567', '678', '789', '890', '012'];
-        return !seq.some(s => p.includes(s));
-      }},
-      { label: 'Sin secuencias de letras (abc, bcd, etc.)', test: (p: string) => {
-        const seq = ['abc', 'bcd', 'cde', 'def', 'efg', 'fgh', 'ghi', 'hij', 'ijk', 'jkl', 'klm', 'lmn', 'mno', 'nop', 'opq', 'pqr', 'qrs', 'rst', 'stu', 'tuv', 'uvw', 'vwx', 'wxy', 'xyz'];
-        const pLower = p.toLowerCase();
-        return !seq.some(s => pLower.includes(s));
-      }},
-      { label: 'Sin más de 3 caracteres repetidos', test: (p: string) => !/(.)\1{3,}/.test(p) },
-    ];
-
+  if (step === "verify") {
     return (
-      <div className="mt-2 p-3 bg-gray-50 rounded-lg text-xs space-y-1">
-        <p className="font-semibold text-gray-600 mb-1">Requisitos de contraseña:</p>
-        {requirements.map((req, idx) => {
-          const isMet = req.test(registerData.contrasena);
-          return (
-            <div key={idx} className="flex items-center gap-2">
-              {isMet ? (
-                <CheckCircle size={12} className="text-green-500" />
-              ) : (
-                <XCircle size={12} className="text-gray-300" />
-              )}
-              <span className={isMet ? 'text-green-600' : 'text-gray-500'}>
-                {req.label}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
-  // Mostrar pantalla de verificación si estamos en ese paso
-  if (step === 'verify') {
-    return (
-      <VerifyCodeForm 
+      <VerifyCodeForm
         email={emailRegistro}
         onBack={() => {
-          console.log("🔙 Volviendo al formulario de registro");
-          setStep('form');
+          setStep("form");
         }}
         onVerify={handleFinalRegister}
         loading={cargando}
@@ -401,542 +738,872 @@ export function RegisterForm({ onRegistroExitoso }: RegisterFormProps = {}) {
     );
   }
 
-  // Formulario de registro
   return (
-    <div className="w-full max-w-md mx-auto">
-      {/* Título */}
-      <div className="text-center mb-8">
-        <h1 className="text-4xl font-black text-[#0A3D62] mb-2 tracking-tight">
-          REGÍSTRATE
-        </h1>
-        <p className="text-xl font-bold text-[#FFC300]">
-          crea tu cuenta gratis
-        </p>
-      </div>
+    <div className="mx-auto w-full max-w-[700px]">
+      <div className="relative overflow-hidden rounded-3xl border border-[#0A3D62]/10 bg-white shadow-[0_20px_55px_rgba(10,61,98,0.12)]">
+        <div
+          className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#0A3D62] via-[#FFC300] to-[#0A3D62]"
+          aria-hidden="true"
+        />
 
-      {/* Botones sociales */}
-      <RegisterSocialButtons />
+        <div
+          className="pointer-events-none absolute -right-20 -top-20 h-48 w-48 rounded-full bg-[#FFC300]/15 blur-3xl"
+          aria-hidden="true"
+        />
 
-      <div className="relative my-8">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-gray-200"></div>
-        </div>
-        <div className="relative flex justify-center text-sm">
-          <span className="px-4 bg-white text-gray-400">o regístrate con email</span>
-        </div>
-      </div>
+        <div
+          className="pointer-events-none absolute -bottom-24 -left-24 h-52 w-52 rounded-full bg-[#0A3D62]/10 blur-3xl"
+          aria-hidden="true"
+        />
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Sección de Nombre y Apellidos */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <User size={16} className="text-[#FFC300]" />
-            <span className="text-xs font-semibold text-[#0A3D62] uppercase tracking-wider">
-              Nombre y Apellidos
-            </span>
-            <div className="flex-1 h-px bg-gradient-to-r from-[#FFC300]/50 to-transparent"></div>
-          </div>
-          
-          <div className="grid grid-cols-3 gap-2">
-            {/* Nombre */}
-            <div className="relative col-span-1">
-              <div className={`
-                relative rounded-xl transition-all duration-200 bg-white border-2
-                ${nombreFocused ? 'border-[#FFC300] shadow-lg' : 'border-gray-200 hover:border-gray-300'}
-                ${errores.nombre ? 'border-red-500 bg-red-50' : ''}
-              `}>
-                <User className={`
-                  absolute left-3 top-1/2 -translate-y-1/2 transition-colors duration-200 z-10
-                  ${nombreFocused ? 'text-[#FFC300]' : 'text-gray-400'}
-                `} size={18} />
-
-                <label className={`
-                  absolute left-9 transition-all duration-200 pointer-events-none
-                  ${nombreFocused || registerData.nombre
-                    ? '-top-2 text-[10px] bg-white px-1.5 text-[#FFC300] font-medium'
-                    : 'top-1/2 -translate-y-1/2 text-xs text-gray-400 left-9'}
-                `}>
-                  Nombre
-                </label>
-
-                <input
-                  type="text"
-                  name="nombre"
-                  value={registerData.nombre}
-                  onChange={handleChange}
-                  onFocus={() => setNombreFocused(true)}
-                  onBlur={() => setNombreFocused(false)}
-                  className="w-full pl-9 pr-2 py-3.5 bg-transparent rounded-xl focus:outline-none text-gray-700 relative z-20 placeholder-transparent text-sm"
+        <div className="relative p-4 sm:p-6">
+          {/* Encabezado */}
+          <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.13em] text-emerald-700">
+                <ShieldCheck
+                  size={12}
+                  strokeWidth={2}
+                  aria-hidden="true"
                 />
-              </div>
-            </div>
 
-            {/* Apellido Paterno */}
-            <div className="relative col-span-1">
-              <div className={`
-                relative rounded-xl transition-all duration-200 bg-white border-2
-                ${apellidoPaternoFocused ? 'border-[#FFC300] shadow-lg' : 'border-gray-200 hover:border-gray-300'}
-                ${errores.apellidoPaterno ? 'border-red-500 bg-red-50' : ''}
-              `}>
-                <User className={`
-                  absolute left-3 top-1/2 -translate-y-1/2 transition-colors duration-200 z-10
-                  ${apellidoPaternoFocused ? 'text-[#FFC300]' : 'text-gray-400'}
-                `} size={18} />
+                Registro seguro
+              </span>
 
-                <label className={`
-                  absolute left-9 transition-all duration-200 pointer-events-none
-                  ${apellidoPaternoFocused || registerData.apellidoPaterno
-                    ? '-top-2 text-[10px] bg-white px-1.5 text-[#FFC300] font-medium'
-                    : 'top-1/2 -translate-y-1/2 text-xs text-gray-400 left-9'}
-                `}>
-                  Paterno
-                </label>
+              <h1 className="mt-2 text-2xl font-extrabold leading-tight text-[#0A3D62] sm:text-3xl">
+                Crea tu cuenta
+              </h1>
 
-                <input
-                  type="text"
-                  name="apellidoPaterno"
-                  value={registerData.apellidoPaterno}
-                  onChange={handleChange}
-                  onFocus={() => setApellidoPaternoFocused(true)}
-                  onBlur={() => setApellidoPaternoFocused(false)}
-                  className="w-full pl-9 pr-2 py-3.5 bg-transparent rounded-xl focus:outline-none text-gray-700 relative z-20 placeholder-transparent text-sm"
-                />
-              </div>
-            </div>
-
-            {/* Apellido Materno */}
-            <div className="relative col-span-1">
-              <div className={`
-                relative rounded-xl transition-all duration-200 bg-white border-2
-                ${apellidoMaternoFocused ? 'border-[#FFC300] shadow-lg' : 'border-gray-200 hover:border-gray-300'}
-                ${errores.apellidoMaterno ? 'border-red-500 bg-red-50' : ''}
-              `}>
-                <User className={`
-                  absolute left-3 top-1/2 -translate-y-1/2 transition-colors duration-200 z-10
-                  ${apellidoMaternoFocused ? 'text-[#FFC300]' : 'text-gray-400'}
-                `} size={18} />
-
-                <label className={`
-                  absolute left-9 transition-all duration-200 pointer-events-none
-                  ${apellidoMaternoFocused || registerData.apellidoMaterno
-                    ? '-top-2 text-[10px] bg-white px-1.5 text-[#FFC300] font-medium'
-                    : 'top-1/2 -translate-y-1/2 text-xs text-gray-400 left-9'}
-                `}>
-                  Materno
-                </label>
-
-                <input
-                  type="text"
-                  name="apellidoMaterno"
-                  value={registerData.apellidoMaterno}
-                  onChange={handleChange}
-                  onFocus={() => setApellidoMaternoFocused(true)}
-                  onBlur={() => setApellidoMaternoFocused(false)}
-                  className="w-full pl-9 pr-2 py-3.5 bg-transparent rounded-xl focus:outline-none text-gray-700 relative z-20 placeholder-transparent text-sm"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            {errores.nombre && <p className="text-[10px] text-red-500">{errores.nombre}</p>}
-            {errores.apellidoPaterno && <p className="text-[10px] text-red-500">{errores.apellidoPaterno}</p>}
-            {errores.apellidoMaterno && <p className="text-[10px] text-red-500">{errores.apellidoMaterno}</p>}
-          </div>
-        </div>
-
-        {/* Sección de Información Personal */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Users size={16} className="text-[#FFC300]" />
-            <span className="text-xs font-semibold text-[#0A3D62] uppercase tracking-wider">
-              Información Personal
-            </span>
-            <div className="flex-1 h-px bg-gradient-to-r from-[#FFC300]/50 to-transparent"></div>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-3">
-            {/* Edad */}
-            <div className="relative">
-              <div className={`
-                relative rounded-xl transition-all duration-200 bg-white border-2
-                ${edadFocused ? 'border-[#FFC300] shadow-lg' : 'border-gray-200 hover:border-gray-300'}
-                ${errores.edad ? 'border-red-500 bg-red-50' : ''}
-              `}>
-                <Calendar className={`
-                  absolute left-3 top-1/2 -translate-y-1/2 transition-colors duration-200 z-10
-                  ${edadFocused ? 'text-[#FFC300]' : 'text-gray-400'}
-                `} size={18} />
-
-                <label className={`
-                  absolute left-9 transition-all duration-200 pointer-events-none
-                  ${edadFocused || registerData.edad
-                    ? '-top-2 text-[10px] bg-white px-1.5 text-[#FFC300] font-medium'
-                    : 'top-1/2 -translate-y-1/2 text-xs text-gray-400 left-9'}
-                `}>
-                  Edad
-                </label>
-
-                <input
-                  type="number"
-                  name="edad"
-                  min="18"
-                  max="100"
-                  value={registerData.edad}
-                  onChange={handleChange}
-                  onFocus={() => setEdadFocused(true)}
-                  onBlur={() => setEdadFocused(false)}
-                  className="w-full pl-9 pr-2 py-3.5 bg-transparent rounded-xl focus:outline-none text-gray-700 relative z-20 placeholder-transparent text-sm"
-                />
-              </div>
-              {errores.edad && <p className="mt-1 text-[10px] text-red-500">{errores.edad}</p>}
-            </div>
-
-            {/* Sexo */}
-            <div className="relative">
-              <div className={`
-                relative rounded-xl transition-all duration-200 bg-white border-2
-                ${sexoFocused ? 'border-[#FFC300] shadow-lg' : 'border-gray-200 hover:border-gray-300'}
-                ${errores.sexo ? 'border-red-500 bg-red-50' : ''}
-              `}>
-                <Users className={`
-                  absolute left-3 top-1/2 -translate-y-1/2 transition-colors duration-200 z-10
-                  ${sexoFocused ? 'text-[#FFC300]' : 'text-gray-400'}
-                `} size={18} />
-
-                <label className={`
-                  absolute left-9 transition-all duration-200 pointer-events-none
-                  ${sexoFocused || registerData.sexo
-                    ? '-top-2 text-[10px] bg-white px-1.5 text-[#FFC300] font-medium'
-                    : 'top-1/2 -translate-y-1/2 text-xs text-gray-400 left-9'}
-                `}>
-                  Sexo
-                </label>
-
-                <select
-                  name="sexo"
-                  value={registerData.sexo}
-                  onChange={handleChange}
-                  onFocus={() => setSexoFocused(true)}
-                  onBlur={() => setSexoFocused(false)}
-                  className="w-full pl-9 pr-6 py-3.5 bg-transparent rounded-xl focus:outline-none text-gray-700 relative z-20 appearance-none cursor-pointer text-sm"
-                >
-                  <option value="" disabled></option>
-                  <option value="masculino">Masculino</option>
-                  <option value="femenino">Femenino</option>
-                  <option value="otro">Otro</option>
-                </select>
-                
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                  ▼
-                </div>
-              </div>
-              {errores.sexo && <p className="mt-1 text-[10px] text-red-500">{errores.sexo}</p>}
-            </div>
-          </div>
-        </div>
-
-        {/* Sección de Contacto */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Phone size={16} className="text-[#FFC300]" />
-            <span className="text-xs font-semibold text-[#0A3D62] uppercase tracking-wider">
-              Contacto
-            </span>
-            <div className="flex-1 h-px bg-gradient-to-r from-[#FFC300]/50 to-transparent"></div>
-          </div>
-          
-          {/* Campo Teléfono */}
-          <div className="relative">
-            <div className={`
-              relative rounded-xl transition-all duration-200 bg-white border-2
-              ${telefonoFocused ? 'border-[#FFC300] shadow-lg' : 'border-gray-200 hover:border-gray-300'}
-              ${errores.telefono ? 'border-red-500 bg-red-50' : ''}
-            `}>
-              <Phone className={`
-                absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-200 z-10
-                ${telefonoFocused ? 'text-[#FFC300]' : 'text-gray-400'}
-              `} size={20} />
-
-              <label className={`
-                absolute left-12 transition-all duration-200 pointer-events-none
-                ${telefonoFocused || registerData.telefono
-                  ? '-top-3 text-xs bg-white px-2 text-[#FFC300] font-medium'
-                  : 'top-1/2 -translate-y-1/2 text-sm text-gray-400 left-12'}
-              `}>
-                Teléfono (10 dígitos)
-              </label>
-
-              <input
-                type="tel"
-                name="telefono"
-                value={registerData.telefono}
-                onChange={handleChange}
-                onFocus={() => setTelefonoFocused(true)}
-                onBlur={() => setTelefonoFocused(false)}
-                maxLength={10}
-                className="w-full pl-12 pr-4 py-4 bg-transparent rounded-xl focus:outline-none text-gray-700 relative z-20 placeholder-transparent"
-              />
-            </div>
-            {errores.telefono && (
-              <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
-                <span className="w-1 h-1 bg-red-500 rounded-full"></span>
-                {errores.telefono}
+              <p className="mt-1 text-sm leading-6 text-gray-500">
+                Completa tus datos para acceder a cursos,
+                contenidos y servicios.
               </p>
-            )}
-          </div>
-
-          {/* Campo Correo */}
-          <div className="relative">
-            <div className={`
-              relative rounded-xl transition-all duration-200 bg-white border-2
-              ${correoFocused ? 'border-[#FFC300] shadow-lg' : 'border-gray-200 hover:border-gray-300'}
-              ${errores.correo ? 'border-red-500 bg-red-50' : ''}
-            `}>
-              <Mail className={`
-                absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-200 z-10
-                ${correoFocused ? 'text-[#FFC300]' : 'text-gray-400'}
-              `} size={20} />
-
-              <label className={`
-                absolute left-12 transition-all duration-200 pointer-events-none
-                ${correoFocused || registerData.correo
-                  ? '-top-3 text-xs bg-white px-2 text-[#FFC300] font-medium'
-                  : 'top-1/2 -translate-y-1/2 text-sm text-gray-400 left-12'}
-              `}>
-                Correo Electrónico
-              </label>
-
-              <input
-                type="email"
-                name="correo"
-                value={registerData.correo}
-                onChange={handleChange}
-                onFocus={() => setCorreoFocused(true)}
-                onBlur={() => setCorreoFocused(false)}
-                className="w-full pl-12 pr-4 py-4 bg-transparent rounded-xl focus:outline-none text-gray-700 relative z-20 placeholder-transparent"
-              />
-              
-              {verificandoEmail && registerData.correo && (
-                <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                  <Loader2 size={16} className="animate-spin text-gray-400" />
-                </div>
-              )}
-              {emailDisponible === true && registerData.correo && !verificandoEmail && (
-                <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                  <CheckCircle size={16} className="text-green-500" />
-                </div>
-              )}
-              {emailDisponible === false && registerData.correo && !verificandoEmail && (
-                <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                  <XCircle size={16} className="text-red-500" />
-                </div>
-              )}
             </div>
-            {errores.correo && (
-              <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
-                <span className="w-1 h-1 bg-red-500 rounded-full"></span>
-                {errores.correo}
-              </p>
-            )}
-          </div>
-        </div>
 
-        {/* Sección de Seguridad */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Lock size={16} className="text-[#FFC300]" />
-            <span className="text-xs font-semibold text-[#0A3D62] uppercase tracking-wider">
-              Seguridad
-            </span>
-            <div className="flex-1 h-px bg-gradient-to-r from-[#FFC300]/50 to-transparent"></div>
-          </div>
-
-          {/* Campo Contraseña */}
-          <div className="relative">
-            <div className={`
-              relative rounded-xl transition-all duration-200 bg-white border-2
-              ${passwordFocused ? 'border-[#FFC300] shadow-lg' : 'border-gray-200 hover:border-gray-300'}
-              ${errores.contrasena ? 'border-red-500 bg-red-50' : ''}
-            `}>
-              <Lock className={`
-                absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-200 z-10
-                ${passwordFocused ? 'text-[#FFC300]' : 'text-gray-400'}
-              `} size={20} />
-
-              <label className={`
-                absolute left-12 transition-all duration-200 pointer-events-none
-                ${passwordFocused || registerData.contrasena
-                  ? '-top-3 text-xs bg-white px-2 text-[#FFC300] font-medium'
-                  : 'top-1/2 -translate-y-1/2 text-sm text-gray-400 left-12'}
-              `}>
-                Contraseña
-              </label>
-
-              <input
-                type={mostrarContrasena ? 'text' : 'password'}
-                name="contrasena"
-                value={registerData.contrasena}
-                onChange={handleChange}
-                onFocus={() => setPasswordFocused(true)}
-                onBlur={() => setPasswordFocused(false)}
-                className="w-full pl-12 pr-12 py-4 bg-transparent rounded-xl focus:outline-none text-gray-700 relative z-20 placeholder-transparent"
+            <div className="flex w-fit items-center gap-2 rounded-xl border border-[#0A3D62]/10 bg-[#F7FAFC] px-3 py-2">
+              <UserPlus
+                size={16}
+                className="text-[#0A3D62]"
+                aria-hidden="true"
               />
 
-              <button
-                type="button"
-                onClick={() => setMostrarContrasena(!mostrarContrasena)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#FFC300] transition-colors z-30"
+              <p className="text-[11px] font-bold text-[#0A3D62]">
+                Cuenta gratuita
+              </p>
+            </div>
+          </header>
+
+          {/* Redes sociales */}
+          <div className="mt-5">
+            <RegisterSocialButtons />
+          </div>
+
+          <div className="relative my-5">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200" />
+            </div>
+
+            <div className="relative flex justify-center">
+              <span className="bg-white px-3 text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">
+                O completa el formulario
+              </span>
+            </div>
+          </div>
+
+          <form
+            onSubmit={handleSubmit}
+            noValidate
+            className="space-y-3.5"
+          >
+            <fieldset
+              disabled={cargando}
+              className="space-y-3.5 disabled:opacity-70"
+            >
+              {/* Identidad */}
+              <SeccionFormulario
+                icono={
+                  <UserRound
+                    size={16}
+                    aria-hidden="true"
+                  />
+                }
+                titulo="Datos personales"
+                descripcion="Información básica del titular de la cuenta."
               >
-                {mostrarContrasena ? <EyeOff size={20} /> : <Eye size={20} />}
-              </button>
-            </div>
-            
-            {registerData.contrasena && (
-              <div className="mt-2">
-                <div className="flex gap-1 h-1">
-                  {[1, 2, 3, 4].map((level) => (
-                    <div
-                      key={level}
-                      className={`flex-1 h-1 rounded-full transition-all duration-300 ${
-                        passwordStrength >= level ? getPasswordStrengthColor() : 'bg-gray-200'
-                      }`}
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <CampoTexto
+                    id="nombre"
+                    name="nombre"
+                    label="Nombre"
+                    value={registerData.nombre}
+                    onChange={handleChange}
+                    error={errores.nombre}
+                    icono={
+                      <UserRound
+                        size={16}
+                        aria-hidden="true"
+                      />
+                    }
+                    autoComplete="given-name"
+                    placeholder="Nombre"
+                  />
+
+                  <CampoTexto
+                    id="apellidoPaterno"
+                    name="apellidoPaterno"
+                    label="Apellido paterno"
+                    value={
+                      registerData.apellidoPaterno
+                    }
+                    onChange={handleChange}
+                    error={
+                      errores.apellidoPaterno
+                    }
+                    icono={
+                      <UserRound
+                        size={16}
+                        aria-hidden="true"
+                      />
+                    }
+                    autoComplete="family-name"
+                    placeholder="Apellido"
+                  />
+
+                  <CampoTexto
+                    id="apellidoMaterno"
+                    name="apellidoMaterno"
+                    label="Apellido materno"
+                    value={
+                      registerData.apellidoMaterno
+                    }
+                    onChange={handleChange}
+                    error={
+                      errores.apellidoMaterno
+                    }
+                    icono={
+                      <UserRound
+                        size={16}
+                        aria-hidden="true"
+                      />
+                    }
+                    autoComplete="additional-name"
+                    placeholder="Apellido"
+                  />
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <CampoTexto
+                    id="edad"
+                    name="edad"
+                    label="Edad"
+                    value={registerData.edad}
+                    onChange={handleChange}
+                    error={errores.edad}
+                    icono={
+                      <CalendarDays
+                        size={16}
+                        aria-hidden="true"
+                      />
+                    }
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={3}
+                    placeholder="18"
+                  />
+
+                  <CampoSelect
+                    id="sexo"
+                    name="sexo"
+                    label="Sexo"
+                    value={registerData.sexo}
+                    onChange={handleChange}
+                    error={errores.sexo}
+                    icono={
+                      <UsersRound
+                        size={16}
+                        aria-hidden="true"
+                      />
+                    }
+                    opciones={[
+                      {
+                        valor: "masculino",
+                        texto: "Masculino",
+                      },
+                      {
+                        valor: "femenino",
+                        texto: "Femenino",
+                      },
+                      {
+                        valor: "otro",
+                        texto: "Otro",
+                      },
+                    ]}
+                  />
+                </div>
+              </SeccionFormulario>
+
+              {/* Contacto */}
+              <SeccionFormulario
+                icono={
+                  <Mail
+                    size={16}
+                    aria-hidden="true"
+                  />
+                }
+                titulo="Información de contacto"
+                descripcion="Usaremos estos datos para identificar y verificar tu cuenta."
+              >
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <CampoTexto
+                    id="telefono"
+                    name="telefono"
+                    label="Teléfono"
+                    value={registerData.telefono}
+                    onChange={handleChange}
+                    error={errores.telefono}
+                    icono={
+                      <Phone
+                        size={16}
+                        aria-hidden="true"
+                      />
+                    }
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel"
+                    maxLength={10}
+                    placeholder="10 dígitos"
+                  />
+
+                  <CampoTexto
+                    id="correo"
+                    name="correo"
+                    label="Correo electrónico"
+                    value={registerData.correo}
+                    onChange={handleChange}
+                    error={errores.correo}
+                    icono={
+                      <Mail
+                        size={16}
+                        aria-hidden="true"
+                      />
+                    }
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    placeholder="nombre@correo.com"
+                    endAdornment={
+                      verificandoEmail ? (
+                        <Loader2
+                          size={16}
+                          className="animate-spin text-gray-400"
+                          aria-label="Verificando correo"
+                        />
+                      ) : emailDisponible ===
+                        true ? (
+                        <CheckCircle2
+                          size={17}
+                          className="text-emerald-600"
+                          aria-label="Correo disponible"
+                        />
+                      ) : emailDisponible ===
+                        false ? (
+                        <XCircle
+                          size={17}
+                          className="text-red-500"
+                          aria-label="Correo no disponible"
+                        />
+                      ) : null
+                    }
+                  />
+                </div>
+              </SeccionFormulario>
+
+              {/* Seguridad */}
+              <SeccionFormulario
+                icono={
+                  <LockKeyhole
+                    size={16}
+                    aria-hidden="true"
+                  />
+                }
+                titulo="Seguridad"
+                descripcion="Crea una contraseña segura para proteger tu información."
+              >
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <CampoTexto
+                    id="contrasena"
+                    name="contrasena"
+                    label="Contraseña"
+                    value={registerData.contrasena}
+                    onChange={handleChange}
+                    error={errores.contrasena}
+                    icono={
+                      <LockKeyhole
+                        size={16}
+                        aria-hidden="true"
+                      />
+                    }
+                    type={
+                      mostrarContrasena
+                        ? "text"
+                        : "password"
+                    }
+                    autoComplete="new-password"
+                    placeholder="Crea una contraseña"
+                    endAdornment={
+                      <BotonMostrarPassword
+                        mostrar={mostrarContrasena}
+                        onClick={() =>
+                          setMostrarContrasena(
+                            (actual) => !actual,
+                          )
+                        }
+                        etiqueta="contraseña"
+                      />
+                    }
+                  />
+
+                  <CampoTexto
+                    id="confirmarContrasena"
+                    name="confirmarContrasena"
+                    label="Confirmar contraseña"
+                    value={
+                      registerData.confirmarContrasena
+                    }
+                    onChange={handleChange}
+                    error={
+                      errores.confirmarContrasena
+                    }
+                    icono={
+                      <LockKeyhole
+                        size={16}
+                        aria-hidden="true"
+                      />
+                    }
+                    type={
+                      mostrarConfirmContrasena
+                        ? "text"
+                        : "password"
+                    }
+                    autoComplete="new-password"
+                    placeholder="Repite la contraseña"
+                    endAdornment={
+                      <BotonMostrarPassword
+                        mostrar={
+                          mostrarConfirmContrasena
+                        }
+                        onClick={() =>
+                          setMostrarConfirmContrasena(
+                            (actual) => !actual,
+                          )
+                        }
+                        etiqueta="confirmación de contraseña"
+                      />
+                    }
+                  />
+                </div>
+
+                {registerData.contrasena && (
+                  <div className="rounded-xl border border-gray-200 bg-white p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-gray-400">
+                        Fortaleza
+                      </p>
+
+                      <p
+                        className={cn(
+                          "text-xs font-extrabold",
+                          fortaleza.textoClase,
+                        )}
+                      >
+                        {fortaleza.texto}
+                      </p>
+                    </div>
+
+                    <div className="mt-2 grid grid-cols-4 gap-1.5">
+                      {[1, 2, 3, 4].map(
+                        (nivel) => (
+                          <div
+                            key={nivel}
+                            className={cn(
+                              "h-1.5 rounded-full transition-colors",
+                              analisisContrasena.nivel >=
+                                nivel
+                                ? fortaleza.barraClase
+                                : "bg-gray-200",
+                            )}
+                          />
+                        ),
+                      )}
+                    </div>
+
+                    <div className="mt-3 grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
+                      {analisisContrasena.requisitos.map(
+                        (requisito) => (
+                          <div
+                            key={requisito.etiqueta}
+                            className="flex items-center gap-1.5"
+                          >
+                            {requisito.cumple ? (
+                              <CheckCircle2
+                                size={13}
+                                className="shrink-0 text-emerald-600"
+                                aria-hidden="true"
+                              />
+                            ) : (
+                              <XCircle
+                                size={13}
+                                className="shrink-0 text-gray-300"
+                                aria-hidden="true"
+                              />
+                            )}
+
+                            <span
+                              className={cn(
+                                "text-[10px] leading-4",
+                                requisito.cumple
+                                  ? "font-semibold text-emerald-700"
+                                  : "text-gray-500",
+                              )}
+                            >
+                              {requisito.etiqueta}
+                            </span>
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {registerData.confirmarContrasena && (
+                  <div
+                    className={cn(
+                      "flex items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-semibold",
+                      contrasenasCoinciden
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-red-50 text-red-600",
+                    )}
+                  >
+                    {contrasenasCoinciden ? (
+                      <CheckCircle2
+                        size={14}
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <XCircle
+                        size={14}
+                        aria-hidden="true"
+                      />
+                    )}
+
+                    {contrasenasCoinciden
+                      ? "Las contraseñas coinciden."
+                      : "Las contraseñas no coinciden."}
+                  </div>
+                )}
+              </SeccionFormulario>
+
+              {/* Términos */}
+              <div>
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-gray-200 bg-[#F7FAFC] px-3.5 py-3">
+                  <input
+                    type="checkbox"
+                    checked={aceptaTerminos}
+                    onChange={(event) => {
+                      setAceptaTerminos(
+                        event.target.checked,
+                      );
+
+                      setErrores((actual) => ({
+                        ...actual,
+                        terminos: undefined,
+                      }));
+                    }}
+                    className="peer sr-only"
+                  />
+
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-gray-300 bg-white text-transparent transition-all peer-checked:border-[#0A3D62] peer-checked:bg-[#0A3D62] peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-[#FFC300] peer-focus-visible:ring-offset-2">
+                    <CheckCircle2
+                      size={14}
+                      strokeWidth={2.2}
+                      aria-hidden="true"
                     />
-                  ))}
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Fortaleza: <span className="font-medium">{getPasswordStrengthText()}</span>
-                </p>
-              </div>
-            )}
-            
-            {registerData.contrasena && !isPasswordValid && (
-              <PasswordRequirements />
-            )}
-            
-            {errores.contrasena && (
-              <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
-                <span className="w-1 h-1 bg-red-500 rounded-full"></span>
-                {errores.contrasena}
-              </p>
-            )}
-          </div>
+                  </span>
 
-          {/* Campo Confirmar Contraseña */}
-          <div className="relative">
-            <div className={`
-              relative rounded-xl transition-all duration-200 bg-white border-2
-              ${confirmFocused ? 'border-[#FFC300] shadow-lg' : 'border-gray-200 hover:border-gray-300'}
-              ${errores.confirmarContrasena ? 'border-red-500 bg-red-50' : ''}
-            `}>
-              <Lock className={`
-                absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-200 z-10
-                ${confirmFocused ? 'text-[#FFC300]' : 'text-gray-400'}
-              `} size={20} />
+                  <span className="text-[11px] leading-5 text-gray-600">
+                    Acepto los{" "}
+                    <Link
+                      href="/terminos"
+                      className="font-bold text-[#0A3D62] transition-colors hover:text-[#B88600]"
+                    >
+                      Términos y Condiciones
+                    </Link>{" "}
+                    y la{" "}
+                    <Link
+                      href="/privacidad"
+                      className="font-bold text-[#0A3D62] transition-colors hover:text-[#B88600]"
+                    >
+                      Política de Privacidad
+                    </Link>
+                    .
+                  </span>
+                </label>
 
-              <label className={`
-                absolute left-12 transition-all duration-200 pointer-events-none
-                ${confirmFocused || registerData.confirmarContrasena
-                  ? '-top-3 text-xs bg-white px-2 text-[#FFC300] font-medium'
-                  : 'top-1/2 -translate-y-1/2 text-sm text-gray-400 left-12'}
-              `}>
-                Confirmar Contraseña
-              </label>
-
-              <input
-                type={mostrarConfirmContrasena ? 'text' : 'password'}
-                name="confirmarContrasena"
-                value={registerData.confirmarContrasena}
-                onChange={handleChange}
-                onFocus={() => setConfirmFocused(true)}
-                onBlur={() => setConfirmFocused(false)}
-                className="w-full pl-12 pr-12 py-4 bg-transparent rounded-xl focus:outline-none text-gray-700 relative z-20 placeholder-transparent"
-              />
-
-              <button
-                type="button"
-                onClick={() => setMostrarConfirmContrasena(!mostrarConfirmContrasena)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#FFC300] transition-colors z-30"
-              >
-                {mostrarConfirmContrasena ? <EyeOff size={20} /> : <Eye size={20} />}
-              </button>
-            </div>
-            
-            {registerData.confirmarContrasena && registerData.contrasena && (
-              <div className="mt-1 flex items-center gap-1">
-                {registerData.contrasena === registerData.confirmarContrasena ? (
-                  <>
-                    <CheckCircle size={14} className="text-green-500" />
-                    <span className="text-xs text-green-500">Las contraseñas coinciden</span>
-                  </>
-                ) : (
-                  <>
-                    <XCircle size={14} className="text-red-500" />
-                    <span className="text-xs text-red-500">Las contraseñas no coinciden</span>
-                  </>
+                {errores.terminos && (
+                  <MensajeError
+                    id="terminos-error"
+                    mensaje={errores.terminos}
+                  />
                 )}
               </div>
-            )}
-            
-            {errores.confirmarContrasena && (
-              <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
-                <span className="w-1 h-1 bg-red-500 rounded-full"></span>
-                {errores.confirmarContrasena}
-              </p>
-            )}
-          </div>
-        </div>
+            </fieldset>
 
-        {/* Términos y condiciones */}
-        <div className="space-y-1">
-          <div className="flex items-start gap-2">
-            <input
-              type="checkbox"
-              id="terminos"
-              checked={aceptaTerminos}
-              onChange={(e) => setAceptaTerminos(e.target.checked)}
-              className="mt-1 w-4 h-4 rounded border-gray-300 text-[#FFC300] focus:ring-[#FFC300]"
+            <button
+              type="submit"
+              disabled={cargando}
+              className="group flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#0A3D62] px-5 py-3 text-sm font-extrabold text-white shadow-[0_8px_22px_rgba(10,61,98,0.18)] transition-all duration-300 hover:bg-[#FFC300] hover:text-[#0A3D62] hover:shadow-[0_12px_28px_rgba(10,61,98,0.22)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC300] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {cargando ? (
+                <>
+                  <Loader2
+                    size={18}
+                    className="animate-spin"
+                    aria-hidden="true"
+                  />
+
+                  Enviando código...
+                </>
+              ) : (
+                <>
+                  <UserPlus
+                    size={18}
+                    strokeWidth={2}
+                    className="transition-transform duration-200 group-hover:scale-105"
+                    aria-hidden="true"
+                  />
+
+                  Crear cuenta
+                </>
+              )}
+            </button>
+          </form>
+
+          <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-[#0A3D62]/10 bg-[#F7FAFC] px-3.5 py-3">
+            <ShieldCheck
+              size={17}
+              className="mt-0.5 shrink-0 text-emerald-600"
+              aria-hidden="true"
             />
-            <label htmlFor="terminos" className="text-xs text-gray-500">
-              Acepto los{' '}
-              <Link href="/terminos" className="text-[#FFC300] hover:text-[#0A3D62] transition-colors">
-                Términos y Condiciones
-              </Link>{' '}
-              y la{' '}
-              <Link href="/privacidad" className="text-[#FFC300] hover:text-[#0A3D62] transition-colors">
-                Política de Privacidad
-              </Link>
-            </label>
-          </div>
-          {errores.terminos && (
-            <p className="text-xs text-red-500 flex items-center gap-1">
-              <span className="w-1 h-1 bg-red-500 rounded-full"></span>
-              {errores.terminos}
-            </p>
-          )}
-        </div>
 
-        {/* Botón submit */}
-        <button
-          type="submit"
-          disabled={cargando}
-          className="relative w-full group overflow-hidden rounded-xl bg-gradient-to-r from-[#FFC300] to-[#FFD700] p-[2px] focus:outline-none focus:ring-2 focus:ring-[#FFC300] focus:ring-offset-2 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
-        >
-          <div className="relative flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#FFC300] to-[#FFD700] px-6 py-4 text-[#0A3D62] font-bold transition-all duration-300">
-            {cargando ? (
-              <>
-                <Loader2 size={20} className="animate-spin" />
-                <span className="font-semibold">CREANDO CUENTA...</span>
-              </>
-            ) : (
-              <>
-                <User size={20} />
-                <span className="font-semibold text-lg">REGISTRARSE</span>
-              </>
-            )}
+            <p className="text-[11px] leading-5 text-gray-500">
+              Verificaremos tu correo antes de crear la cuenta.
+              Tu contraseña no se almacena en este dispositivo.
+            </p>
           </div>
-        </button>
-      </form>
+        </div>
+      </div>
     </div>
+  );
+}
+
+interface SeccionFormularioProps {
+  icono: ReactNode;
+  titulo: string;
+  descripcion: string;
+  children: ReactNode;
+}
+
+function SeccionFormulario({
+  icono,
+  titulo,
+  descripcion,
+  children,
+}: SeccionFormularioProps) {
+  return (
+    <section className="rounded-2xl border border-gray-200 bg-[#F8FAFC] p-3.5 sm:p-4">
+      <header className="mb-3 flex items-start gap-2.5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#EAF2F8] text-[#0A3D62]">
+          {icono}
+        </span>
+
+        <div>
+          <h2 className="text-xs font-extrabold text-[#0A3D62]">
+            {titulo}
+          </h2>
+
+          <p className="mt-0.5 text-[10px] leading-4 text-gray-500">
+            {descripcion}
+          </p>
+        </div>
+      </header>
+
+      <div className="space-y-3">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+interface CampoTextoProps {
+  id: string;
+  name: keyof RegisterData;
+  label: string;
+  value: string;
+  onChange: (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => void;
+  error?: string;
+  icono: ReactNode;
+  type?: string;
+  inputMode?:
+    | "text"
+    | "email"
+    | "tel"
+    | "numeric";
+  autoComplete?: string;
+  placeholder?: string;
+  maxLength?: number;
+  endAdornment?: ReactNode;
+}
+
+function CampoTexto({
+  id,
+  name,
+  label,
+  value,
+  onChange,
+  error,
+  icono,
+  type = "text",
+  inputMode,
+  autoComplete,
+  placeholder,
+  maxLength,
+  endAdornment,
+}: CampoTextoProps) {
+  const errorId = `${id}-error`;
+
+  return (
+    <div className="min-w-0">
+      <label
+        htmlFor={id}
+        className="mb-1.5 block text-[11px] font-bold text-[#0A3D62]"
+      >
+        {label}
+      </label>
+
+      <div
+        className={cn(
+          "group relative rounded-xl border bg-white transition-all focus-within:border-[#FFC300] focus-within:ring-4 focus-within:ring-[#FFC300]/10",
+          error
+            ? "border-red-400 bg-red-50/30"
+            : "border-gray-200 hover:border-[#0A3D62]/25",
+        )}
+      >
+        <span
+          className={cn(
+            "pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 transition-colors",
+            error
+              ? "text-red-500"
+              : "text-gray-400 group-focus-within:text-[#B88600]",
+          )}
+        >
+          {icono}
+        </span>
+
+        <input
+          id={id}
+          name={name}
+          type={type}
+          value={value}
+          onChange={onChange}
+          inputMode={inputMode}
+          autoComplete={autoComplete}
+          placeholder={placeholder}
+          maxLength={maxLength}
+          aria-invalid={Boolean(error)}
+          aria-describedby={
+            error ? errorId : undefined
+          }
+          className={cn(
+            "h-11 w-full rounded-xl bg-transparent pl-10 text-xs font-medium text-gray-800 outline-none placeholder:text-gray-400",
+            endAdornment
+              ? "pr-10"
+              : "pr-3",
+          )}
+        />
+
+        {endAdornment && (
+          <span className="absolute right-2.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center">
+            {endAdornment}
+          </span>
+        )}
+      </div>
+
+      {error && (
+        <MensajeError
+          id={errorId}
+          mensaje={error}
+        />
+      )}
+    </div>
+  );
+}
+
+interface CampoSelectProps {
+  id: string;
+  name: keyof RegisterData;
+  label: string;
+  value: string;
+  onChange: (
+    event: ChangeEvent<HTMLSelectElement>,
+  ) => void;
+  error?: string;
+  icono: ReactNode;
+  opciones: Array<{
+    valor: string;
+    texto: string;
+  }>;
+}
+
+function CampoSelect({
+  id,
+  name,
+  label,
+  value,
+  onChange,
+  error,
+  icono,
+  opciones,
+}: CampoSelectProps) {
+  const errorId = `${id}-error`;
+
+  return (
+    <div className="min-w-0">
+      <label
+        htmlFor={id}
+        className="mb-1.5 block text-[11px] font-bold text-[#0A3D62]"
+      >
+        {label}
+      </label>
+
+      <div
+        className={cn(
+          "group relative rounded-xl border bg-white transition-all focus-within:border-[#FFC300] focus-within:ring-4 focus-within:ring-[#FFC300]/10",
+          error
+            ? "border-red-400 bg-red-50/30"
+            : "border-gray-200 hover:border-[#0A3D62]/25",
+        )}
+      >
+        <span
+          className={cn(
+            "pointer-events-none absolute left-3 top-1/2 -translate-y-1/2",
+            error
+              ? "text-red-500"
+              : "text-gray-400 group-focus-within:text-[#B88600]",
+          )}
+        >
+          {icono}
+        </span>
+
+        <select
+          id={id}
+          name={name}
+          value={value}
+          onChange={onChange}
+          aria-invalid={Boolean(error)}
+          aria-describedby={
+            error ? errorId : undefined
+          }
+          className="h-11 w-full cursor-pointer appearance-none rounded-xl bg-transparent pl-10 pr-10 text-xs font-medium text-gray-800 outline-none"
+        >
+          <option value="" disabled>
+            Selecciona una opción
+          </option>
+
+          {opciones.map((opcion) => (
+            <option
+              key={opcion.valor}
+              value={opcion.valor}
+            >
+              {opcion.texto}
+            </option>
+          ))}
+        </select>
+
+        <ChevronDown
+          size={16}
+          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+          aria-hidden="true"
+        />
+      </div>
+
+      {error && (
+        <MensajeError
+          id={errorId}
+          mensaje={error}
+        />
+      )}
+    </div>
+  );
+}
+
+interface BotonMostrarPasswordProps {
+  mostrar: boolean;
+  onClick: () => void;
+  etiqueta: string;
+}
+
+function BotonMostrarPassword({
+  mostrar,
+  onClick,
+  etiqueta,
+}: BotonMostrarPasswordProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-[#EAF2F8] hover:text-[#0A3D62] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC300]"
+      aria-label={
+        mostrar
+          ? `Ocultar ${etiqueta}`
+          : `Mostrar ${etiqueta}`
+      }
+      aria-pressed={mostrar}
+    >
+      {mostrar ? (
+        <EyeOff
+          size={16}
+          aria-hidden="true"
+        />
+      ) : (
+        <Eye
+          size={16}
+          aria-hidden="true"
+        />
+      )}
+    </button>
+  );
+}
+
+interface MensajeErrorProps {
+  id: string;
+  mensaje: string;
+}
+
+function MensajeError({
+  id,
+  mensaje,
+}: MensajeErrorProps) {
+  return (
+    <p
+      id={id}
+      className="mt-1.5 flex items-start gap-1.5 text-[10px] font-medium leading-4 text-red-600"
+      role="alert"
+    >
+      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
+
+      {mensaje}
+    </p>
   );
 }

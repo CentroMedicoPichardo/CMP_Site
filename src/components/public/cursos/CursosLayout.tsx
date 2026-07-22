@@ -50,7 +50,7 @@ export function CursosLayout({
 
   if (listaCursos.length === 0) {
     return (
-      <section className="relative border-t border-gray-200 bg-[#F7FAFC] py-10 sm:py-12 lg:py-14">
+      <section className="relative border-t border-gray-200 bg-[#F7FAFC] py-8 sm:py-9 lg:py-10">
         <div
           className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2"
           aria-hidden="true"
@@ -59,10 +59,10 @@ export function CursosLayout({
         </div>
 
         <Container>
-          <div className="mx-auto max-w-xl rounded-3xl border border-gray-200 bg-white px-5 py-10 text-center shadow-[0_12px_35px_rgba(10,61,98,0.08)] sm:px-8 sm:py-12">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#EAF2F8] text-[#0A3D62]">
+          <div className="mx-auto max-w-xl rounded-3xl border border-gray-200 bg-white px-5 py-9 text-center shadow-[0_12px_35px_rgba(10,61,98,0.08)] sm:px-8">
+            <div className="mx-auto flex h-13 w-13 items-center justify-center rounded-2xl bg-[#EAF2F8] text-[#0A3D62]">
               <SearchX
-                size={27}
+                size={25}
                 strokeWidth={1.8}
                 aria-hidden="true"
               />
@@ -88,10 +88,9 @@ export function CursosLayout({
 
   return (
     <section
-      className="relative overflow-hidden border-t border-gray-200 bg-[#F7FAFC] pb-12 pt-9 sm:pb-14 sm:pt-10 lg:pb-16 lg:pt-12"
+      className="relative overflow-hidden border-t border-gray-200 bg-[#F7FAFC] pb-8 pt-7 sm:pb-9 sm:pt-8 lg:pb-10 lg:pt-9"
       aria-labelledby="cursos-disponibles-titulo"
     >
-      {/* Separador con el encabezado */}
       <div
         className="absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-1/2"
         aria-hidden="true"
@@ -99,24 +98,23 @@ export function CursosLayout({
         <div className="h-1 w-16 rounded-full bg-[#FFC300]" />
       </div>
 
-      {/* Decoraciones de fondo */}
       <div
-        className="pointer-events-none absolute -left-24 top-24 h-52 w-52 rounded-full bg-[#FFC300]/10 blur-3xl"
+        className="pointer-events-none absolute -left-24 top-20 h-48 w-48 rounded-full bg-[#FFC300]/10 blur-3xl"
         aria-hidden="true"
       />
 
       <div
-        className="pointer-events-none absolute -right-24 bottom-10 h-60 w-60 rounded-full bg-[#0A3D62]/10 blur-3xl"
+        className="pointer-events-none absolute -right-24 bottom-8 h-52 w-52 rounded-full bg-[#0A3D62]/10 blur-3xl"
         aria-hidden="true"
       />
 
       <Container>
-        {/* Encabezado de resultados */}
-        <div className="relative mb-6 flex flex-col gap-4 sm:mb-7 sm:flex-row sm:items-end sm:justify-between">
+        {/* Encabezado compacto */}
+        <div className="relative mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="max-w-2xl">
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#0A3D62]/10 bg-white px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-[#0A3D62] shadow-sm">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#0A3D62]/10 bg-white px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.14em] text-[#0A3D62] shadow-sm">
               <BookOpenCheck
-                size={13}
+                size={12}
                 className="text-[#B88600]"
                 strokeWidth={1.9}
                 aria-hidden="true"
@@ -127,7 +125,7 @@ export function CursosLayout({
 
             <h2
               id="cursos-disponibles-titulo"
-              className="mt-3 text-2xl font-extrabold leading-tight text-[#0A3D62] sm:text-3xl"
+              className="mt-2 text-2xl font-extrabold leading-tight text-[#0A3D62] sm:text-3xl"
             >
               Cursos y talleres para{" "}
               <span className="relative inline-block">
@@ -142,42 +140,41 @@ export function CursosLayout({
               </span>
             </h2>
 
-            <p className="mt-2 max-w-xl text-sm leading-6 text-gray-500 sm:text-base">
+            <p className="mt-1.5 max-w-xl text-sm leading-6 text-gray-500">
               Consulta fechas, modalidad, disponibilidad y
               detalles de cada actividad formativa.
             </p>
           </div>
 
-          {/* Contador */}
-          <div className="flex w-fit shrink-0 items-center gap-3 rounded-2xl border border-[#0A3D62]/10 bg-white px-4 py-3 shadow-sm">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#EAF2F8] text-[#0A3D62]">
+          <div className="flex w-fit shrink-0 items-center gap-2.5 rounded-xl border border-[#0A3D62]/10 bg-white px-3 py-2.5 shadow-sm">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#EAF2F8] text-[#0A3D62]">
               <GraduationCap
-                size={20}
+                size={18}
                 strokeWidth={1.9}
                 aria-hidden="true"
               />
             </div>
 
             <div>
-              <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-gray-400">
+              <p className="text-[8px] font-bold uppercase tracking-[0.13em] text-gray-400">
                 Resultados
               </p>
 
-              <p className="text-sm font-extrabold text-[#0A3D62]">
+              <p className="text-xs font-extrabold text-[#0A3D62] sm:text-sm">
                 {listaCursos.length}{" "}
                 {listaCursos.length === 1
-                  ? "curso disponible"
-                  : "cursos disponibles"}
+                  ? "curso"
+                  : "cursos"}
               </p>
             </div>
           </div>
         </div>
 
-        {/* Cuadrícula de cursos */}
-        <div className="relative grid items-stretch gap-4 sm:grid-cols-2 sm:gap-5 xl:grid-cols-3 xl:gap-6">
+        {/* Nueve cursos: tres filas de tres */}
+        <div className="relative grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {listaCursos.map((curso) => (
             <CursoCard
-              key={curso.id}
+              key={String(curso.id)}
               id={curso.id}
               titulo={
                 curso.titulo?.trim() ||
@@ -192,11 +189,9 @@ export function CursosLayout({
               fechaPublicacion={
                 curso.fechaPublicacion
               }
-              inscripcionesAbiertas={
-                Boolean(
-                  curso.inscripcionesAbiertas,
-                )
-              }
+              inscripcionesAbiertas={Boolean(
+                curso.inscripcionesAbiertas,
+              )}
               cupoMaximo={Math.max(
                 Number(curso.cupoMaximo) || 0,
                 0,
@@ -230,14 +225,13 @@ export function CursosLayout({
           ))}
         </div>
 
-        {/* Mensaje inferior */}
-        <div className="mx-auto mt-7 flex max-w-2xl items-start justify-center gap-2.5 rounded-xl border border-[#0A3D62]/10 bg-white px-4 py-3 text-center shadow-sm">
+        {/* Aviso inferior compacto */}
+        <div className="mx-auto mt-5 flex max-w-2xl items-start justify-center gap-2 rounded-xl border border-[#0A3D62]/10 bg-white px-4 py-2.5 text-center shadow-sm">
           <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
 
-          <p className="text-xs font-semibold leading-5 text-gray-500">
-            Selecciona “Detalles” en cualquier curso para
-            consultar la información completa y disponibilidad
-            de lugares.
+          <p className="text-[11px] font-semibold leading-5 text-gray-500 sm:text-xs">
+            Selecciona “Detalles” para consultar toda la
+            información y la disponibilidad del curso.
           </p>
         </div>
       </Container>
