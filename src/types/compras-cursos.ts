@@ -80,6 +80,7 @@ export interface CompraParticipanteResumen {
 export interface CompraCursoResumen {
   idCompra: number;
   folioCompra: string;
+  usuarioId: number;
   cursoId: number;
   tituloCurso: string;
   cantidadCupos: number;

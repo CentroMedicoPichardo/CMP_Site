@@ -72,6 +72,9 @@ const TIPOS_IMAGEN_PERMITIDOS = [
   "image/webp",
 ] as const;
 
+const CLOUDINARY_COMPROBANTES_ROOT =
+  "centro-medico/comprobantes-cursos";
+
 class ReportePagoError extends Error {
   constructor(
     message: string,
@@ -260,9 +263,79 @@ function validateHttpsUrl(
   return url.toString();
 }
 
+function validarUrlImagenCloudinary(
+  value: string,
+  compraId: number,
+  usuarioId: number
+): string {
+  const normalizedUrl =
+    validateHttpsUrl(
+      value,
+      "La URL de la imagen"
+    );
+
+  const url = new URL(
+    normalizedUrl
+  );
+
+  const cloudName =
+    (
+      process.env.CLOUDINARY_CLOUD_NAME ??
+      process.env
+        .NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ??
+      ""
+    ).trim();
+
+  if (!cloudName) {
+    throw new ReportePagoError(
+      "Cloudinary no está configurado en el servidor",
+      500
+    );
+  }
+
+  if (
+    url.hostname !==
+    "res.cloudinary.com"
+  ) {
+    throw new ReportePagoError(
+      "La imagen debe proceder de Cloudinary",
+      400
+    );
+  }
+
+  const decodedPath =
+    decodeURIComponent(
+      url.pathname
+    );
+
+  const cloudinaryPrefix =
+    `/${cloudName}/image/upload/`;
+
+  const expectedAssetPath =
+    `/${CLOUDINARY_COMPROBANTES_ROOT}/compra-${compraId}/comprobante-compra-${compraId}-usuario-${usuarioId}-`;
+
+  if (
+    !decodedPath.includes(
+      cloudinaryPrefix
+    ) ||
+    !decodedPath.includes(
+      expectedAssetPath
+    )
+  ) {
+    throw new ReportePagoError(
+      "El comprobante no pertenece a esta compra",
+      400
+    );
+  }
+
+  return normalizedUrl;
+}
+
 function normalizarComprobante(
   input: ReportarPagoCursoInput,
-  requiereComprobante: boolean
+  requiereComprobante: boolean,
+  compraId: number,
+  usuarioId: number
 ): DatosComprobanteNormalizados {
   const canal = input.canalComprobante;
   const observaciones =
@@ -328,9 +401,10 @@ function normalizarComprobante(
     return {
       canalComprobante: "Imagen",
       rutaComprobante:
-        validateHttpsUrl(
+        validarUrlImagenCloudinary(
           ruta,
-          "La URL de la imagen"
+          compraId,
+          usuarioId
         ),
       nombreArchivoOriginal:
         nombreArchivo.slice(0, 255),
@@ -604,7 +678,9 @@ export async function POST(
           const comprobante =
             normalizarComprobante(
               input,
-              metodoPago.requiereComprobante
+              metodoPago.requiereComprobante,
+              compraId,
+              usuarioId
             );
 
           const pagosExistentes =

@@ -15,6 +15,7 @@ import {
 import {
   useCallback,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 
@@ -28,11 +29,18 @@ export interface ComprobanteCloudinaryAsset {
 }
 
 interface ComprobanteCloudinaryUploaderProps {
+  compraId: string;
+  usuarioId: number;
   value: ComprobanteCloudinaryAsset | null;
   onChange: (
     asset: ComprobanteCloudinaryAsset | null
   ) => void;
   disabled?: boolean;
+}
+
+interface EliminarComprobanteInput {
+  compraId: string;
+  publicId: string;
 }
 
 const MAX_FILE_SIZE = 5_000_000;
@@ -49,6 +57,9 @@ const MIME_TYPES_PERMITIDOS = [
   "image/png",
   "image/webp",
 ] as const;
+
+const CLOUDINARY_FOLDER_ROOT =
+  "centro-medico/comprobantes-cursos";
 
 function restaurarScrollPagina(): void {
   if (typeof document === "undefined") {
@@ -78,6 +89,81 @@ function restaurarScrollPagina(): void {
   document.documentElement.classList.remove(
     "cloudinary-widget-active"
   );
+}
+
+function isRecord(
+  value: unknown
+): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
+}
+
+async function readJsonResponse(
+  response: Response
+): Promise<unknown> {
+  const text = await response.text();
+
+  if (!text) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function getErrorMessage(
+  value: unknown,
+  fallback: string
+): string {
+  if (
+    isRecord(value) &&
+    typeof value.error === "string" &&
+    value.error.trim()
+  ) {
+    return value.error;
+  }
+
+  return fallback;
+}
+
+export async function eliminarComprobanteCloudinary({
+  compraId,
+  publicId,
+}: EliminarComprobanteInput): Promise<void> {
+  const response = await fetch(
+    "/api/cloudinary/comprobantes/delete",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type":
+          "application/json",
+      },
+      credentials: "include",
+      cache: "no-store",
+      body: JSON.stringify({
+        compraId,
+        publicId,
+      }),
+    }
+  );
+
+  const payload =
+    await readJsonResponse(response);
+
+  if (!response.ok) {
+    throw new Error(
+      getErrorMessage(
+        payload,
+        "No fue posible eliminar el comprobante"
+      )
+    );
+  }
 }
 
 function isUploadInfo(
@@ -161,7 +247,25 @@ function getOriginalFilename(
   return `${lastPart}${extension}`;
 }
 
+function crearSufijoCarga(): string {
+  const randomPart =
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID ===
+      "function"
+      ? crypto
+          .randomUUID()
+          .replaceAll("-", "")
+          .slice(0, 12)
+      : Math.random()
+          .toString(36)
+          .slice(2, 14);
+
+  return `${Date.now()}-${randomPart}`;
+}
+
 export function ComprobanteCloudinaryUploader({
+  compraId,
+  usuarioId,
   value,
   onChange,
   disabled = false,
@@ -169,8 +273,42 @@ export function ComprobanteCloudinaryUploader({
   const [isUploading, setIsUploading] =
     useState(false);
 
+  const [isDeleting, setIsDeleting] =
+    useState(false);
+
+  const [uploadSuffix, setUploadSuffix] =
+    useState(crearSufijoCarga);
+
   const [error, setError] =
     useState<string | null>(null);
+
+  const compraIdNumber =
+    Number(compraId);
+
+  const folder = useMemo(
+    () =>
+      `${CLOUDINARY_FOLDER_ROOT}/compra-${compraIdNumber}`,
+    [compraIdNumber]
+  );
+
+  const publicId = useMemo(
+    () =>
+      `comprobante-compra-${compraIdNumber}-usuario-${usuarioId}-${uploadSuffix}`,
+    [
+      compraIdNumber,
+      usuarioId,
+      uploadSuffix,
+    ]
+  );
+
+  const signatureEndpoint =
+    useMemo(
+      () =>
+        `/api/cloudinary/comprobantes/signature?compraId=${encodeURIComponent(
+          compraId
+        )}`,
+      [compraId]
+    );
 
   const finalizarWidget =
     useCallback(() => {
@@ -187,8 +325,21 @@ export function ComprobanteCloudinaryUploader({
     };
   }, []);
 
+  const limpiarAssetSubido =
+    useCallback(
+      async (
+        assetPublicId: string
+      ): Promise<void> => {
+        await eliminarComprobanteCloudinary({
+          compraId,
+          publicId: assetPublicId,
+        });
+      },
+      [compraId]
+    );
+
   const handleSuccess = useCallback(
-    (
+    async (
       result: CloudinaryUploadWidgetResults
     ) => {
       if (!isUploadInfo(result.info)) {
@@ -215,6 +366,14 @@ export function ComprobanteCloudinaryUploader({
         );
 
       if (!mimeTypePermitido) {
+        try {
+          await limpiarAssetSubido(
+            result.info.public_id
+          );
+        } catch {
+          // El endpoint registrará el error del servidor.
+        }
+
         setError(
           "El comprobante debe ser JPG, PNG o WEBP."
         );
@@ -258,24 +417,79 @@ export function ComprobanteCloudinaryUploader({
     },
     [
       finalizarWidget,
+      limpiarAssetSubido,
       onChange,
     ]
   );
 
-  const handleRemove = useCallback(() => {
-    onChange(null);
-    setError(null);
-    restaurarScrollPagina();
-  }, [onChange]);
+  const handleRemove =
+    useCallback(async () => {
+      if (!value) {
+        return;
+      }
+
+      setIsDeleting(true);
+      setError(null);
+
+      try {
+        await limpiarAssetSubido(
+          value.publicId
+        );
+
+        onChange(null);
+        setUploadSuffix(
+          crearSufijoCarga()
+        );
+      } catch (errorValue: unknown) {
+        setError(
+          errorValue instanceof Error
+            ? errorValue.message
+            : "No fue posible eliminar el comprobante"
+        );
+      } finally {
+        setIsDeleting(false);
+        restaurarScrollPagina();
+      }
+    }, [
+      limpiarAssetSubido,
+      onChange,
+      value,
+    ]);
+
+  const invalidIds =
+    !Number.isSafeInteger(
+      compraIdNumber
+    ) ||
+    compraIdNumber <= 0 ||
+    !Number.isSafeInteger(
+      usuarioId
+    ) ||
+    usuarioId <= 0;
 
   return (
     <div className="space-y-4">
       {!value && (
         <CldUploadWidget
-          uploadPreset="medicos_preset"
+          signatureEndpoint={
+            signatureEndpoint
+          }
           options={{
-            folder:
-              "centro-medico-pichardo/comprobantes-cursos",
+            folder,
+
+            publicId,
+
+            tags: [
+              "comprobante-curso",
+              `compra-${compraIdNumber}`,
+              `usuario-${usuarioId}`,
+            ],
+
+            context: {
+              compra_id:
+                String(compraIdNumber),
+              usuario_id:
+                String(usuarioId),
+            },
 
             resourceType: "image",
 
@@ -297,6 +511,9 @@ export function ComprobanteCloudinaryUploader({
             cropping: false,
 
             showAdvancedOptions:
+              false,
+
+            showUploadMoreButton:
               false,
 
             styles: {
@@ -327,7 +544,9 @@ export function ComprobanteCloudinaryUploader({
           onClose={() => {
             finalizarWidget();
           }}
-          onSuccess={handleSuccess}
+          onSuccess={(result) => {
+            void handleSuccess(result);
+          }}
           onError={() => {
             setError(
               "No fue posible subir el comprobante."
@@ -342,6 +561,8 @@ export function ComprobanteCloudinaryUploader({
               disabled={
                 disabled ||
                 isUploading ||
+                isDeleting ||
+                invalidIds ||
                 !open
               }
               onClick={() => {
@@ -416,15 +637,22 @@ export function ComprobanteCloudinaryUploader({
                 </p>
 
                 <p className="text-xs text-slate-500">
-                  Imagen cargada correctamente
+                  {isDeleting
+                    ? "Eliminando..."
+                    : "Imagen cargada correctamente"}
                 </p>
               </div>
             </div>
 
             <button
               type="button"
-              onClick={handleRemove}
-              disabled={disabled}
+              onClick={() => {
+                void handleRemove();
+              }}
+              disabled={
+                disabled ||
+                isDeleting
+              }
               className="
                 inline-flex shrink-0
                 items-center gap-2
@@ -436,11 +664,27 @@ export function ComprobanteCloudinaryUploader({
                 disabled:opacity-60
               "
             >
-              <Trash2 size={17} />
-              Quitar
+              {isDeleting ? (
+                <LoaderCircle
+                  size={17}
+                  className="animate-spin"
+                />
+              ) : (
+                <Trash2 size={17} />
+              )}
+
+              {isDeleting
+                ? "Quitando..."
+                : "Quitar"}
             </button>
           </div>
         </div>
+      )}
+
+      {invalidIds && (
+        <p className="text-sm text-red-600">
+          No fue posible identificar la compra o el usuario para cargar el comprobante.
+        </p>
       )}
 
       {error && (

@@ -552,6 +552,8 @@ export async function GET(
                 ),
               folioCompra:
                 compraEncontrada.folioCompra,
+              usuarioId:
+                compraEncontrada.usuarioId,
               cursoId:
                 compraEncontrada.cursoId,
               tituloCurso:

@@ -73,11 +73,24 @@ export interface CompraCursoAdminDetalle {
   observaciones: string | null;
 }
 
+export interface HistorialEstadoCompraAdmin {
+  idHistorial: number;
+  estadoAnterior: string | null;
+  estadoNuevo: string;
+  fechaCambio: string;
+  origenCambio: string;
+  usuarioResponsableId: number | null;
+  usuarioResponsableNombre: string | null;
+  motivo: string | null;
+  observaciones: string | null;
+}
+
 export interface CompraCursoAdminDetalleResponse {
   compra: CompraCursoAdminDetalle;
   participantes: CompraParticipanteResumen[];
   metodosPago: MetodoPagoCurso[];
   pagos: PagoCursoResumen[];
+  historialEstados: HistorialEstadoCompraAdmin[];
   resumenPago: {
     totalCompra: string;
     totalReportado: string;

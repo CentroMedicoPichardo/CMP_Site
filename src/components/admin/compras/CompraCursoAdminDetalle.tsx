@@ -12,6 +12,7 @@ import {
   Loader2,
   MessageCircle,
   RefreshCw,
+  History,
   UserRound,
   Users,
   WalletCards,
@@ -78,6 +79,7 @@ function parseResponse(
     !Array.isArray(value.participantes) ||
     !Array.isArray(value.metodosPago) ||
     !Array.isArray(value.pagos) ||
+    !Array.isArray(value.historialEstados) ||
     !isRecord(value.resumenPago)
   ) {
     return null;
@@ -166,6 +168,26 @@ function estadoCompraClassName(
       return "border-red-200 bg-red-50 text-red-700";
     default:
       return "border-gray-200 bg-gray-50 text-gray-700";
+  }
+}
+
+function estadoTimelineClassName(
+  estado: string
+): string {
+  switch (estado) {
+    case "Pago reportado":
+      return "bg-amber-500 ring-amber-200";
+    case "En validación":
+      return "bg-blue-500 ring-blue-200";
+    case "Pago validado":
+    case "Inscripciones generadas":
+      return "bg-green-500 ring-green-200";
+    case "Rechazada":
+    case "Cancelada":
+    case "Expirada":
+      return "bg-red-500 ring-red-200";
+    default:
+      return "bg-gray-500 ring-gray-200";
   }
 }
 
@@ -477,8 +499,13 @@ export function CompraCursoAdminDetalle({
     );
   }
 
-  const { compra, participantes, pagos, resumenPago } =
-    data;
+  const {
+    compra,
+    participantes,
+    pagos,
+    historialEstados,
+    resumenPago,
+  } = data;
 
   const compraExpirada =
     compra.estado === "Expirada";
@@ -956,6 +983,138 @@ export function CompraCursoAdminDetalle({
             </div>
           )}
         </InfoSection>
+      </section>
+
+      <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="mb-5 flex items-center gap-2">
+          <History
+            size={21}
+            className="text-[#0A3D62]"
+          />
+
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">
+              Historial de estados
+            </h2>
+
+            <p className="text-sm text-gray-500">
+              {historialEstados.length} cambio(s)
+              registrado(s)
+            </p>
+          </div>
+        </div>
+
+        {historialEstados.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500">
+            No hay cambios de estado registrados para esta compra.
+          </div>
+        ) : (
+          <div className="space-y-0">
+            {historialEstados.map(
+              (movimiento, index) => {
+                const esUltimo =
+                  index ===
+                  historialEstados.length - 1;
+
+                return (
+                  <article
+                    key={movimiento.idHistorial}
+                    className="relative flex gap-4"
+                  >
+                    <div className="flex w-5 shrink-0 flex-col items-center">
+                      <span
+                        className={`mt-1 h-4 w-4 rounded-full border-4 border-white ring-2 ${
+                          estadoTimelineClassName(
+                            movimiento.estadoNuevo
+                          )
+                        }`}
+                      />
+
+                      {!esUltimo && (
+                        <span className="mt-1 min-h-16 w-px flex-1 bg-gray-200" />
+                      )}
+                    </div>
+
+                    <div
+                      className={`min-w-0 flex-1 ${
+                        esUltimo
+                          ? "pb-0"
+                          : "pb-6"
+                      }`}
+                    >
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <span
+                            className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${estadoCompraClassName(
+                              movimiento.estadoNuevo
+                            )}`}
+                          >
+                            {movimiento.estadoNuevo}
+                          </span>
+
+                          <p className="mt-2 text-sm font-medium text-gray-800">
+                            {movimiento.estadoAnterior
+                              ? `${movimiento.estadoAnterior} → ${movimiento.estadoNuevo}`
+                              : `Compra creada en ${movimiento.estadoNuevo}`}
+                          </p>
+                        </div>
+
+                        <time className="shrink-0 text-xs text-gray-500">
+                          {formatDate(
+                            movimiento.fechaCambio
+                          )}
+                        </time>
+                      </div>
+
+                      <div className="mt-3 grid gap-2 text-sm text-gray-600 sm:grid-cols-2">
+                        <InfoRow
+                          label="Origen"
+                          value={
+                            movimiento.origenCambio
+                          }
+                        />
+
+                        <InfoRow
+                          label="Responsable"
+                          value={
+                            movimiento.usuarioResponsableNombre ??
+                            (
+                              movimiento.usuarioResponsableId
+                                ? `Usuario #${movimiento.usuarioResponsableId}`
+                                : "Sistema"
+                            )
+                          }
+                        />
+                      </div>
+
+                      {movimiento.motivo && (
+                        <div className="mt-3 rounded-lg bg-gray-50 p-3 text-sm text-gray-700">
+                          <p className="font-medium text-gray-900">
+                            Motivo
+                          </p>
+                          <p className="mt-1 whitespace-pre-line">
+                            {movimiento.motivo}
+                          </p>
+                        </div>
+                      )}
+
+                      {movimiento.observaciones && (
+                        <div className="mt-3 rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-700">
+                          <p className="font-medium text-gray-900">
+                            Observaciones
+                          </p>
+                          <p className="mt-1 whitespace-pre-line">
+                            {movimiento.observaciones}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </article>
+                );
+              }
+            )}
+          </div>
+        )}
       </section>
 
       <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">

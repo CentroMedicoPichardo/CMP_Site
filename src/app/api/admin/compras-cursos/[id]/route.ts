@@ -1,6 +1,7 @@
 // src/app/api/admin/compras-cursos/[id]/route.ts
 
 import { asc, eq } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { NextResponse } from "next/server";
 
 import { requireApiRole } from "@/lib/auth";
@@ -13,6 +14,7 @@ import {
   comprasCursos,
   cursos,
   estadosCompra,
+  historialEstadosCompra,
   metodosPagoCursos,
   pagosCursos,
   participantes,
@@ -20,6 +22,7 @@ import {
 } from "@/lib/schema";
 import type {
   CompraCursoAdminDetalleResponse,
+  HistorialEstadoCompraAdmin,
 } from "@/types/admin-compras-cursos";
 import type {
   CanalComprobanteCurso,
@@ -40,6 +43,21 @@ const ESTADOS_PAGO_REPORTADOS = [
   "En revisión",
   "Aprobado",
 ] as const;
+
+const estadoAnterior = alias(
+  estadosCompra,
+  "estado_anterior_historial"
+);
+
+const estadoNuevo = alias(
+  estadosCompra,
+  "estado_nuevo_historial"
+);
+
+const usuarioResponsable = alias(
+  usuarios,
+  "usuario_responsable_historial"
+);
 
 function isSexoParticipante(
   value: string | null
@@ -517,6 +535,112 @@ export async function GET(
           fila.observaciones,
       }));
 
+    const filasHistorial = await db
+      .select({
+        idHistorial:
+          historialEstadosCompra.idHistorialEstado,
+        estadoAnterior:
+          estadoAnterior.nombre,
+        estadoNuevo:
+          estadoNuevo.nombre,
+        fechaCambio:
+          historialEstadosCompra.fechaCambio,
+        origenCambio:
+          historialEstadosCompra.origenCambio,
+        usuarioResponsableId:
+          historialEstadosCompra.usuarioResponsable,
+        responsableNombre:
+          usuarioResponsable.nombre,
+        responsableApellidoPaterno:
+          usuarioResponsable.apellidoPaterno,
+        responsableApellidoMaterno:
+          usuarioResponsable.apellidoMaterno,
+        motivo:
+          historialEstadosCompra.motivo,
+        observaciones:
+          historialEstadosCompra.observaciones,
+      })
+      .from(historialEstadosCompra)
+      .leftJoin(
+        estadoAnterior,
+        eq(
+          historialEstadosCompra.idEstadoAnterior,
+          estadoAnterior.idestadocompra
+        )
+      )
+      .innerJoin(
+        estadoNuevo,
+        eq(
+          historialEstadosCompra.idEstadoNuevo,
+          estadoNuevo.idestadocompra
+        )
+      )
+      .leftJoin(
+        usuarioResponsable,
+        eq(
+          historialEstadosCompra.usuarioResponsable,
+          usuarioResponsable.id
+        )
+      )
+      .where(
+        eq(
+          historialEstadosCompra.idCompra,
+          compraId
+        )
+      )
+      .orderBy(
+        asc(
+          historialEstadosCompra.fechaCambio
+        ),
+        asc(
+          historialEstadosCompra.idHistorialEstado
+        )
+      );
+
+    const historialEstados:
+      HistorialEstadoCompraAdmin[] =
+      filasHistorial.map((fila) => {
+        const usuarioResponsableNombre = [
+          fila.responsableNombre,
+          fila.responsableApellidoPaterno,
+          fila.responsableApellidoMaterno,
+        ]
+          .filter(
+            (value): value is string =>
+              typeof value === "string" &&
+              value.trim().length > 0
+          )
+          .join(" ");
+
+        return {
+          idHistorial:
+            idToSafeNumber(
+              fila.idHistorial,
+              "idHistorial"
+            ),
+          estadoAnterior:
+            fila.estadoAnterior,
+          estadoNuevo:
+            fila.estadoNuevo,
+          fechaCambio:
+            fechaToString(
+              fila.fechaCambio,
+              "la fecha del cambio de estado"
+            ),
+          origenCambio:
+            fila.origenCambio,
+          usuarioResponsableId:
+            fila.usuarioResponsableId,
+          usuarioResponsableNombre:
+            usuarioResponsableNombre ||
+            null,
+          motivo:
+            fila.motivo,
+          observaciones:
+            fila.observaciones,
+        };
+      });
+
     const totalCompra = Number(
       compra.total
     );
@@ -609,6 +733,7 @@ export async function GET(
           participantesResponse,
         metodosPago,
         pagos,
+        historialEstados,
         resumenPago: {
           totalCompra:
             moneyToFixed(totalCompra),

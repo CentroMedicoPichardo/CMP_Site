@@ -21,7 +21,11 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { ComprobanteCloudinaryUploader, type ComprobanteCloudinaryAsset } from "@/components/client/compras/ComprobanteCloudinaryUploader";
+import {
+  ComprobanteCloudinaryUploader,
+  eliminarComprobanteCloudinary,
+  type ComprobanteCloudinaryAsset,
+} from "@/components/client/compras/ComprobanteCloudinaryUploader";
 import { getApiErrorMessage } from "@/types/api";
 import type {
   CanalComprobanteCurso,
@@ -325,22 +329,74 @@ export function CompraCursoDetalle({
     setMensaje(null);
   };
 
-  const cambiarCanalComprobante = (
-    canal: CanalComprobanteCurso
-  ) => {
-    setComprobanteImagen(null);
+  const limpiarComprobanteTemporal =
+    useCallback(async (): Promise<boolean> => {
+      if (!comprobanteImagen) {
+        return true;
+      }
 
-    setFormData((previous) => ({
-      ...previous,
-      canalComprobante: canal,
-      rutaComprobante: "",
-      nombreArchivoOriginal: "",
-      tipoArchivo: "",
-      comprobanteConfirmado: false,
-    }));
+      try {
+        await eliminarComprobanteCloudinary({
+          compraId,
+          publicId:
+            comprobanteImagen.publicId,
+        });
 
-    setMensaje(null);
-  };
+        setComprobanteImagen(null);
+
+        setFormData((previous) => ({
+          ...previous,
+          rutaComprobante: "",
+          nombreArchivoOriginal: "",
+          tipoArchivo: "",
+        }));
+
+        return true;
+      } catch (errorValue: unknown) {
+        setMensaje({
+          tipo: "error",
+          texto:
+            errorValue instanceof Error
+              ? errorValue.message
+              : "No fue posible eliminar el comprobante anterior",
+        });
+
+        return false;
+      }
+    }, [
+      compraId,
+      comprobanteImagen,
+    ]);
+
+  const cambiarCanalComprobante =
+    async (
+      canal: CanalComprobanteCurso
+    ) => {
+      if (
+        canal ===
+        formData.canalComprobante
+      ) {
+        return;
+      }
+
+      const comprobanteEliminado =
+        await limpiarComprobanteTemporal();
+
+      if (!comprobanteEliminado) {
+        return;
+      }
+
+      setFormData((previous) => ({
+        ...previous,
+        canalComprobante: canal,
+        rutaComprobante: "",
+        nombreArchivoOriginal: "",
+        tipoArchivo: "",
+        comprobanteConfirmado: false,
+      }));
+
+      setMensaje(null);
+    };
 
   const actualizarImagen = (
     asset: ComprobanteCloudinaryAsset | null
@@ -439,6 +495,8 @@ export function CompraCursoDetalle({
     setReportando(true);
     setMensaje(null);
 
+    let pagoRegistrado = false;
+
     try {
       const input: ReportarPagoCursoInput = {
         idMetodoPago: metodoId,
@@ -493,6 +551,8 @@ export function CompraCursoDetalle({
         );
       }
 
+      pagoRegistrado = true;
+
       if (
         !isReportarPagoResponse(payload)
       ) {
@@ -516,6 +576,30 @@ export function CompraCursoDetalle({
 
       await cargarCompra();
     } catch (submitError: unknown) {
+      if (
+        !pagoRegistrado &&
+        comprobanteImagen
+      ) {
+        try {
+          await eliminarComprobanteCloudinary({
+            compraId,
+            publicId:
+              comprobanteImagen.publicId,
+          });
+
+          setComprobanteImagen(null);
+
+          setFormData((previous) => ({
+            ...previous,
+            rutaComprobante: "",
+            nombreArchivoOriginal: "",
+            tipoArchivo: "",
+          }));
+        } catch {
+          // Conservamos el error original del reporte.
+        }
+      }
+
       setMensaje({
         tipo: "error",
         texto:
@@ -1084,7 +1168,11 @@ export function CompraCursoDetalle({
                           <button
                             key={opcion.value}
                             type="button"
-                            onClick={() => cambiarCanalComprobante(opcion.value)}
+                            onClick={() => {
+                              void cambiarCanalComprobante(
+                                opcion.value
+                              );
+                            }}
                             className={`flex items-center gap-2 rounded-lg border px-3 py-3 text-left text-sm font-medium transition ${
                               seleccionado
                                 ? "border-[#0A3D62] bg-blue-50 text-[#0A3D62]"
@@ -1101,6 +1189,10 @@ export function CompraCursoDetalle({
 
                   {formData.canalComprobante === "Imagen" && (
                     <ComprobanteCloudinaryUploader
+                      compraId={compraId}
+                      usuarioId={
+                        data.compra.usuarioId
+                      }
                       value={comprobanteImagen}
                       onChange={actualizarImagen}
                       disabled={reportando}
