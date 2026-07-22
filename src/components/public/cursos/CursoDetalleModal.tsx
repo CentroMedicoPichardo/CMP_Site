@@ -1,4 +1,3 @@
-// src/components/public/cursos/CursoDetalleModal.tsx
 "use client";
 
 import {
@@ -7,25 +6,31 @@ import {
   useMemo,
   useRef,
   useState,
+  type FormEvent,
+  type ReactNode,
 } from "react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   ArrowLeft,
-  Calendar,
-  CheckCircle,
-  Clock,
-  DollarSign,
-  MapPin,
+  BadgeCheck,
+  CalendarDays,
+  CheckCircle2,
+  ChevronRight,
+  CircleDollarSign,
+  Clock3,
+  GraduationCap,
+  Laptop,
+  MapPinned,
   Minus,
-  Monitor,
   Plus,
+  ShoppingBag,
   Trash2,
-  User,
-  Users,
+  UserRound,
+  UsersRound,
   X,
 } from "lucide-react";
-import Image from "next/image";
-import { useRouter } from "next/navigation";
 
 import { getApiErrorMessage } from "@/types/api";
 import type {
@@ -33,9 +38,7 @@ import type {
   CrearCompraCursoResponse,
   SexoParticipante,
 } from "@/types/compras-cursos";
-import type {
-  VerificarInscripcionCursoResponse,
-} from "@/types/cursos";
+import type { VerificarInscripcionCursoResponse } from "@/types/cursos";
 
 interface CursoDetalleProps {
   id: string | number;
@@ -105,9 +108,15 @@ interface CompraFormData {
   observaciones: string;
 }
 
+function cn(
+  ...clases: Array<string | false | null | undefined>
+): string {
+  return clases.filter(Boolean).join(" ");
+}
+
 function crearParticipanteVacio(
   localId: number,
-  correo = ""
+  correo = "",
 ): ParticipanteFormData {
   return {
     localId,
@@ -130,7 +139,7 @@ function crearFormularioInicial(): CompraFormData {
 }
 
 function isRecord(
-  value: unknown
+  value: unknown,
 ): value is Record<string, unknown> {
   return (
     typeof value === "object" &&
@@ -140,7 +149,7 @@ function isRecord(
 }
 
 async function readJsonResponse(
-  response: Response
+  response: Response,
 ): Promise<unknown> {
   const text = await response.text();
 
@@ -156,7 +165,7 @@ async function readJsonResponse(
 }
 
 function parseAuthResponse(
-  value: unknown
+  value: unknown,
 ): AuthVerificarResponse {
   if (!isRecord(value)) {
     return {};
@@ -176,7 +185,7 @@ function parseAuthResponse(
 }
 
 function parseUsuarioSesion(
-  usuario: AuthUsuario
+  usuario: AuthUsuario,
 ): UsuarioSesion | null {
   const id = Number(usuario.id);
 
@@ -212,7 +221,7 @@ function parseUsuarioSesion(
 }
 
 function parseVerificarInscripcionResponse(
-  value: unknown
+  value: unknown,
 ): VerificarInscripcionCursoResponse | null {
   if (!isRecord(value)) {
     return null;
@@ -231,7 +240,7 @@ function parseVerificarInscripcionResponse(
 }
 
 function parseCrearCompraResponse(
-  value: unknown
+  value: unknown,
 ): CrearCompraCursoResponse | null {
   if (
     !isRecord(value) ||
@@ -277,28 +286,33 @@ export function CursoDetalleModal({
     useState<"detalle" | "formulario">("detalle");
   const [formData, setFormData] =
     useState<CompraFormData>(
-      crearFormularioInicial
+      crearFormularioInicial,
     );
 
   const requestControllerRef =
     useRef<AbortController | null>(null);
   const mensajeTimeoutRef =
-    useRef<ReturnType<typeof setTimeout> | null>(null);
+    useRef<ReturnType<typeof setTimeout> | null>(
+      null,
+    );
   const siguienteParticipanteIdRef =
     useRef(2);
 
   const cuposDisponibles = Math.max(
     0,
-    curso.lugaresDisponibles
+    Number(curso.lugaresDisponibles) || 0,
   );
 
   const porcentajeLlenado =
     curso.cupoMaximo > 0
       ? Math.min(
-          (curso.cupoInscrito /
-            curso.cupoMaximo) *
-            100,
-          100
+          Math.max(
+            (curso.cupoInscrito /
+              curso.cupoMaximo) *
+              100,
+            0,
+          ),
+          100,
         )
       : 0;
 
@@ -311,7 +325,10 @@ export function CursoDetalleModal({
     () =>
       precioUnitario *
       formData.cantidadCupos,
-    [precioUnitario, formData.cantidadCupos]
+    [
+      precioUnitario,
+      formData.cantidadCupos,
+    ],
   );
 
   const costoMostrar =
@@ -319,23 +336,34 @@ export function CursoDetalleModal({
       ? "Gratis"
       : formatCurrency(curso.costo);
 
+  const periodoCurso =
+    curso.fechaFin &&
+    curso.fechaFin !== curso.fechaInicio
+      ? `${curso.fechaInicio} – ${curso.fechaFin}`
+      : curso.fechaInicio;
+
   const mostrarMensajeTemporal = useCallback(
     (
       nuevoMensaje: MensajeEstado,
-      duration = 3000
+      duration = 3000,
     ) => {
       if (mensajeTimeoutRef.current) {
-        clearTimeout(mensajeTimeoutRef.current);
+        clearTimeout(
+          mensajeTimeoutRef.current,
+        );
       }
 
       setMensaje(nuevoMensaje);
 
-      mensajeTimeoutRef.current = setTimeout(() => {
-        setMensaje(null);
-        mensajeTimeoutRef.current = null;
-      }, duration);
+      mensajeTimeoutRef.current = setTimeout(
+        () => {
+          setMensaje(null);
+          mensajeTimeoutRef.current = null;
+        },
+        duration,
+      );
     },
-    []
+    [],
   );
 
   const verificarLoginYInscripcion =
@@ -348,7 +376,7 @@ export function CursoDetalleModal({
               signal,
               credentials: "include",
               cache: "no-store",
-            }
+            },
           );
 
           const authPayload =
@@ -373,7 +401,7 @@ export function CursoDetalleModal({
           }
 
           const usuario = parseUsuarioSesion(
-            authData.usuario
+            authData.usuario,
           );
 
           if (!usuario) {
@@ -384,39 +412,40 @@ export function CursoDetalleModal({
 
           setUsuarioLogueado(usuario);
 
-          const inscripcionResponse = await fetch(
-            `/api/cursos/verificar-inscripcion?cursoId=${encodeURIComponent(
-              String(curso.id)
-            )}`,
-            {
-              signal,
-              credentials: "include",
-              cache: "no-store",
-            }
-          );
+          const inscripcionResponse =
+            await fetch(
+              `/api/cursos/verificar-inscripcion?cursoId=${encodeURIComponent(
+                String(curso.id),
+              )}`,
+              {
+                signal,
+                credentials: "include",
+                cache: "no-store",
+              },
+            );
 
           const inscripcionPayload =
             await readJsonResponse(
-              inscripcionResponse
+              inscripcionResponse,
             );
 
           if (!inscripcionResponse.ok) {
             throw new Error(
               getApiErrorMessage(
                 inscripcionPayload,
-                "No fue posible verificar la inscripción"
-              )
+                "No fue posible verificar la inscripción",
+              ),
             );
           }
 
           const resultado =
             parseVerificarInscripcionResponse(
-              inscripcionPayload
+              inscripcionPayload,
             );
 
           if (!resultado) {
             throw new Error(
-              "La respuesta de verificación no es válida"
+              "La respuesta de verificación no es válida",
             );
           }
 
@@ -431,14 +460,13 @@ export function CursoDetalleModal({
 
           console.error(
             "Error verificando login e inscripción:",
-            error
+            error,
           );
 
-          setUsuarioLogueado(null);
           setYaInscrito(false);
         }
       },
-      [curso.id]
+      [curso.id],
     );
 
   useEffect(() => {
@@ -449,27 +477,82 @@ export function CursoDetalleModal({
     const controller = new AbortController();
 
     void verificarLoginYInscripcion(
-      controller.signal
+      controller.signal,
     );
 
     return () => {
       controller.abort();
     };
-  }, [isOpen, verificarLoginYInscripcion]);
+  }, [
+    isOpen,
+    verificarLoginYInscripcion,
+  ]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const overflowAnterior =
+      document.body.style.overflow;
+
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (
+      event: KeyboardEvent,
+    ) => {
+      if (
+        event.key === "Escape" &&
+        !creandoCompra
+      ) {
+        requestControllerRef.current?.abort();
+        setView("detalle");
+        setFormData(
+          crearFormularioInicial(),
+        );
+        setMensaje(null);
+        siguienteParticipanteIdRef.current = 2;
+        onClose();
+      }
+    };
+
+    window.addEventListener(
+      "keydown",
+      handleKeyDown,
+    );
+
+    return () => {
+      document.body.style.overflow =
+        overflowAnterior;
+
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown,
+      );
+    };
+  }, [
+    creandoCompra,
+    isOpen,
+    onClose,
+  ]);
 
   useEffect(() => {
     return () => {
       requestControllerRef.current?.abort();
 
       if (mensajeTimeoutRef.current) {
-        clearTimeout(mensajeTimeoutRef.current);
+        clearTimeout(
+          mensajeTimeoutRef.current,
+        );
       }
     };
   }, []);
 
   const resetModalState = () => {
     setView("detalle");
-    setFormData(crearFormularioInicial());
+    setFormData(
+      crearFormularioInicial(),
+    );
     setMensaje(null);
     setCreandoCompra(false);
     siguienteParticipanteIdRef.current = 2;
@@ -483,7 +566,9 @@ export function CursoDetalleModal({
 
   const handlePrepararCompra = () => {
     if (!usuarioLogueado) {
-      router.push("/acceder?redirect=/cursos");
+      router.push(
+        "/acceder?redirect=/cursos",
+      );
       return;
     }
 
@@ -515,7 +600,7 @@ export function CursoDetalleModal({
                   correo:
                     usuarioLogueado.email,
                 }
-              : participante
+              : participante,
         ),
     }));
 
@@ -524,11 +609,11 @@ export function CursoDetalleModal({
   };
 
   const ajustarCantidadCupos = (
-    nuevaCantidad: number
+    nuevaCantidad: number,
   ) => {
     const cantidadValida = Math.min(
       Math.max(1, nuevaCantidad),
-      cuposDisponibles
+      cuposDisponibles,
     );
 
     setFormData((previous) => {
@@ -555,7 +640,7 @@ export function CursoDetalleModal({
           participantes:
             participantesActuales.slice(
               0,
-              cantidadValida
+              cantidadValida,
             ),
         };
       }
@@ -574,9 +659,9 @@ export function CursoDetalleModal({
             siguienteParticipanteIdRef.current += 1;
 
             return crearParticipanteVacio(
-              localId
+              localId,
             );
-          }
+          },
         );
 
       return {
@@ -605,14 +690,16 @@ export function CursoDetalleModal({
     }
 
     ajustarCantidadCupos(
-      formData.cantidadCupos + 1
+      formData.cantidadCupos + 1,
     );
   };
 
   const eliminarParticipante = (
-    localId: number
+    localId: number,
   ) => {
-    if (formData.participantes.length <= 1) {
+    if (
+      formData.participantes.length <= 1
+    ) {
       return;
     }
 
@@ -620,7 +707,7 @@ export function CursoDetalleModal({
       const participantes =
         previous.participantes.filter(
           (participante) =>
-            participante.localId !== localId
+            participante.localId !== localId,
         );
 
       return {
@@ -640,7 +727,7 @@ export function CursoDetalleModal({
       ParticipanteFormData,
       "localId"
     >,
-    value: string
+    value: string,
   ) => {
     setFormData((previous) => ({
       ...previous,
@@ -652,14 +739,16 @@ export function CursoDetalleModal({
                   ...participante,
                   [field]: value,
                 }
-              : participante
+              : participante,
         ),
     }));
 
     setMensaje(null);
   };
 
-  const validarFormulario = (): string | null => {
+  const validarFormulario = ():
+    | string
+    | null => {
     if (
       formData.cantidadCupos < 1 ||
       formData.cantidadCupos >
@@ -677,7 +766,8 @@ export function CursoDetalleModal({
 
     for (
       let index = 0;
-      index < formData.participantes.length;
+      index <
+      formData.participantes.length;
       index += 1
     ) {
       const participante =
@@ -714,7 +804,7 @@ export function CursoDetalleModal({
   };
 
   const confirmarCompra = async (
-    event: React.FormEvent<HTMLFormElement>
+    event: FormEvent<HTMLFormElement>,
   ) => {
     event.preventDefault();
 
@@ -744,8 +834,11 @@ export function CursoDetalleModal({
 
     requestControllerRef.current?.abort();
 
-    const controller = new AbortController();
-    requestControllerRef.current = controller;
+    const controller =
+      new AbortController();
+
+    requestControllerRef.current =
+      controller;
 
     setCreandoCompra(true);
     setMensaje(null);
@@ -760,7 +853,7 @@ export function CursoDetalleModal({
           (participante) => {
             if (!participante.sexo) {
               throw new Error(
-                "Todos los participantes deben tener un sexo seleccionado"
+                "Todos los participantes deben tener un sexo seleccionado",
               );
             }
 
@@ -785,7 +878,7 @@ export function CursoDetalleModal({
                   null,
               },
             };
-          }
+          },
         );
 
       const input: CrearCompraCursoInput = {
@@ -809,7 +902,7 @@ export function CursoDetalleModal({
           credentials: "include",
           signal: controller.signal,
           body: JSON.stringify(input),
-        }
+        },
       );
 
       const payload =
@@ -819,8 +912,8 @@ export function CursoDetalleModal({
         throw new Error(
           getApiErrorMessage(
             payload,
-            "No fue posible crear la compra"
-          )
+            "No fue posible crear la compra",
+          ),
         );
       }
 
@@ -829,18 +922,17 @@ export function CursoDetalleModal({
 
       if (!result) {
         throw new Error(
-          "La respuesta de la compra no es válida"
+          "La respuesta de la compra no es válida",
         );
       }
 
       setMensaje({
         type: "success",
-        text:
-          "Compra creada correctamente. Redirigiendo al pago...",
+        text: "Compra creada correctamente. Redirigiendo al pago...",
       });
 
       router.push(
-        `/mis-compras/cursos/${result.compra.idCompra}`
+        `/mis-compras/cursos/${result.compra.idCompra}`,
       );
     } catch (error: unknown) {
       const abortado =
@@ -873,16 +965,24 @@ export function CursoDetalleModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[99999] overflow-y-auto">
-      <div
-        className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+    <div
+      className="fixed inset-0 z-[99999]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="curso-modal-titulo"
+    >
+      <button
+        type="button"
+        className="absolute inset-0 h-full w-full cursor-default bg-[#061C2E]/80 backdrop-blur-sm"
         onClick={handleClose}
+        aria-label="Cerrar modal"
       />
 
-      <div className="flex min-h-full items-center justify-center p-4">
-        <div className="relative max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
-          <header className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4">
-            <div className="flex items-center gap-3">
+      <div className="relative flex min-h-full items-end justify-center sm:items-center sm:p-4">
+        <div className="flex max-h-[96dvh] w-full max-w-6xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-h-[92vh] sm:rounded-3xl">
+          {/* Barra superior */}
+          <header className="relative z-30 flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 py-3 sm:px-5">
+            <div className="flex min-w-0 items-center gap-2.5">
               {view === "formulario" && (
                 <button
                   type="button"
@@ -890,422 +990,730 @@ export function CursoDetalleModal({
                     setView("detalle")
                   }
                   disabled={creandoCompra}
-                  className="rounded-full p-2 transition-colors hover:bg-gray-100 disabled:opacity-50"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-gray-600 transition-colors hover:bg-gray-100 disabled:opacity-50"
                   aria-label="Regresar al detalle"
                 >
                   <ArrowLeft
-                    size={20}
-                    className="text-gray-600"
+                    size={18}
+                    aria-hidden="true"
                   />
                 </button>
               )}
 
-              <h2 className="text-xl font-bold text-[#0A3D62]">
-                {view === "detalle"
-                  ? "Detalle del curso"
-                  : "Crear compra"}
-              </h2>
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#EAF2F8] text-[#0A3D62]">
+                {view === "detalle" ? (
+                  <GraduationCap
+                    size={19}
+                    strokeWidth={1.9}
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <ShoppingBag
+                    size={18}
+                    strokeWidth={1.9}
+                    aria-hidden="true"
+                  />
+                )}
+              </div>
+
+              <div className="min-w-0">
+                <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-gray-400">
+                  {view === "detalle"
+                    ? "Información del curso"
+                    : "Proceso de inscripción"}
+                </p>
+
+                <h2
+                  id="curso-modal-titulo"
+                  className="truncate text-base font-extrabold text-[#0A3D62] sm:text-lg"
+                >
+                  {view === "detalle"
+                    ? "Detalle del curso"
+                    : "Reservar lugares"}
+                </h2>
+              </div>
             </div>
 
             <button
               type="button"
               onClick={handleClose}
               disabled={creandoCompra}
-              className="rounded-lg p-2 transition-colors hover:bg-gray-100 disabled:opacity-50"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-gray-500 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
               aria-label="Cerrar"
             >
               <X
-                size={22}
-                className="text-gray-500"
+                size={19}
+                aria-hidden="true"
               />
             </button>
           </header>
 
-          {view === "detalle" ? (
-            <div className="p-6">
-              {curso.imagenSrc && (
-                <div className="relative mb-6 h-64 overflow-hidden rounded-xl">
-                  <Image
-                    src={curso.imagenSrc}
-                    alt={curso.titulo}
-                    fill
-                    className="object-cover"
-                  />
-                </div>
-              )}
+          {/* Contenido desplazable */}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {view === "detalle" ? (
+              <div className="grid lg:min-h-[570px] lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+                {/* Imagen y descripción */}
+                <div className="border-b border-gray-200 bg-[#E7EEF3] lg:border-b-0 lg:border-r">
+                  <div className="relative h-56 overflow-hidden sm:h-72 lg:h-[390px]">
+                    {curso.imagenSrc ? (
+                      <>
+                        <Image
+                          src={curso.imagenSrc}
+                          alt=""
+                          fill
+                          sizes="(max-width: 1024px) 100vw, 55vw"
+                          className="scale-110 object-cover opacity-40 blur-xl"
+                          aria-hidden="true"
+                        />
 
-              <h1 className="mb-4 text-2xl font-bold text-[#0A3D62]">
-                {curso.titulo}
-              </h1>
+                        <div
+                          className="absolute inset-0 bg-[#0A3D62]/10"
+                          aria-hidden="true"
+                        />
 
-              <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-                <InfoCard
-                  icon={<Calendar size={20} />}
-                  label="Fechas"
-                  value={`${curso.fechaInicio} - ${curso.fechaFin}`}
-                />
-                <InfoCard
-                  icon={<Clock size={20} />}
-                  label="Horario"
-                  value={curso.horario}
-                />
-                <InfoCard
-                  icon={<User size={20} />}
-                  label="Instructor"
-                  value={curso.instructor}
-                />
-                <InfoCard
-                  icon={
-                    curso.modalidad ===
-                    "Online" ? (
-                      <Monitor size={20} />
-                    ) : (
-                      <MapPin size={20} />
-                    )
-                  }
-                  label="Modalidad"
-                  value={
-                    curso.ubicacion
-                      ? `${curso.modalidad} · ${curso.ubicacion}`
-                      : curso.modalidad
-                  }
-                />
-                <InfoCard
-                  icon={<Users size={20} />}
-                  label="Cupo disponible"
-                  value={`${cuposDisponibles} de ${curso.cupoMaximo} lugares`}
-                  valueClassName={
-                    cuposDisponibles < 5
-                      ? "text-red-600"
-                      : "text-green-600"
-                  }
-                />
-                <InfoCard
-                  icon={<DollarSign size={20} />}
-                  label="Costo por persona"
-                  value={costoMostrar}
-                  valueClassName="font-bold"
-                />
-              </div>
-
-              <div className="mb-6">
-                <div className="mb-2 flex justify-between text-sm">
-                  <span className="text-gray-700">
-                    Ocupación del curso
-                  </span>
-                  <span className="font-semibold text-[#0A3D62]">
-                    {porcentajeLlenado.toFixed(0)}%
-                  </span>
-                </div>
-
-                <div className="h-3 w-full overflow-hidden rounded-full bg-gray-200">
-                  <div
-                    className="h-full bg-gradient-to-r from-[#FFC300] to-[#FFD700]"
-                    style={{
-                      width: `${porcentajeLlenado}%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              <section className="mb-6">
-                <h3 className="mb-3 text-lg font-semibold text-[#0A3D62]">
-                  Descripción del curso
-                </h3>
-                <p className="leading-relaxed text-gray-700">
-                  {curso.descripcion}
-                </p>
-              </section>
-
-              {mensaje && (
-                <MensajeBox mensaje={mensaje} />
-              )}
-
-              <div className="border-t pt-6">
-                {!usuarioLogueado ? (
-                  <div className="rounded-lg bg-yellow-100 p-4 text-center">
-                    <p className="mb-3 text-gray-800">
-                      Para comprar lugares necesitas iniciar sesión.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        router.push(
-                          "/acceder?redirect=/cursos"
-                        )
-                      }
-                      className="rounded-lg bg-[#0A3D62] px-6 py-2 text-white hover:bg-[#1A4F7A]"
-                    >
-                      Iniciar sesión
-                    </button>
-                  </div>
-                ) : !curso.inscripcionesAbiertas ? (
-                  <EstadoBloqueado text="Inscripciones cerradas" />
-                ) : cuposDisponibles <= 0 ? (
-                  <EstadoBloqueado text="Cupo completo" />
-                ) : (
-                  <div className="space-y-4">
-                    {yaInscrito && (
-                      <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-                        <div className="flex items-center gap-2 text-green-800">
-                          <CheckCircle size={20} />
-                          <p className="font-semibold">
-                            Ya tienes una inscripción en este curso
-                          </p>
+                        <div className="absolute inset-3 overflow-hidden rounded-2xl sm:inset-4">
+                          <Image
+                            src={curso.imagenSrc}
+                            alt={curso.titulo}
+                            fill
+                            priority
+                            sizes="(max-width: 1024px) 100vw, 55vw"
+                            className="object-contain object-center"
+                          />
                         </div>
-                        <p className="mt-1 text-sm text-green-700">
-                          Aun puedes comprar cupos para otros participantes.
-                        </p>
+                      </>
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#0A3D62] to-[#1A4F7A]">
+                        <div className="flex h-20 w-20 items-center justify-center rounded-3xl border border-white/15 bg-white/10 text-white">
+                          <GraduationCap
+                            size={38}
+                            strokeWidth={1.5}
+                            aria-hidden="true"
+                          />
+                        </div>
                       </div>
                     )}
 
-                    <button
-                      type="button"
-                      onClick={handlePrepararCompra}
-                      className="w-full rounded-xl bg-gradient-to-r from-[#FFC300] to-[#FFD700] py-3 text-lg font-semibold text-[#0A3D62] transition hover:from-[#0A3D62] hover:to-[#1A4F7A] hover:text-white"
-                    >
-                      Comprar uno o más lugares
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="p-6">
-              <div className="mb-6 rounded-xl border border-blue-100 bg-blue-50 p-4">
-                <h3 className="font-bold text-[#0A3D62]">
-                  {curso.titulo}
-                </h3>
-                <p className="mt-1 text-sm text-blue-800">
-                  Selecciona la cantidad de cupos y captura un participante por cada lugar.
-                </p>
-              </div>
+                    <div
+                      className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-[#061C2E]/85 to-transparent"
+                      aria-hidden="true"
+                    />
 
-              <form
-                onSubmit={confirmarCompra}
-                className="space-y-6"
-              >
-                <section className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <h4 className="font-semibold text-gray-900">
-                        Cantidad de cupos
-                      </h4>
-                      <p className="text-sm text-gray-600">
-                        Hay {cuposDisponibles} lugares disponibles.
+                    <div className="absolute left-3 top-3 flex flex-wrap gap-2 sm:left-4 sm:top-4">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FFC300] px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.1em] text-[#0A3D62] shadow-md">
+                        <UsersRound
+                          size={12}
+                          strokeWidth={2}
+                          aria-hidden="true"
+                        />
+
+                        {curso.dirigidoA}
+                      </span>
+
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.1em] text-white shadow-md",
+                          curso.inscripcionesAbiertas &&
+                            cuposDisponibles > 0
+                            ? "bg-emerald-600"
+                            : "bg-gray-700",
+                        )}
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full bg-white/80" />
+
+                        {curso.inscripcionesAbiertas &&
+                        cuposDisponibles > 0
+                          ? "Inscripciones abiertas"
+                          : "No disponible"}
+                      </span>
+                    </div>
+
+                    <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5">
+                      <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#FFC300]">
+                        Formación y aprendizaje
+                      </span>
+
+                      <h1 className="mt-1 line-clamp-2 text-xl font-extrabold leading-tight text-white sm:text-2xl">
+                        {curso.titulo}
+                      </h1>
+                    </div>
+                  </div>
+
+                  <section className="bg-white p-4 sm:p-5">
+                    <div className="flex items-center gap-2">
+                      <BadgeCheck
+                        size={17}
+                        className="text-[#D69F00]"
+                        strokeWidth={2}
+                        aria-hidden="true"
+                      />
+
+                      <h3 className="text-sm font-extrabold text-[#0A3D62]">
+                        Acerca del curso
+                      </h3>
+                    </div>
+
+                    <p className="mt-2 text-sm leading-6 text-gray-600">
+                      {curso.descripcion}
+                    </p>
+                  </section>
+                </div>
+
+                {/* Información y acciones */}
+                <div className="flex flex-col p-4 sm:p-5 lg:p-6">
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <InfoCard
+                      icon={
+                        <CalendarDays
+                          size={17}
+                        />
+                      }
+                      label="Periodo"
+                      value={periodoCurso}
+                    />
+
+                    <InfoCard
+                      icon={<Clock3 size={17} />}
+                      label="Horario"
+                      value={curso.horario}
+                    />
+
+                    <InfoCard
+                      icon={
+                        <UserRound size={17} />
+                      }
+                      label="Instructor"
+                      value={curso.instructor}
+                    />
+
+                    <InfoCard
+                      icon={
+                        curso.modalidad ===
+                        "Online" ? (
+                          <Laptop size={17} />
+                        ) : (
+                          <MapPinned size={17} />
+                        )
+                      }
+                      label="Modalidad"
+                      value={
+                        curso.ubicacion
+                          ? `${curso.modalidad} · ${curso.ubicacion}`
+                          : curso.modalidad
+                      }
+                    />
+
+                    <InfoCard
+                      icon={
+                        <UsersRound size={17} />
+                      }
+                      label="Disponibilidad"
+                      value={`${cuposDisponibles} de ${curso.cupoMaximo}`}
+                      valueClassName={
+                        cuposDisponibles <= 0
+                          ? "text-red-600"
+                          : cuposDisponibles <= 5
+                            ? "text-amber-600"
+                            : "text-emerald-600"
+                      }
+                    />
+
+                    <InfoCard
+                      icon={
+                        <CircleDollarSign
+                          size={17}
+                        />
+                      }
+                      label="Costo por persona"
+                      value={costoMostrar}
+                      valueClassName={
+                        curso.costo ===
+                        "Gratuito"
+                          ? "text-emerald-600"
+                          : "text-[#0A3D62]"
+                      }
+                    />
+                  </div>
+
+                  {/* Ocupación */}
+                  {curso.cupoMaximo > 0 && (
+                    <div className="mt-4 rounded-2xl border border-gray-200 bg-[#F8FAFC] p-3.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-gray-400">
+                            Ocupación del curso
+                          </p>
+
+                          <p className="mt-0.5 text-xs font-bold text-[#0A3D62]">
+                            {curso.cupoInscrito} de{" "}
+                            {curso.cupoMaximo} lugares
+                          </p>
+                        </div>
+
+                        <span className="text-lg font-extrabold text-[#0A3D62]">
+                          {porcentajeLlenado.toFixed(
+                            0,
+                          )}
+                          %
+                        </span>
+                      </div>
+
+                      <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-gray-200">
+                        <div
+                          className={cn(
+                            "h-full rounded-full transition-all duration-500",
+                            porcentajeLlenado >= 100
+                              ? "bg-red-500"
+                              : porcentajeLlenado >=
+                                  80
+                                ? "bg-amber-500"
+                                : "bg-emerald-500",
+                          )}
+                          style={{
+                            width: `${porcentajeLlenado}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {mensaje && (
+                    <div className="mt-4">
+                      <MensajeBox
+                        mensaje={mensaje}
+                      />
+                    </div>
+                  )}
+
+                  {/* Acción principal */}
+                  <div className="mt-auto pt-5">
+                    {!usuarioLogueado ? (
+                      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-center">
+                        <AlertCircle
+                          size={23}
+                          className="mx-auto text-amber-600"
+                          aria-hidden="true"
+                        />
+
+                        <p className="mt-2 text-sm font-bold text-[#0A3D62]">
+                          Inicia sesión para reservar
+                        </p>
+
+                        <p className="mt-1 text-xs leading-5 text-gray-600">
+                          Necesitas una cuenta para comprar uno o más lugares.
+                        </p>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            router.push(
+                              "/acceder?redirect=/cursos",
+                            )
+                          }
+                          className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#0A3D62] px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#1A4F7A]"
+                        >
+                          Iniciar sesión
+                          <ChevronRight
+                            size={16}
+                            aria-hidden="true"
+                          />
+                        </button>
+                      </div>
+                    ) : !curso.inscripcionesAbiertas ? (
+                      <EstadoBloqueado text="Inscripciones cerradas" />
+                    ) : cuposDisponibles <= 0 ? (
+                      <EstadoBloqueado text="Cupo completo" />
+                    ) : (
+                      <div className="space-y-3">
+                        {yaInscrito && (
+                          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                            <div className="flex items-start gap-2.5">
+                              <CheckCircle2
+                                size={18}
+                                className="mt-0.5 shrink-0 text-emerald-600"
+                                aria-hidden="true"
+                              />
+
+                              <div>
+                                <p className="text-xs font-bold text-emerald-800">
+                                  Ya tienes una inscripción
+                                </p>
+
+                                <p className="mt-0.5 text-[11px] leading-5 text-emerald-700">
+                                  Puedes adquirir cupos para otros participantes.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={
+                            handlePrepararCompra
+                          }
+                          className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FFC300] px-4 py-3 text-sm font-extrabold text-[#0A3D62] shadow-sm transition-colors hover:bg-[#0A3D62] hover:text-white"
+                        >
+                          <ShoppingBag
+                            size={18}
+                            strokeWidth={1.9}
+                            aria-hidden="true"
+                          />
+
+                          Comprar uno o más lugares
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 sm:p-5 lg:p-6">
+                {/* Resumen del curso */}
+                <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0A3D62] text-white">
+                      <GraduationCap
+                        size={20}
+                        strokeWidth={1.9}
+                        aria-hidden="true"
+                      />
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-blue-600">
+                        Curso seleccionado
+                      </p>
+
+                      <h3 className="mt-0.5 line-clamp-2 text-sm font-extrabold text-[#0A3D62] sm:text-base">
+                        {curso.titulo}
+                      </h3>
+
+                      <p className="mt-1 text-xs text-blue-800">
+                        Captura un participante por cada lugar.
                       </p>
                     </div>
-
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          ajustarCantidadCupos(
-                            formData.cantidadCupos - 1
-                          )
-                        }
-                        disabled={
-                          creandoCompra ||
-                          formData.cantidadCupos <= 1
-                        }
-                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
-                        aria-label="Disminuir cantidad de cupos"
-                      >
-                        <Minus size={18} />
-                      </button>
-
-                      <input
-                        type="number"
-                        min={1}
-                        max={cuposDisponibles}
-                        value={formData.cantidadCupos}
-                        onChange={(event) => {
-                          const value = Number(
-                            event.target.value
-                          );
-
-                          if (
-                            Number.isSafeInteger(value)
-                          ) {
-                            ajustarCantidadCupos(
-                              value
-                            );
-                          }
-                        }}
-                        disabled={creandoCompra}
-                        className="h-10 w-20 rounded-lg border border-gray-300 bg-white text-center font-semibold text-gray-900 outline-none focus:border-transparent focus:ring-2 focus:ring-[#0A3D62]"
-                        aria-label="Cantidad de cupos"
-                      />
-
-                      <button
-                        type="button"
-                        onClick={agregarParticipante}
-                        disabled={
-                          creandoCompra ||
-                          formData.cantidadCupos >=
-                            cuposDisponibles
-                        }
-                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
-                        aria-label="Aumentar cantidad de cupos"
-                      >
-                        <Plus size={18} />
-                      </button>
-                    </div>
-                  </div>
-                </section>
-
-                <section className="space-y-5">
-                  <div className="flex items-center justify-between border-b pb-2">
-                    <h4 className="text-lg font-semibold text-gray-800">
-                      Participantes
-                    </h4>
-
-                    <span className="rounded-full bg-[#0A3D62] px-3 py-1 text-sm font-medium text-white">
-                      {formData.participantes.length}
-                    </span>
                   </div>
 
-                  {formData.participantes.map(
-                    (participante, index) => (
-                      <ParticipanteForm
-                        key={participante.localId}
-                        participante={participante}
-                        numero={index + 1}
-                        puedeEliminar={
-                          formData.participantes
-                            .length > 1
-                        }
-                        disabled={creandoCompra}
-                        onChange={
-                          handleParticipanteChange
-                        }
-                        onRemove={
-                          eliminarParticipante
-                        }
-                      />
-                    )
-                  )}
+                  <div className="shrink-0 rounded-xl bg-white px-3 py-2 text-right shadow-sm">
+                    <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-gray-400">
+                      Precio individual
+                    </p>
 
-                  {formData.cantidadCupos <
-                    cuposDisponibles && (
-                    <button
-                      type="button"
-                      onClick={agregarParticipante}
-                      disabled={creandoCompra}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 py-3 font-medium text-gray-700 transition hover:border-[#0A3D62] hover:text-[#0A3D62] disabled:opacity-50"
-                    >
-                      <Plus size={18} />
-                      Agregar otro participante
-                    </button>
-                  )}
-                </section>
+                    <p className="mt-0.5 text-base font-extrabold text-[#0A3D62]">
+                      {costoMostrar}
+                    </p>
+                  </div>
+                </div>
 
-                <FormField
-                  label="Observaciones de la compra"
-                  htmlFor="observaciones"
+                <form
+                  onSubmit={confirmarCompra}
+                  className="space-y-5"
                 >
-                  <textarea
-                    id="observaciones"
-                    name="observaciones"
-                    rows={3}
-                    maxLength={1000}
-                    value={formData.observaciones}
-                    onChange={(event) => {
-                      setFormData((previous) => ({
-                        ...previous,
-                        observaciones:
-                          event.target.value,
-                      }));
-                      setMensaje(null);
-                    }}
-                    disabled={creandoCompra}
-                    className="w-full resize-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 outline-none placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-[#0A3D62] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
-                    placeholder="Información adicional para la compra"
-                  />
-                </FormField>
+                  {/* Cantidad */}
+                  <section className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                    <div className="rounded-2xl border border-gray-200 bg-[#F8FAFC] p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <h4 className="text-sm font-extrabold text-[#0A3D62]">
+                            Cantidad de lugares
+                          </h4>
 
-                <section className="rounded-xl border border-yellow-200 bg-yellow-50 p-4">
-                  <div className="space-y-2 text-sm text-yellow-950">
-                    <div className="flex justify-between gap-4">
-                      <span>
-                        Precio por participante
-                      </span>
-                      <strong>
-                        {costoMostrar}
-                      </strong>
+                          <p className="mt-0.5 text-xs text-gray-500">
+                            Hay {cuposDisponibles} cupos disponibles.
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              ajustarCantidadCupos(
+                                formData.cantidadCupos -
+                                  1,
+                              )
+                            }
+                            disabled={
+                              creandoCompra ||
+                              formData.cantidadCupos <=
+                                1
+                            }
+                            className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                            aria-label="Disminuir cantidad de cupos"
+                          >
+                            <Minus
+                              size={16}
+                              aria-hidden="true"
+                            />
+                          </button>
+
+                          <input
+                            type="number"
+                            min={1}
+                            max={
+                              cuposDisponibles
+                            }
+                            value={
+                              formData.cantidadCupos
+                            }
+                            onChange={(event) => {
+                              const value = Number(
+                                event.target.value,
+                              );
+
+                              if (
+                                Number.isSafeInteger(
+                                  value,
+                                )
+                              ) {
+                                ajustarCantidadCupos(
+                                  value,
+                                );
+                              }
+                            }}
+                            disabled={creandoCompra}
+                            className="h-9 w-16 rounded-lg border border-gray-300 bg-white text-center text-sm font-extrabold text-[#0A3D62] outline-none focus:border-transparent focus:ring-2 focus:ring-[#0A3D62]"
+                            aria-label="Cantidad de cupos"
+                          />
+
+                          <button
+                            type="button"
+                            onClick={
+                              agregarParticipante
+                            }
+                            disabled={
+                              creandoCompra ||
+                              formData.cantidadCupos >=
+                                cuposDisponibles
+                            }
+                            className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                            aria-label="Aumentar cantidad de cupos"
+                          >
+                            <Plus
+                              size={16}
+                              aria-hidden="true"
+                            />
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="flex justify-between gap-4">
-                      <span>
-                        Cantidad de cupos
+                    <div className="flex min-w-[180px] items-center justify-between rounded-2xl bg-[#0A3D62] px-4 py-3 text-white sm:flex-col sm:items-end sm:justify-center">
+                      <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">
+                        Total estimado
                       </span>
-                      <strong>
-                        {formData.cantidadCupos}
-                      </strong>
-                    </div>
 
-                    <div className="flex justify-between gap-4 border-t border-yellow-300 pt-2 text-base">
-                      <span className="font-semibold">
-                        Total
-                      </span>
-                      <strong>
+                      <strong className="text-xl font-extrabold text-[#FFC300]">
                         {precioUnitario === 0
                           ? "Gratis"
                           : formatCurrency(
-                              totalCompra
+                              totalCompra,
                             )}
                       </strong>
                     </div>
-                  </div>
+                  </section>
 
-                  <p className="mt-3 text-xs text-yellow-800">
-                    Después de crear la compra podrás seleccionar el método y reportar el pago.
-                  </p>
-                </section>
+                  {/* Participantes */}
+                  <section className="space-y-4">
+                    <div className="flex items-center justify-between border-b border-gray-200 pb-2">
+                      <div>
+                        <h4 className="text-base font-extrabold text-[#0A3D62]">
+                          Datos de participantes
+                        </h4>
 
-                {mensaje && (
-                  <MensajeBox mensaje={mensaje} />
-                )}
+                        <p className="mt-0.5 text-xs text-gray-500">
+                          Completa los campos obligatorios marcados con *.
+                        </p>
+                      </div>
 
-                <div className="flex gap-4 border-t pt-6">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setView("detalle")
-                    }
-                    disabled={creandoCompra}
-                    className="w-1/3 rounded-xl bg-gray-100 py-3 font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-60"
-                  >
-                    Cancelar
-                  </button>
+                      <span className="flex h-8 min-w-8 items-center justify-center rounded-full bg-[#0A3D62] px-2 text-xs font-bold text-white">
+                        {
+                          formData.participantes
+                            .length
+                        }
+                      </span>
+                    </div>
 
-                  <button
-                    type="submit"
-                    disabled={creandoCompra}
-                    className="flex w-2/3 items-center justify-center gap-2 rounded-xl bg-[#0A3D62] py-3 text-lg font-semibold text-white hover:bg-[#1A4F7A] disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {creandoCompra ? (
-                      <>
-                        <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                        Procesando compra...
-                      </>
-                    ) : (
-                      `Crear compra de ${formData.cantidadCupos} ${
-                        formData.cantidadCupos === 1
-                          ? "cupo"
-                          : "cupos"
-                      }`
+                    {formData.participantes.map(
+                      (
+                        participante,
+                        index,
+                      ) => (
+                        <ParticipanteForm
+                          key={
+                            participante.localId
+                          }
+                          participante={
+                            participante
+                          }
+                          numero={index + 1}
+                          puedeEliminar={
+                            formData
+                              .participantes
+                              .length > 1
+                          }
+                          disabled={
+                            creandoCompra
+                          }
+                          onChange={
+                            handleParticipanteChange
+                          }
+                          onRemove={
+                            eliminarParticipante
+                          }
+                        />
+                      ),
                     )}
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
+
+                    {formData.cantidadCupos <
+                      cuposDisponibles && (
+                      <button
+                        type="button"
+                        onClick={
+                          agregarParticipante
+                        }
+                        disabled={creandoCompra}
+                        className="flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 py-2.5 text-sm font-bold text-gray-600 transition-colors hover:border-[#0A3D62] hover:bg-[#F8FAFC] hover:text-[#0A3D62] disabled:opacity-50"
+                      >
+                        <Plus
+                          size={16}
+                          aria-hidden="true"
+                        />
+
+                        Agregar participante
+                      </button>
+                    )}
+                  </section>
+
+                  <FormField
+                    label="Observaciones de la compra"
+                    htmlFor="observaciones"
+                  >
+                    <textarea
+                      id="observaciones"
+                      name="observaciones"
+                      rows={2}
+                      maxLength={1000}
+                      value={
+                        formData.observaciones
+                      }
+                      onChange={(event) => {
+                        setFormData(
+                          (previous) => ({
+                            ...previous,
+                            observaciones:
+                              event.target.value,
+                          }),
+                        );
+
+                        setMensaje(null);
+                      }}
+                      disabled={creandoCompra}
+                      className={cn(
+                        inputClassName,
+                        "resize-none",
+                      )}
+                      placeholder="Información adicional para la compra"
+                    />
+                  </FormField>
+
+                  {/* Resumen */}
+                  <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                    <div className="grid gap-2 text-sm sm:grid-cols-3">
+                      <ResumenCompraItem
+                        label="Precio individual"
+                        value={costoMostrar}
+                      />
+
+                      <ResumenCompraItem
+                        label="Cantidad"
+                        value={`${formData.cantidadCupos} ${
+                          formData.cantidadCupos ===
+                          1
+                            ? "cupo"
+                            : "cupos"
+                        }`}
+                      />
+
+                      <ResumenCompraItem
+                        label="Total"
+                        value={
+                          precioUnitario === 0
+                            ? "Gratis"
+                            : formatCurrency(
+                                totalCompra,
+                              )
+                        }
+                        destacado
+                      />
+                    </div>
+
+                    <p className="mt-3 border-t border-amber-200 pt-2.5 text-xs leading-5 text-amber-800">
+                      Después de crear la compra podrás seleccionar el método y reportar el pago.
+                    </p>
+                  </section>
+
+                  {mensaje && (
+                    <MensajeBox
+                      mensaje={mensaje}
+                    />
+                  )}
+
+                  {/* Acciones */}
+                  <div className="sticky bottom-0 z-20 -mx-4 flex gap-3 border-t border-gray-200 bg-white/95 px-4 pb-1 pt-4 backdrop-blur sm:-mx-5 sm:px-5 lg:-mx-6 lg:px-6">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setView("detalle")
+                      }
+                      disabled={creandoCompra}
+                      className="min-h-11 w-1/3 rounded-xl border border-gray-200 bg-gray-100 px-3 py-2.5 text-sm font-bold text-gray-700 transition-colors hover:bg-gray-200 disabled:opacity-60"
+                    >
+                      Cancelar
+                    </button>
+
+                    <button
+                      type="submit"
+                      disabled={creandoCompra}
+                      className="flex min-h-11 w-2/3 items-center justify-center gap-2 rounded-xl bg-[#0A3D62] px-3 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#1A4F7A] disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {creandoCompra ? (
+                        <>
+                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+
+                          Procesando...
+                        </>
+                      ) : (
+                        <>
+                          <ShoppingBag
+                            size={17}
+                            aria-hidden="true"
+                          />
+
+                          Crear compra de{" "}
+                          {
+                            formData.cantidadCupos
+                          }{" "}
+                          {formData.cantidadCupos ===
+                          1
+                            ? "cupo"
+                            : "cupos"}
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
+const inputClassName =
+  "w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-[#0A3D62] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500";
 
 interface ParticipanteFormProps {
   participante: ParticipanteFormData;
@@ -1318,7 +1726,7 @@ interface ParticipanteFormProps {
       ParticipanteFormData,
       "localId"
     >,
-    value: string
+    value: string,
   ) => void;
   onRemove: (localId: number) => void;
 }
@@ -1332,15 +1740,26 @@ function ParticipanteForm({
   onRemove,
 }: ParticipanteFormProps) {
   return (
-    <article className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h5 className="font-semibold text-[#0A3D62]">
-            Participante {numero}
-          </h5>
-          <p className="text-xs text-gray-500">
-            Este participante ocupará el cupo {numero}.
-          </p>
+    <article className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between border-b border-gray-100 bg-[#F8FAFC] px-4 py-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#EAF2F8] text-[#0A3D62]">
+            <UserRound
+              size={17}
+              strokeWidth={1.9}
+              aria-hidden="true"
+            />
+          </div>
+
+          <div>
+            <h5 className="text-sm font-extrabold text-[#0A3D62]">
+              Participante {numero}
+            </h5>
+
+            <p className="text-[11px] text-gray-500">
+              Ocupará el cupo {numero}.
+            </p>
+          </div>
         </div>
 
         {puedeEliminar && (
@@ -1350,116 +1769,117 @@ function ParticipanteForm({
               onRemove(participante.localId)
             }
             disabled={disabled}
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+            className="flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
           >
-            <Trash2 size={16} />
-            Quitar
+            <Trash2
+              size={15}
+              aria-hidden="true"
+            />
+
+            <span className="hidden sm:inline">
+              Quitar
+            </span>
           </button>
         )}
       </div>
 
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <FormField
-            label="Nombre(s) *"
-            htmlFor={`nombre-${participante.localId}`}
-          >
-            <input
-              id={`nombre-${participante.localId}`}
-              required
-              type="text"
-              maxLength={100}
-              value={participante.nombre}
-              onChange={(event) =>
-                onChange(
-                  participante.localId,
-                  "nombre",
-                  event.target.value
-                )
-              }
-              disabled={disabled}
-              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 outline-none placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-[#0A3D62] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
-            />
-          </FormField>
+      <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
+        <FormField
+          label="Nombre(s) *"
+          htmlFor={`nombre-${participante.localId}`}
+        >
+          <input
+            id={`nombre-${participante.localId}`}
+            required
+            type="text"
+            maxLength={100}
+            value={participante.nombre}
+            onChange={(event) =>
+              onChange(
+                participante.localId,
+                "nombre",
+                event.target.value,
+              )
+            }
+            disabled={disabled}
+            className={inputClassName}
+          />
+        </FormField>
 
-          <FormField
-            label="Apellido paterno *"
-            htmlFor={`apellidoPaterno-${participante.localId}`}
-          >
-            <input
-              id={`apellidoPaterno-${participante.localId}`}
-              required
-              type="text"
-              maxLength={100}
-              value={
-                participante.apellidoPaterno
-              }
-              onChange={(event) =>
-                onChange(
-                  participante.localId,
-                  "apellidoPaterno",
-                  event.target.value
-                )
-              }
-              disabled={disabled}
-              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 outline-none placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-[#0A3D62] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
-            />
-          </FormField>
-        </div>
+        <FormField
+          label="Apellido paterno *"
+          htmlFor={`apellidoPaterno-${participante.localId}`}
+        >
+          <input
+            id={`apellidoPaterno-${participante.localId}`}
+            required
+            type="text"
+            maxLength={100}
+            value={
+              participante.apellidoPaterno
+            }
+            onChange={(event) =>
+              onChange(
+                participante.localId,
+                "apellidoPaterno",
+                event.target.value,
+              )
+            }
+            disabled={disabled}
+            className={inputClassName}
+          />
+        </FormField>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <FormField
-            label="Apellido materno"
-            htmlFor={`apellidoMaterno-${participante.localId}`}
-          >
-            <input
-              id={`apellidoMaterno-${participante.localId}`}
-              type="text"
-              maxLength={100}
-              value={
-                participante.apellidoMaterno
-              }
-              onChange={(event) =>
-                onChange(
-                  participante.localId,
-                  "apellidoMaterno",
-                  event.target.value
-                )
-              }
-              disabled={disabled}
-              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 outline-none placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-[#0A3D62] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
-            />
-          </FormField>
+        <FormField
+          label="Apellido materno"
+          htmlFor={`apellidoMaterno-${participante.localId}`}
+        >
+          <input
+            id={`apellidoMaterno-${participante.localId}`}
+            type="text"
+            maxLength={100}
+            value={
+              participante.apellidoMaterno
+            }
+            onChange={(event) =>
+              onChange(
+                participante.localId,
+                "apellidoMaterno",
+                event.target.value,
+              )
+            }
+            disabled={disabled}
+            className={inputClassName}
+          />
+        </FormField>
 
-          <FormField
-            label="Fecha de nacimiento"
-            htmlFor={`fechaNacimiento-${participante.localId}`}
-          >
-            <input
-              id={`fechaNacimiento-${participante.localId}`}
-              type="date"
-              max={fechaMaximaNacimiento()}
-              value={
-                participante.fechaNacimiento
-              }
-              onChange={(event) =>
-                onChange(
-                  participante.localId,
-                  "fechaNacimiento",
-                  event.target.value
-                )
-              }
-              disabled={disabled}
-              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 outline-none placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-[#0A3D62] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
-            />
-          </FormField>
-        </div>
+        <FormField
+          label="Fecha de nacimiento"
+          htmlFor={`fechaNacimiento-${participante.localId}`}
+        >
+          <input
+            id={`fechaNacimiento-${participante.localId}`}
+            type="date"
+            max={fechaMaximaNacimiento()}
+            value={
+              participante.fechaNacimiento
+            }
+            onChange={(event) =>
+              onChange(
+                participante.localId,
+                "fechaNacimiento",
+                event.target.value,
+              )
+            }
+            disabled={disabled}
+            className={inputClassName}
+          />
+        </FormField>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <FormField
-            label="Sexo *"
-            htmlFor={`sexo-${participante.localId}`}
-          >
+        <FormField
+          label="Sexo *"
+          htmlFor={`sexo-${participante.localId}`}
+        >
           <select
             id={`sexo-${participante.localId}`}
             required
@@ -1468,79 +1888,80 @@ function ParticipanteForm({
               onChange(
                 participante.localId,
                 "sexo",
-                event.target.value
+                event.target.value,
               )
             }
             disabled={disabled}
-            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 outline-none focus:border-transparent focus:ring-2 focus:ring-[#0A3D62] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
+            className={inputClassName}
           >
-              <option value="">
-                Selecciona
-              </option>
-              <option value="Masculino">
-                Masculino
-              </option>
-              <option value="Femenino">
-                Femenino
-              </option>
-              <option value="Otro">
-                Otro
-              </option>
-              <option value="Prefiere no indicar">
-                Prefiero no indicar
-              </option>
-            </select>
-          </FormField>
-
-          <FormField
-            label="Teléfono"
-            htmlFor={`telefono-${participante.localId}`}
-          >
-            <input
-              id={`telefono-${participante.localId}`}
-              type="tel"
-              maxLength={20}
-              value={participante.telefono}
-              onChange={(event) =>
-                onChange(
-                  participante.localId,
-                  "telefono",
-                  event.target.value
-                )
-              }
-              disabled={disabled}
-              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 outline-none placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-[#0A3D62] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
-            />
-          </FormField>
-        </div>
+            <option value="">
+              Selecciona
+            </option>
+            <option value="Masculino">
+              Masculino
+            </option>
+            <option value="Femenino">
+              Femenino
+            </option>
+            <option value="Otro">
+              Otro
+            </option>
+            <option value="Prefiere no indicar">
+              Prefiero no indicar
+            </option>
+          </select>
+        </FormField>
 
         <FormField
-          label="Correo"
-          htmlFor={`correo-${participante.localId}`}
+          label="Teléfono"
+          htmlFor={`telefono-${participante.localId}`}
         >
           <input
-            id={`correo-${participante.localId}`}
-            type="email"
-            maxLength={150}
-            value={participante.correo}
+            id={`telefono-${participante.localId}`}
+            type="tel"
+            maxLength={20}
+            value={participante.telefono}
             onChange={(event) =>
               onChange(
                 participante.localId,
-                "correo",
-                event.target.value
+                "telefono",
+                event.target.value,
               )
             }
             disabled={disabled}
-            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 outline-none placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-[#0A3D62] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
+            className={inputClassName}
           />
         </FormField>
+
+        <div className="sm:col-span-2 lg:col-span-3">
+          <FormField
+            label="Correo"
+            htmlFor={`correo-${participante.localId}`}
+          >
+            <input
+              id={`correo-${participante.localId}`}
+              type="email"
+              maxLength={150}
+              value={participante.correo}
+              onChange={(event) =>
+                onChange(
+                  participante.localId,
+                  "correo",
+                  event.target.value,
+                )
+              }
+              disabled={disabled}
+              className={inputClassName}
+            />
+          </FormField>
+        </div>
       </div>
     </article>
   );
 }
 
 interface InfoCardProps {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   value: string;
   valueClassName?: string;
@@ -1553,16 +1974,22 @@ function InfoCard({
   valueClassName = "",
 }: InfoCardProps) {
   return (
-    <div className="flex items-center gap-3 rounded-lg bg-gray-100 p-3">
-      <span className="text-[#FFC300]">
+    <div className="flex min-w-0 items-start gap-2.5 rounded-xl border border-gray-200 bg-[#F8FAFC] p-3">
+      <span className="mt-0.5 shrink-0 text-[#B88600]">
         {icon}
       </span>
-      <div>
-        <p className="text-xs text-gray-600">
+
+      <div className="min-w-0">
+        <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-gray-400">
           {label}
         </p>
+
         <p
-          className={`text-sm font-medium text-gray-800 ${valueClassName}`}
+          className={cn(
+            "mt-0.5 line-clamp-2 text-xs font-bold leading-5 text-gray-700",
+            valueClassName,
+          )}
+          title={value}
         >
           {value}
         </p>
@@ -1574,7 +2001,7 @@ function InfoCard({
 interface FormFieldProps {
   label: string;
   htmlFor: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 function FormField({
@@ -1586,10 +2013,11 @@ function FormField({
     <div>
       <label
         htmlFor={htmlFor}
-        className="mb-1 block text-sm font-medium text-gray-700"
+        className="mb-1 block text-xs font-bold text-gray-600"
       >
         {label}
       </label>
+
       {children}
     </div>
   );
@@ -1600,20 +2028,36 @@ function MensajeBox({
 }: {
   mensaje: MensajeEstado;
 }) {
+  const exitoso =
+    mensaje.type === "success";
+
   return (
     <div
-      className={`mb-6 flex items-center gap-3 rounded-lg border p-4 ${
-        mensaje.type === "success"
-          ? "border-green-300 bg-green-100 text-green-800"
-          : "border-red-300 bg-red-100 text-red-800"
-      }`}
-    >
-      {mensaje.type === "success" ? (
-        <CheckCircle size={20} />
-      ) : (
-        <AlertCircle size={20} />
+      className={cn(
+        "flex items-start gap-3 rounded-xl border p-3.5",
+        exitoso
+          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+          : "border-red-200 bg-red-50 text-red-800",
       )}
-      <span>{mensaje.text}</span>
+      role="status"
+    >
+      {exitoso ? (
+        <CheckCircle2
+          size={19}
+          className="mt-0.5 shrink-0"
+          aria-hidden="true"
+        />
+      ) : (
+        <AlertCircle
+          size={19}
+          className="mt-0.5 shrink-0"
+          aria-hidden="true"
+        />
+      )}
+
+      <span className="text-sm font-semibold leading-6">
+        {mensaje.text}
+      </span>
     </div>
   );
 }
@@ -1624,14 +2068,49 @@ function EstadoBloqueado({
   text: string;
 }) {
   return (
-    <div className="rounded-lg bg-red-100 p-4 text-center">
+    <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-center">
       <AlertCircle
-        size={24}
-        className="mx-auto mb-2 text-red-600"
+        size={23}
+        className="mx-auto text-red-600"
+        aria-hidden="true"
       />
-      <p className="font-semibold text-red-800">
+
+      <p className="mt-2 text-sm font-extrabold text-red-800">
         {text}
       </p>
+
+      <p className="mt-1 text-xs text-red-700">
+        Actualmente no es posible adquirir lugares para este curso.
+      </p>
+    </div>
+  );
+}
+
+interface ResumenCompraItemProps {
+  label: string;
+  value: string;
+  destacado?: boolean;
+}
+
+function ResumenCompraItem({
+  label,
+  value,
+  destacado = false,
+}: ResumenCompraItemProps) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-xl bg-white/70 px-3 py-2 sm:block">
+      <span className="text-xs text-amber-900/70">
+        {label}
+      </span>
+
+      <strong
+        className={cn(
+          "text-sm text-amber-950 sm:mt-1 sm:block",
+          destacado && "text-base",
+        )}
+      >
+        {value}
+      </strong>
     </div>
   );
 }

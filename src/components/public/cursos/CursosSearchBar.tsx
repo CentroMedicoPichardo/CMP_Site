@@ -1,32 +1,65 @@
-// src/components/public/cursos/CursosSearchBar.tsx
-'use client';
+"use client";
 
-import { Search } from 'lucide-react';
-import React from 'react';
+import { Search, X } from "lucide-react";
 
 interface CursosSearchBarProps {
   busqueda: string;
   setBusqueda: (value: string) => void;
 }
 
-export function CursosSearchBar({ busqueda, setBusqueda }: CursosSearchBarProps) {
+export function CursosSearchBar({
+  busqueda,
+  setBusqueda,
+}: CursosSearchBarProps) {
+  const tieneBusqueda = busqueda.trim().length > 0;
+
   return (
-    <div className="flex justify-center">
-      <div className="relative w-full max-w-md">
-        <input
-          type="text"
-          placeholder="Buscar curso, taller o instructor..."
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          className="w-full pl-5 pr-12 py-3.5 bg-white/95 backdrop-blur-sm border-2 border-[#FFC300]/30 rounded-full focus:outline-none focus:border-[#FFC300] focus:ring-4 focus:ring-[#FFC300]/20 transition-all duration-300 text-gray-800 placeholder-gray-500 text-base shadow-xl"
-        />
+    <div className="relative w-full">
+      <label
+        htmlFor="busqueda-cursos"
+        className="sr-only"
+      >
+        Buscar cursos, talleres o instructores
+      </label>
+
+      <Search
+        size={17}
+        strokeWidth={1.9}
+        className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#0A3D62]"
+        aria-hidden="true"
+      />
+
+      <input
+        id="busqueda-cursos"
+        type="search"
+        value={busqueda}
+        onChange={(event) =>
+          setBusqueda(event.target.value)
+        }
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            setBusqueda("");
+          }
+        }}
+        placeholder="Buscar curso, taller o instructor..."
+        autoComplete="off"
+        className="h-11 w-full rounded-xl border border-gray-200 bg-[#F8FAFC] py-2 pl-10 pr-11 text-sm font-medium text-gray-800 outline-none transition-all placeholder:font-normal placeholder:text-gray-400 hover:border-[#0A3D62]/30 focus:border-[#0A3D62] focus:bg-white focus:ring-2 focus:ring-[#0A3D62]/10"
+      />
+
+      {tieneBusqueda && (
         <button
-          className="absolute right-1.5 top-1/2 -translate-y-1/2 w-10 h-10 bg-gradient-to-r from-[#FFC300] to-[#FFD700] rounded-full flex items-center justify-center hover:from-[#0A3D62] hover:to-[#1A4F7A] transition-all duration-300 cursor-pointer group shadow-md hover:shadow-lg"
           type="button"
+          onClick={() => setBusqueda("")}
+          className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC300]"
+          aria-label="Limpiar búsqueda"
         >
-          <Search size={18} className="text-[#0A3D62] group-hover:text-white group-hover:scale-110 transition-transform duration-300" />
+          <X
+            size={15}
+            strokeWidth={2}
+            aria-hidden="true"
+          />
         </button>
-      </div>
+      )}
     </div>
   );
 }

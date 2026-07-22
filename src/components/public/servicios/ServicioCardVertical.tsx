@@ -1,74 +1,105 @@
-// src/components/public/servicios/ServicioCardVertical.tsx
-import React from 'react';
-import Image from 'next/image';
-import Link from 'next/link';
-import { ChevronRight } from 'lucide-react';
+import Image from "next/image";
+import { HeartPulse, ShieldCheck } from "lucide-react";
 
 interface ServicioCardVerticalProps {
   id: string | number;
   titulo: string;
   descripcion: string;
   imagenSrc?: string;
-  linkVerMas: string;
+  linkVerMas?: string;
 }
 
-export function ServicioCardVertical({ 
+const DEFAULT_IMAGE = "/images/default-servicio.jpg";
+
+export function ServicioCardVertical({
   id,
-  titulo, 
-  descripcion, 
+  titulo,
+  descripcion,
   imagenSrc,
-  linkVerMas 
 }: ServicioCardVerticalProps) {
-  
-  // 👇 AGREGAR CONSOLA PARA DEBUG
-  console.log('🎨 Renderizando ServicioCardVertical:', { id, titulo, descripcion, imagenSrc });
-  
-  const descripcionCorta = descripcion && descripcion.length > 100 
-    ? descripcion.substring(0, 100) + '...' 
-    : descripcion || "Atención especializada con profesionales de excelencia.";
+  const tituloMostrado =
+    titulo?.trim() || "Servicio médico";
 
-  // Imagen por defecto (puedes cambiar la ruta según donde tengas tu imagen default)
-  const DEFAULT_IMAGE = "/images/default-servicio.jpg"; // 👈 Cambia esta ruta según tu proyecto
+  const descripcionMostrada =
+    descripcion?.trim() ||
+    "Atención especializada con profesionales comprometidos con tu salud y bienestar.";
 
-  // Usar imagenSrc si existe, sino la imagen por defecto
-  const imageToShow = imagenSrc && imagenSrc.trim() !== "" ? imagenSrc : DEFAULT_IMAGE;
+  const imagenMostrada =
+    imagenSrc?.trim() || DEFAULT_IMAGE;
 
   return (
-    <div className="group bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100 h-full flex flex-col">
+    <article
+      aria-labelledby={`servicio-${id}`}
+      className="group flex h-full flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-[0_8px_28px_rgba(10,61,98,0.08)] transition-all duration-300 hover:-translate-y-1 hover:border-[#0A3D62]/20 hover:shadow-[0_18px_40px_rgba(10,61,98,0.14)]"
+    >
       {/* Imagen */}
-      <div className="relative h-48 overflow-hidden bg-gradient-to-br from-[#0A3D62] to-[#1A4F7A]">
-        <Image 
-          src={imageToShow}
-          alt={titulo || "Servicio"}
+      <div className="relative h-48 shrink-0 overflow-hidden bg-[#EAF2F8] sm:h-52">
+        <Image
+          src={imagenMostrada}
+          alt={`Servicio de ${tituloMostrado}`}
           fill
-          className="object-cover group-hover:scale-110 transition-transform duration-500"
-          onError={(e) => {
-            // Si la imagen falla al cargar, mostrar la imagen por defecto
-            const target = e.target as HTMLImageElement;
-            target.src = DEFAULT_IMAGE;
-          }}
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+          className="object-cover object-center transition-transform duration-500 group-hover:scale-105"
         />
+
+        <div
+          className="absolute inset-0 bg-gradient-to-t from-[#061C2E]/85 via-[#0A3D62]/10 to-transparent"
+          aria-hidden="true"
+        />
+
+        {/* Etiqueta */}
+        <div className="absolute left-3 top-3">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/60 bg-[#FFC300] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#0A3D62] shadow-md">
+            <HeartPulse
+              size={13}
+              strokeWidth={2}
+              aria-hidden="true"
+            />
+
+            Servicio médico
+          </span>
+        </div>
+
+        {/* Indicador visual */}
+        <div className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-xl border border-white/20 bg-[#0A3D62]/80 text-white shadow-md backdrop-blur-md">
+          <ShieldCheck
+            size={18}
+            strokeWidth={1.9}
+            aria-hidden="true"
+          />
+        </div>
+
+        {/* Título */}
+        <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#FFC300]">
+            Atención especializada
+          </p>
+
+          <h3
+            id={`servicio-${id}`}
+            className="mt-1 line-clamp-2 text-xl font-extrabold leading-tight text-white sm:text-2xl"
+          >
+            {tituloMostrado}
+          </h3>
+        </div>
       </div>
 
       {/* Contenido */}
-      <div className="p-6 flex-1 flex flex-col">
-        <h3 className="text-xl font-bold text-[#0A3D62] mb-3 group-hover:text-[#FFC300] transition-colors">
-          {titulo || "Servicio Médico"}
-        </h3>
-        
-        <p className="text-gray-600 mb-4 leading-relaxed flex-1">
-          {descripcionCorta}
+      <div className="flex flex-1 flex-col p-4 sm:p-5">
+        <p className="line-clamp-4 text-sm leading-6 text-gray-600">
+          {descripcionMostrada}
         </p>
-        
-        {/* Link a detalle */}
-        <Link 
-          href={linkVerMas}
-          className="inline-flex items-center gap-2 text-[#0A3D62] font-semibold hover:text-[#FFC300] transition-colors group/link mt-auto"
-        >
-          <span>Ver más</span>
-          <ChevronRight size={16} className="group-hover/link:translate-x-1 transition-transform" />
-        </Link>
+
+        <div className="mt-auto pt-4">
+          <div className="flex items-center gap-2 border-t border-gray-100 pt-3">
+            <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+
+            <p className="text-xs font-semibold text-gray-500">
+              Atención profesional y personalizada
+            </p>
+          </div>
+        </div>
       </div>
-    </div>
+    </article>
   );
 }

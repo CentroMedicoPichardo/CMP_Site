@@ -1,35 +1,33 @@
-// src/app/(public)/acceder/page.tsx
 "use client";
 
-import React, { useState } from 'react';
-import { LoginLayout } from '@/components/public/auth/LoginLayout';
-import { HeroAcceder } from '@/components/public/auth/HeroAcceder';
-import { LoginForm } from '@/components/public/auth/LoginForm';
-import { RegisterForm } from '@/components/public/auth/RegisterForm';
-import { LoginMfaForm } from '@/components/public/auth/LoginMfaForm';
+import React, { useState } from "react";
+import { LoginLayout } from "@/components/public/auth/LoginLayout";
+import { HeroAcceder } from "@/components/public/auth/HeroAcceder";
+import { LoginForm } from "@/components/public/auth/LoginForm";
+import { RegisterForm } from "@/components/public/auth/RegisterForm";
+import { LoginMfaForm } from "@/components/public/auth/LoginMfaForm";
 
 export default function AccederPage() {
-  const [modo, setModo] = useState<'login' | 'registro'>('login');
+  const [modo, setModo] = useState<"login" | "registro">("login");
   const [necesitaMfa, setNecesitaMfa] = useState(false);
-  const [emailTemp, setEmailTemp] = useState('');
+  const [emailTemp, setEmailTemp] = useState("");
 
-  const handleCambiarModo = (nuevoModo: 'login' | 'registro') => {
+  const handleCambiarModo = (
+    nuevoModo: "login" | "registro",
+  ) => {
     setModo(nuevoModo);
-    setNecesitaMfa(false); // Reset MFA si cambia de modo
+    setNecesitaMfa(false);
   };
 
-  // 👈 Función para cuando el registro es exitoso
   const handleRegistroExitoso = () => {
-    setModo('login');
+    setModo("login");
     setNecesitaMfa(false);
-    // Opcional: mostrar mensaje de éxito
-    // toast.success('Cuenta creada exitosamente, ahora inicia sesión');
   };
 
   const renderFormulario = () => {
     if (necesitaMfa) {
       return (
-        <LoginMfaForm 
+        <LoginMfaForm
           email={emailTemp}
           onCancel={() => setNecesitaMfa(false)}
         />
@@ -37,21 +35,23 @@ export default function AccederPage() {
     }
 
     switch (modo) {
-      case 'login':
+      case "login":
         return (
-          <LoginForm 
+          <LoginForm
             onMfaRequired={(email) => {
               setEmailTemp(email);
               setNecesitaMfa(true);
             }}
           />
         );
-      case 'registro':
+
+      case "registro":
         return (
-          <RegisterForm 
-            onRegistroExitoso={handleRegistroExitoso}  // 👈 Pasar callback
+          <RegisterForm
+            onRegistroExitoso={handleRegistroExitoso}
           />
         );
+
       default:
         return null;
     }
@@ -59,12 +59,51 @@ export default function AccederPage() {
 
   return (
     <LoginLayout>
-      {/* Lado izquierdo - Hero con selector funcional */}
-      <HeroAcceder modo={modo} onCambiarModo={handleCambiarModo} />
-      
-      {/* Lado derecho - Formulario dinámico */}
+      {/* Se conserva el Hero exactamente como estaba */}
+      <HeroAcceder
+        modo={modo}
+        onCambiarModo={handleCambiarModo}
+      />
+
+      {/* Se conserva el espacio original del formulario */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white">
-        {renderFormulario()}
+        <div className="w-full">
+          {renderFormulario()}
+
+          {/* Cambio de formulario solo cuando el Hero desaparece */}
+          {!necesitaMfa && (
+            <div className="mt-6 text-center lg:hidden">
+              <p className="text-sm text-gray-600">
+                {modo === "login"
+                  ? "¿Aún no tienes una cuenta?"
+                  : "¿Ya tienes una cuenta?"}
+              </p>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleCambiarModo(
+                    modo === "login" ? "registro" : "login",
+                  )
+                }
+                className="
+                  mt-2
+                  text-sm
+                  font-semibold
+                  text-[#07466c]
+                  underline-offset-4
+                  transition-colors
+                  hover:text-[#f5b400]
+                  hover:underline
+                "
+              >
+                {modo === "login"
+                  ? "Crear una cuenta"
+                  : "Iniciar sesión"}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </LoginLayout>
   );
