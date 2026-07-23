@@ -1,0 +1,95 @@
+{
+  "nombre_modelo": "Regresión de precio de cursos",
+  "tipo_modelo": "Regresión de precios",
+  "algoritmo": "Regresión lineal múltiple",
+  "version_modelo": "1.0.0",
+  "archivo_principal": "pipeline_modelo_precio_cursos.pkl",
+  "variable_objetivo": "precio_historico",
+  "variables_entrada": [
+    "categoria_id",
+    "modalidad_id",
+    "ubicacion_id",
+    "anio_inicio",
+    "mes_inicio",
+    "duracion_dias",
+    "cupo_maximo"
+  ],
+  "variables_numericas": [
+    "anio_inicio",
+    "mes_inicio",
+    "duracion_dias",
+    "cupo_maximo"
+  ],
+  "variables_categoricas": [
+    "categoria_id",
+    "modalidad_id",
+    "ubicacion_id"
+  ],
+  "tipos_esperados": {
+    "categoria_id": "string",
+    "modalidad_id": "string",
+    "ubicacion_id": "string",
+    "anio_inicio": "integer",
+    "mes_inicio": "integer",
+    "duracion_dias": "integer",
+    "cupo_maximo": "integer"
+  },
+  "categorias_conocidas": {
+    "categoria_id": [
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+      "21",
+      "22"
+    ],
+    "modalidad_id": [
+      "7",
+      "8",
+      "9"
+    ],
+    "ubicacion_id": [
+      "15",
+      "16",
+      "18",
+      "19",
+      "Sin dato"
+    ]
+  },
+  "valor_categoria_faltante": "Sin dato",
+  "normalizacion_identificadores": "Los identificadores categóricos se convierten a texto; valores como 3, 3.0 y '3' se normalizan como '3'.",
+  "metricas_prueba": {
+    "mae": 47.609954102515076,
+    "mse": 2944.363055134893,
+    "rmse": 54.26198535931848,
+    "r2": 0.9710629301036798,
+    "registros_prueba": 100
+  },
+  "metricas_validacion_cruzada_5_pliegues": {
+    "mae_promedio": 51.750204434211014,
+    "mae_desviacion": 3.9037955764574486,
+    "rmse_promedio": 60.940555426121975,
+    "rmse_desviacion": 5.8371554173102735,
+    "r2_promedio": 0.9411801883790165,
+    "r2_desviacion": 0.019266806064848815
+  },
+  "margen_orientativo": {
+    "metrica": "MAE de prueba",
+    "valor": 47.609954102515076,
+    "descripcion": "Margen orientativo basado en el error absoluto promedio observado en prueba. No es un intervalo de confianza formal."
+  },
+  "entrenamiento_final": {
+    "cantidad_registros": 500,
+    "fecha_entrenamiento_utc": "2026-07-23T05:51:51.344606+00:00",
+    "usa_todos_los_registros_limpios": true
+  },
+  "versiones": {
+    "python": "3.13.3",
+    "pandas": "3.0.3",
+    "numpy": "2.5.1",
+    "scikit_learn": "1.9.0",
+    "joblib": "1.5.3"
+  }
+}

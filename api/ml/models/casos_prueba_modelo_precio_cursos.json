@@ -1,0 +1,83 @@
+{
+  "modelo": "Regresión de precio de cursos",
+  "version_modelo": "1.0.0",
+  "archivo_pipeline": "pipeline_modelo_precio_cursos.pkl",
+  "criterio_validacion": "abs(prediccion_obtenida - prediccion_esperada) <= tolerancia_absoluta",
+  "casos": [
+    {
+      "id_caso": "caso_01",
+      "entrada": {
+        "categoria_id": "15",
+        "modalidad_id": "7",
+        "ubicacion_id": "18",
+        "anio_inicio": 2025,
+        "mes_inicio": 9,
+        "duracion_dias": 2,
+        "cupo_maximo": 152
+      },
+      "prediccion_esperada": 1054.9296255620732,
+      "prediccion_esperada_redondeada": 1054.93,
+      "tolerancia_absoluta": 0.01
+    },
+    {
+      "id_caso": "caso_02",
+      "entrada": {
+        "categoria_id": "19",
+        "modalidad_id": "7",
+        "ubicacion_id": "15",
+        "anio_inicio": 2025,
+        "mes_inicio": 8,
+        "duracion_dias": 5,
+        "cupo_maximo": 101
+      },
+      "prediccion_esperada": 1760.7747221486609,
+      "prediccion_esperada_redondeada": 1760.77,
+      "tolerancia_absoluta": 0.01
+    },
+    {
+      "id_caso": "caso_03",
+      "entrada": {
+        "categoria_id": "20",
+        "modalidad_id": "8",
+        "ubicacion_id": "Sin dato",
+        "anio_inicio": 2025,
+        "mes_inicio": 2,
+        "duracion_dias": 6,
+        "cupo_maximo": 122
+      },
+      "prediccion_esperada": 2035.945070529962,
+      "prediccion_esperada_redondeada": 2035.95,
+      "tolerancia_absoluta": 0.01
+    },
+    {
+      "id_caso": "caso_04",
+      "entrada": {
+        "categoria_id": "17",
+        "modalidad_id": "9",
+        "ubicacion_id": "16",
+        "anio_inicio": 2025,
+        "mes_inicio": 2,
+        "duracion_dias": 4,
+        "cupo_maximo": 142
+      },
+      "prediccion_esperada": 1602.4270923559002,
+      "prediccion_esperada_redondeada": 1602.43,
+      "tolerancia_absoluta": 0.01
+    },
+    {
+      "id_caso": "caso_05",
+      "entrada": {
+        "categoria_id": "20",
+        "modalidad_id": "9",
+        "ubicacion_id": "19",
+        "anio_inicio": 2024,
+        "mes_inicio": 11,
+        "duracion_dias": 1,
+        "cupo_maximo": 45
+      },
+      "prediccion_esperada": 1497.5532358892174,
+      "prediccion_esperada_redondeada": 1497.55,
+      "tolerancia_absoluta": 0.01
+    }
+  ]
+}

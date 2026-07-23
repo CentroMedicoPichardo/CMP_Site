@@ -87,6 +87,13 @@ export const adminSidebarItems: SidebarItem[] = [
         description:
           "Clasificación de clientes mediante K-Means",
       },
+      {
+        label: "Predicción de precios",
+        href: adminRoutes.prediccionPrecios,
+        icon: WalletCards,
+        description:
+          "Estimación de precios mediante regresión",
+      },
     ],
   },
 

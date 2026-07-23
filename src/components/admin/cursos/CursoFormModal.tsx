@@ -49,30 +49,40 @@ import type {
   UbicacionCursoOption,
 } from "@/types/catalogos-cursos";
 
-type CursoSubmitInput =
-  | CrearCursoInput
-  | ActualizarCursoInput;
+type CursoSubmitInput = CrearCursoInput | ActualizarCursoInput;
 
-type ErroresFormulario = Partial<
-  Record<keyof CursoFormData, string>
->;
+type ErroresFormulario = Partial<Record<keyof CursoFormData, string>>;
+
+interface PrediccionPrecio {
+  precioSugerido: number;
+  precioMinimoEstimado?: number;
+  precioMaximoEstimado?: number;
+  margenOrientativo?: number;
+  modelo?: string;
+  algoritmo?: string;
+  version?: string;
+  aviso?: string;
+  variablesEntrada?: Record<string, unknown>;
+}
+
+interface RespuestaPrediccionPrecio extends Partial<PrediccionPrecio> {
+  ok: boolean;
+  message?: string;
+}
+
+type DecisionTemporalPrecio = "aceptada" | "rechazada" | null;
 
 interface CursoFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (
-    cursoData: CursoSubmitInput,
-  ) => Promise<void>;
+  onSave: (cursoData: CursoSubmitInput) => Promise<void>;
   curso: Curso | null;
 
   /**
-   * Abre el módulo de predicción de precio.
-   * Recibe todos los datos capturados en el formulario,
-   * aunque todavía no se hayan guardado.
+   * Se conserva por compatibilidad con el componente padre.
+   * El predictor ahora funciona directamente dentro del modal.
    */
-  onOpenPricePredictor?: (
-    draft: CursoFormData,
-  ) => void;
+  onOpenPricePredictor?: (draft: CursoFormData) => void;
 }
 
 interface EstilosBodyAnteriores {
@@ -104,43 +114,22 @@ const FORM_DATA_INICIAL: CursoFormData = {
   activo: true,
 };
 
-function cn(
-  ...clases: Array<
-    string | false | null | undefined
-  >
-): string {
+function cn(...clases: Array<string | false | null | undefined>): string {
   return clases.filter(Boolean).join(" ");
 }
 
-function textoSeguro(
-  valor: unknown,
-  respaldo = "",
-): string {
-  if (
-    typeof valor === "string" &&
-    valor.trim().length > 0
-  ) {
-    return valor.trim();
-  }
-
-  return respaldo;
+function textoSeguro(valor: unknown, respaldo = ""): string {
+  return typeof valor === "string" && valor.trim().length > 0
+    ? valor.trim()
+    : respaldo;
 }
 
-function numeroSeguro(
-  valor: unknown,
-  respaldo = 0,
-): number {
-  if (
-    typeof valor === "number" &&
-    Number.isFinite(valor)
-  ) {
+function numeroSeguro(valor: unknown, respaldo = 0): number {
+  if (typeof valor === "number" && Number.isFinite(valor)) {
     return valor;
   }
 
-  if (
-    typeof valor === "string" &&
-    valor.trim()
-  ) {
+  if (typeof valor === "string" && valor.trim()) {
     const numero = Number(valor);
 
     if (Number.isFinite(numero)) {
@@ -154,85 +143,58 @@ function numeroSeguro(
 function capitalizar(valor: string): string {
   const texto = valor.trim();
 
-  if (!texto) {
-    return texto;
-  }
-
-  return (
-    texto.charAt(0).toUpperCase() +
-    texto.slice(1)
-  );
+  return texto
+    ? texto.charAt(0).toUpperCase() + texto.slice(1)
+    : texto;
 }
 
 function obtenerLimiteHeaderGlobal(): number {
-  if (
-    typeof window === "undefined" ||
-    typeof document === "undefined"
-  ) {
+  if (typeof window === "undefined" || typeof document === "undefined") {
     return 0;
   }
 
-  const headers =
-    document.querySelectorAll<HTMLElement>(
-      "header",
-    );
-
+  const headers = document.querySelectorAll<HTMLElement>("header");
   let limiteInferior = 0;
 
   headers.forEach((header) => {
-    if (
-      header.closest(
-        '[data-curso-form-modal="true"]',
-      )
-    ) {
+    if (header.closest('[data-curso-form-modal="true"]')) {
       return;
     }
 
-    const estilos =
-      window.getComputedStyle(header);
-
+    const estilos = window.getComputedStyle(header);
     const esPosicionado =
-      estilos.position === "fixed" ||
-      estilos.position === "sticky";
+      estilos.position === "fixed" || estilos.position === "sticky";
 
     if (!esPosicionado) {
       return;
     }
 
-    const rect =
-      header.getBoundingClientRect();
-
+    const rect = header.getBoundingClientRect();
     const esVisible =
       rect.height > 0 &&
       rect.bottom > 0 &&
       rect.top < window.innerHeight;
 
-    if (!esVisible) {
-      return;
+    if (esVisible) {
+      limiteInferior = Math.max(limiteInferior, rect.bottom);
     }
-
-    limiteInferior = Math.max(
-      limiteInferior,
-      rect.bottom,
-    );
   });
 
-  return Math.max(
-    0,
-    Math.round(limiteInferior),
-  );
+  return Math.max(0, Math.round(limiteInferior));
 }
 
-async function readJsonResponse<T>(
-  response: Response,
-): Promise<T> {
+async function readJsonResponse<T>(response: Response): Promise<T> {
   const texto = await response.text();
 
   if (!texto) {
-    return [] as T;
+    throw new Error("El servidor devolvió una respuesta vacía.");
   }
 
-  return JSON.parse(texto) as T;
+  try {
+    return JSON.parse(texto) as T;
+  } catch {
+    throw new Error("El servidor devolvió una respuesta inválida.");
+  }
 }
 
 function EncabezadoSeccion({
@@ -251,13 +213,8 @@ function EncabezadoSeccion({
       </span>
 
       <div className="min-w-0">
-        <h3 className="text-sm font-extrabold text-[#0A3D62]">
-          {titulo}
-        </h3>
-
-        <p className="mt-1 text-xs leading-5 text-gray-500">
-          {descripcion}
-        </p>
+        <h3 className="text-sm font-extrabold text-[#0A3D62]">{titulo}</h3>
+        <p className="mt-1 text-xs leading-5 text-gray-500">{descripcion}</p>
       </div>
     </div>
   );
@@ -278,12 +235,8 @@ function EtiquetaCampo({
       className="mb-2 block text-xs font-extrabold text-[#0A3D62]"
     >
       {children}
-
       {requerido && (
-        <span
-          className="ml-1 text-red-500"
-          aria-hidden="true"
-        >
+        <span className="ml-1 text-red-500" aria-hidden="true">
           *
         </span>
       )}
@@ -291,11 +244,7 @@ function EtiquetaCampo({
   );
 }
 
-function MensajeError({
-  mensaje,
-}: {
-  mensaje?: string;
-}) {
+function MensajeError({ mensaje }: { mensaje?: string }) {
   if (!mensaje) {
     return null;
   }
@@ -310,10 +259,7 @@ function MensajeError({
         className="mt-0.5 shrink-0"
         aria-hidden="true"
       />
-
-      <span className="break-words">
-        {mensaje}
-      </span>
+      <span className="break-words">{mensaje}</span>
     </p>
   );
 }
@@ -323,59 +269,39 @@ export function CursoFormModal({
   onClose,
   onSave,
   curso,
-  onOpenPricePredictor,
 }: CursoFormModalProps) {
   const tituloModalId = useId();
   const descripcionModalId = useId();
 
   const onCloseRef = useRef(onClose);
   const savingRef = useRef(false);
-  const primerCampoRef =
-    useRef<HTMLInputElement>(null);
+  const primerCampoRef = useRef<HTMLInputElement>(null);
 
-  const [mounted, setMounted] =
-    useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [desplazamientoSuperior, setDesplazamientoSuperior] = useState(88);
 
-  const [
-    desplazamientoSuperior,
-    setDesplazamientoSuperior,
-  ] = useState(88);
+  const [formData, setFormData] = useState<CursoFormData>({
+    ...FORM_DATA_INICIAL,
+  });
 
-  const [formData, setFormData] =
-    useState<CursoFormData>({
-      ...FORM_DATA_INICIAL,
-    });
+  const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<ErroresFormulario>({});
+  const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
 
-  const [saving, setSaving] =
-    useState(false);
+  const [instructores, setInstructores] = useState<InstructorCursoOption[]>([]);
+  const [categorias, setCategorias] = useState<CategoriaCursoOption[]>([]);
+  const [ubicaciones, setUbicaciones] = useState<UbicacionCursoOption[]>([]);
+  const [modalidades, setModalidades] = useState<ModalidadCurso[]>([]);
 
-  const [errors, setErrors] =
-    useState<ErroresFormulario>({});
+  const [loadingData, setLoadingData] = useState(false);
+  const [catalogosError, setCatalogosError] = useState<string | null>(null);
 
-  const [
-    errorGeneral,
-    setErrorGeneral,
-  ] = useState<string | null>(null);
-
-  const [instructores, setInstructores] =
-    useState<InstructorCursoOption[]>([]);
-
-  const [categorias, setCategorias] =
-    useState<CategoriaCursoOption[]>([]);
-
-  const [ubicaciones, setUbicaciones] =
-    useState<UbicacionCursoOption[]>([]);
-
-  const [modalidades, setModalidades] =
-    useState<ModalidadCurso[]>([]);
-
-  const [loadingData, setLoadingData] =
-    useState(false);
-
-  const [
-    catalogosError,
-    setCatalogosError,
-  ] = useState<string | null>(null);
+  const [calculandoPrecio, setCalculandoPrecio] = useState(false);
+  const [prediccionPrecio, setPrediccionPrecio] =
+    useState<PrediccionPrecio | null>(null);
+  const [errorPrediccion, setErrorPrediccion] = useState<string | null>(null);
+  const [decisionTemporalPrecio, setDecisionTemporalPrecio] =
+    useState<DecisionTemporalPrecio>(null);
 
   const esEdicion = Boolean(curso);
 
@@ -400,140 +326,86 @@ export function CursoFormModal({
     savingRef.current = saving;
   }, [saving]);
 
-  const cargarCatalogos = useCallback(
-    async (signal?: AbortSignal) => {
-      setLoadingData(true);
-      setCatalogosError(null);
+  const cargarCatalogos = useCallback(async (signal?: AbortSignal) => {
+    setLoadingData(true);
+    setCatalogosError(null);
 
-      try {
-        const [
-          instructoresRes,
-          categoriasRes,
-          ubicacionesRes,
-          modalidadesRes,
-        ] = await Promise.all([
-          fetch(
-            "/api/instructores?admin=true",
-            {
-              signal,
-              cache: "no-store",
-            },
-          ),
-          fetch(
-            "/api/categorias?admin=true",
-            {
-              signal,
-              cache: "no-store",
-            },
-          ),
-          fetch(
-            "/api/ubicaciones?admin=true",
-            {
-              signal,
-              cache: "no-store",
-            },
-          ),
-          fetch(
-            "/api/modalidades?admin=true",
-            {
-              signal,
-              cache: "no-store",
-            },
-          ),
-        ]);
+    try {
+      const [
+        instructoresRes,
+        categoriasRes,
+        ubicacionesRes,
+        modalidadesRes,
+      ] = await Promise.all([
+        fetch("/api/instructores?admin=true", {
+          signal,
+          cache: "no-store",
+        }),
+        fetch("/api/categorias?admin=true", {
+          signal,
+          cache: "no-store",
+        }),
+        fetch("/api/ubicaciones?admin=true", {
+          signal,
+          cache: "no-store",
+        }),
+        fetch("/api/modalidades?admin=true", {
+          signal,
+          cache: "no-store",
+        }),
+      ]);
 
-        if (
-          !instructoresRes.ok ||
-          !categoriasRes.ok ||
-          !ubicacionesRes.ok ||
-          !modalidadesRes.ok
-        ) {
-          throw new Error(
-            "No fue posible cargar los catálogos del curso.",
-          );
-        }
-
-        const [
-          instructoresData,
-          categoriasData,
-          ubicacionesData,
-          modalidadesData,
-        ] = await Promise.all([
-          readJsonResponse<
-            InstructorCursoOption[]
-          >(instructoresRes),
-          readJsonResponse<
-            CategoriaCursoOption[]
-          >(categoriasRes),
-          readJsonResponse<
-            UbicacionCursoOption[]
-          >(ubicacionesRes),
-          readJsonResponse<
-            ModalidadCurso[]
-          >(modalidadesRes),
-        ]);
-
-        setInstructores(
-          Array.isArray(instructoresData)
-            ? instructoresData
-            : [],
-        );
-
-        setCategorias(
-          Array.isArray(categoriasData)
-            ? categoriasData
-            : [],
-        );
-
-        setUbicaciones(
-          Array.isArray(ubicacionesData)
-            ? ubicacionesData
-            : [],
-        );
-
-        setModalidades(
-          Array.isArray(modalidadesData)
-            ? modalidadesData
-            : [],
-        );
-      } catch (error: unknown) {
-        if (
-          error instanceof DOMException &&
-          error.name === "AbortError"
-        ) {
-          return;
-        }
-
-        console.error(
-          "Error cargando catálogos del curso:",
-          error,
-        );
-
-        setCatalogosError(
-          error instanceof Error
-            ? error.message
-            : "No fue posible cargar los catálogos del curso.",
-        );
-      } finally {
-        if (!signal?.aborted) {
-          setLoadingData(false);
-        }
+      if (
+        !instructoresRes.ok ||
+        !categoriasRes.ok ||
+        !ubicacionesRes.ok ||
+        !modalidadesRes.ok
+      ) {
+        throw new Error("No fue posible cargar los catálogos del curso.");
       }
-    },
-    [],
-  );
+
+      const [
+        instructoresData,
+        categoriasData,
+        ubicacionesData,
+        modalidadesData,
+      ] = await Promise.all([
+        readJsonResponse<InstructorCursoOption[]>(instructoresRes),
+        readJsonResponse<CategoriaCursoOption[]>(categoriasRes),
+        readJsonResponse<UbicacionCursoOption[]>(ubicacionesRes),
+        readJsonResponse<ModalidadCurso[]>(modalidadesRes),
+      ]);
+
+      setInstructores(Array.isArray(instructoresData) ? instructoresData : []);
+      setCategorias(Array.isArray(categoriasData) ? categoriasData : []);
+      setUbicaciones(Array.isArray(ubicacionesData) ? ubicacionesData : []);
+      setModalidades(Array.isArray(modalidadesData) ? modalidadesData : []);
+    } catch (error: unknown) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
+
+      console.error("Error cargando catálogos del curso:", error);
+
+      setCatalogosError(
+        error instanceof Error
+          ? error.message
+          : "No fue posible cargar los catálogos del curso.",
+      );
+    } finally {
+      if (!signal?.aborted) {
+        setLoadingData(false);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (!isOpen) {
       return;
     }
 
-    const controller =
-      new AbortController();
-
-    void cargarCatalogos(
-      controller.signal,
-    );
+    const controller = new AbortController();
+    void cargarCatalogos(controller.signal);
 
     return () => {
       controller.abort();
@@ -548,58 +420,40 @@ export function CursoFormModal({
     if (curso) {
       setFormData({
         idCurso: curso.idCurso,
-        tituloCurso:
-          curso.tituloCurso ?? "",
-        descripcion:
-          curso.descripcion ?? "",
-        idInstructor:
-          curso.idInstructor ?? null,
-        idCategoria:
-          curso.idCategoria ?? null,
-        idUbicacion:
-          curso.idUbicacion ?? null,
-        idModalidad:
-          curso.idModalidad ?? null,
-        fechaInicio:
-          curso.fechaInicio ?? "",
-        fechaFin:
-          curso.fechaFin ?? "",
-        horario:
-          curso.horario ?? "",
-        dirigidoA:
-          curso.dirigidoA || "Padres",
-        cupoMaximo: numeroSeguro(
-          curso.cupoMaximo,
-          20,
-        ),
-        cuposOcupados: numeroSeguro(
-          curso.cuposOcupados,
-          0,
-        ),
+        tituloCurso: curso.tituloCurso ?? "",
+        descripcion: curso.descripcion ?? "",
+        idInstructor: curso.idInstructor ?? null,
+        idCategoria: curso.idCategoria ?? null,
+        idUbicacion: curso.idUbicacion ?? null,
+        idModalidad: curso.idModalidad ?? null,
+        fechaInicio: curso.fechaInicio ?? "",
+        fechaFin: curso.fechaFin ?? "",
+        horario: curso.horario ?? "",
+        dirigidoA: curso.dirigidoA || "Padres",
+        cupoMaximo: numeroSeguro(curso.cupoMaximo, 20),
+        cuposOcupados: numeroSeguro(curso.cuposOcupados, 0),
         costo:
-          curso.costo !== null &&
-          curso.costo !== undefined
+          curso.costo !== null && curso.costo !== undefined
             ? String(curso.costo)
             : "0.00",
-        urlImagenPortada:
-          curso.urlImagenPortada ?? "",
-        activo:
-          curso.activo ?? true,
+        urlImagenPortada: curso.urlImagenPortada ?? "",
+        activo: curso.activo ?? true,
       });
     } else {
-      setFormData({
-        ...FORM_DATA_INICIAL,
-      });
+      setFormData({ ...FORM_DATA_INICIAL });
     }
 
     setErrors({});
     setErrorGeneral(null);
     setSaving(false);
+    setCalculandoPrecio(false);
+    setPrediccionPrecio(null);
+    setErrorPrediccion(null);
+    setDecisionTemporalPrecio(null);
 
-    const temporizador =
-      window.setTimeout(() => {
-        primerCampoRef.current?.focus();
-      }, 150);
+    const temporizador = window.setTimeout(() => {
+      primerCampoRef.current?.focus();
+    }, 150);
 
     return () => {
       window.clearTimeout(temporizador);
@@ -613,178 +467,95 @@ export function CursoFormModal({
 
     const scrollY = window.scrollY;
 
-    const estilosBodyAnteriores:
-      EstilosBodyAnteriores = {
-      overflow:
-        document.body.style.overflow,
-      position:
-        document.body.style.position,
+    const estilosBodyAnteriores: EstilosBodyAnteriores = {
+      overflow: document.body.style.overflow,
+      position: document.body.style.position,
       top: document.body.style.top,
       left: document.body.style.left,
-      right:
-        document.body.style.right,
+      right: document.body.style.right,
       width: document.body.style.width,
-      paddingRight:
-        document.body.style.paddingRight,
-      overscrollBehavior:
-        document.body.style
-          .overscrollBehavior,
+      paddingRight: document.body.style.paddingRight,
+      overscrollBehavior: document.body.style.overscrollBehavior,
     };
 
-    const overflowHtmlAnterior =
-      document.documentElement.style
-        .overflow;
-
+    const overflowHtmlAnterior = document.documentElement.style.overflow;
     const overscrollHtmlAnterior =
-      document.documentElement.style
-        .overscrollBehavior;
+      document.documentElement.style.overscrollBehavior;
 
     const anchoScrollbar =
-      window.innerWidth -
-      document.documentElement.clientWidth;
+      window.innerWidth - document.documentElement.clientWidth;
 
     let frameId: number | null = null;
 
     const actualizarPosicion = () => {
       if (frameId !== null) {
-        window.cancelAnimationFrame(
-          frameId,
-        );
+        window.cancelAnimationFrame(frameId);
       }
 
-      frameId =
-        window.requestAnimationFrame(
-          () => {
-            setDesplazamientoSuperior(
-              obtenerLimiteHeaderGlobal(),
-            );
-
-            frameId = null;
-          },
-        );
+      frameId = window.requestAnimationFrame(() => {
+        setDesplazamientoSuperior(obtenerLimiteHeaderGlobal());
+        frameId = null;
+      });
     };
 
-    setDesplazamientoSuperior(
-      obtenerLimiteHeaderGlobal(),
-    );
+    setDesplazamientoSuperior(obtenerLimiteHeaderGlobal());
 
-    document.documentElement.style.overflow =
-      "hidden";
-
-    document.documentElement.style.overscrollBehavior =
-      "none";
-
-    document.body.style.overflow =
-      "hidden";
-
-    document.body.style.overscrollBehavior =
-      "none";
-
-    document.body.style.position =
-      "fixed";
-
-    document.body.style.top =
-      `-${scrollY}px`;
-
+    document.documentElement.style.overflow = "hidden";
+    document.documentElement.style.overscrollBehavior = "none";
+    document.body.style.overflow = "hidden";
+    document.body.style.overscrollBehavior = "none";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
     document.body.style.left = "0";
     document.body.style.right = "0";
     document.body.style.width = "100%";
 
     if (anchoScrollbar > 0) {
-      document.body.style.paddingRight =
-        `${anchoScrollbar}px`;
+      document.body.style.paddingRight = `${anchoScrollbar}px`;
     }
 
-    const handleKeyDown = (
-      event: KeyboardEvent,
-    ) => {
-      if (
-        event.key === "Escape" &&
-        !savingRef.current
-      ) {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !savingRef.current) {
         onCloseRef.current();
       }
     };
 
     const resizeObserver =
-      typeof ResizeObserver !==
-      "undefined"
-        ? new ResizeObserver(
-            actualizarPosicion,
-          )
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(actualizarPosicion)
         : null;
 
-    const headers =
-      document.querySelectorAll<HTMLElement>(
-        "header",
-      );
+    const headers = document.querySelectorAll<HTMLElement>("header");
 
     headers.forEach((header) => {
-      if (
-        !header.closest(
-          '[data-curso-form-modal="true"]',
-        )
-      ) {
+      if (!header.closest('[data-curso-form-modal="true"]')) {
         resizeObserver?.observe(header);
       }
     });
 
-    window.addEventListener(
-      "resize",
-      actualizarPosicion,
-    );
-
-    window.addEventListener(
-      "keydown",
-      handleKeyDown,
-    );
+    window.addEventListener("resize", actualizarPosicion);
+    window.addEventListener("keydown", handleKeyDown);
 
     return () => {
       if (frameId !== null) {
-        window.cancelAnimationFrame(
-          frameId,
-        );
+        window.cancelAnimationFrame(frameId);
       }
 
       resizeObserver?.disconnect();
+      window.removeEventListener("resize", actualizarPosicion);
+      window.removeEventListener("keydown", handleKeyDown);
 
-      window.removeEventListener(
-        "resize",
-        actualizarPosicion,
-      );
-
-      window.removeEventListener(
-        "keydown",
-        handleKeyDown,
-      );
-
-      document.documentElement.style.overflow =
-        overflowHtmlAnterior;
-
+      document.documentElement.style.overflow = overflowHtmlAnterior;
       document.documentElement.style.overscrollBehavior =
         overscrollHtmlAnterior;
 
-      document.body.style.overflow =
-        estilosBodyAnteriores.overflow;
-
-      document.body.style.position =
-        estilosBodyAnteriores.position;
-
-      document.body.style.top =
-        estilosBodyAnteriores.top;
-
-      document.body.style.left =
-        estilosBodyAnteriores.left;
-
-      document.body.style.right =
-        estilosBodyAnteriores.right;
-
-      document.body.style.width =
-        estilosBodyAnteriores.width;
-
-      document.body.style.paddingRight =
-        estilosBodyAnteriores.paddingRight;
-
+      document.body.style.overflow = estilosBodyAnteriores.overflow;
+      document.body.style.position = estilosBodyAnteriores.position;
+      document.body.style.top = estilosBodyAnteriores.top;
+      document.body.style.left = estilosBodyAnteriores.left;
+      document.body.style.right = estilosBodyAnteriores.right;
+      document.body.style.width = estilosBodyAnteriores.width;
+      document.body.style.paddingRight = estilosBodyAnteriores.paddingRight;
       document.body.style.overscrollBehavior =
         estilosBodyAnteriores.overscrollBehavior;
 
@@ -797,152 +568,88 @@ export function CursoFormModal({
     editing: boolean,
   ): CursoSubmitInput {
     const baseInput: CrearCursoInput = {
-      tituloCurso:
-        data.tituloCurso.trim(),
-
-      descripcion:
-        textoSeguro(data.descripcion) ||
-        null,
-
-      idInstructor: Number(
-        data.idInstructor,
-      ),
-
-      idCategoria: Number(
-        data.idCategoria,
-      ),
-
-      idUbicacion:
-        data.idUbicacion ?? null,
-
-      idModalidad: Number(
-        data.idModalidad,
-      ),
-
+      tituloCurso: data.tituloCurso.trim(),
+      descripcion: textoSeguro(data.descripcion) || null,
+      idInstructor: Number(data.idInstructor),
+      idCategoria: Number(data.idCategoria),
+      idUbicacion: data.idUbicacion ?? null,
+      idModalidad: Number(data.idModalidad),
       fechaInicio: data.fechaInicio,
       fechaFin: data.fechaFin,
-
-      horario:
-        textoSeguro(data.horario) ||
-        null,
-
+      horario: textoSeguro(data.horario) || null,
       dirigidoA: data.dirigidoA,
-
-      cupoMaximo: numeroSeguro(
-        data.cupoMaximo,
-      ),
-
-      costo:
-        String(data.costo || "0.00"),
-
-      urlImagenPortada:
-        textoSeguro(
-          data.urlImagenPortada,
-        ) || null,
+      cupoMaximo: numeroSeguro(data.cupoMaximo),
+      costo: String(data.costo || "0.00"),
+      urlImagenPortada: textoSeguro(data.urlImagenPortada) || null,
     };
 
-    if (!editing) {
-      return baseInput;
-    }
-
-    return {
-      ...baseInput,
-      activo: data.activo,
-    };
+    return editing
+      ? {
+          ...baseInput,
+          activo: data.activo,
+        }
+      : baseInput;
   }
 
-  const validarFormulario =
-    (): boolean => {
-      const nuevosErrores:
-        ErroresFormulario = {};
+  const validarFormulario = (): boolean => {
+    const nuevosErrores: ErroresFormulario = {};
+    const costoNumero = Number(formData.costo);
+    const cupoMaximo = numeroSeguro(formData.cupoMaximo);
+    const cuposOcupados = numeroSeguro(formData.cuposOcupados);
 
-      const costoNumero = Number(
-        formData.costo,
-      );
+    if (!formData.tituloCurso.trim()) {
+      nuevosErrores.tituloCurso = "El título del curso es obligatorio.";
+    }
 
-      const cupoMaximo = numeroSeguro(
-        formData.cupoMaximo,
-      );
+    if (!formData.idInstructor) {
+      nuevosErrores.idInstructor = "Selecciona un instructor.";
+    }
 
-      const cuposOcupados =
-        numeroSeguro(
-          formData.cuposOcupados,
-        );
+    if (!formData.idCategoria) {
+      nuevosErrores.idCategoria = "Selecciona una categoría.";
+    }
 
-      if (
-        !formData.tituloCurso.trim()
-      ) {
-        nuevosErrores.tituloCurso =
-          "El título del curso es obligatorio.";
-      }
+    if (!formData.idModalidad) {
+      nuevosErrores.idModalidad = "Selecciona una modalidad.";
+    }
 
-      if (!formData.idInstructor) {
-        nuevosErrores.idInstructor =
-          "Selecciona un instructor.";
-      }
+    if (!formData.fechaInicio) {
+      nuevosErrores.fechaInicio = "La fecha de inicio es obligatoria.";
+    }
 
-      if (!formData.idCategoria) {
-        nuevosErrores.idCategoria =
-          "Selecciona una categoría.";
-      }
+    if (!formData.fechaFin) {
+      nuevosErrores.fechaFin = "La fecha final es obligatoria.";
+    }
 
-      if (!formData.idModalidad) {
-        nuevosErrores.idModalidad =
-          "Selecciona una modalidad.";
-      }
+    if (
+      formData.fechaInicio &&
+      formData.fechaFin &&
+      formData.fechaInicio > formData.fechaFin
+    ) {
+      nuevosErrores.fechaFin =
+        "La fecha final debe ser igual o posterior a la fecha de inicio.";
+    }
 
-      if (!formData.fechaInicio) {
-        nuevosErrores.fechaInicio =
-          "La fecha de inicio es obligatoria.";
-      }
+    if (cupoMaximo <= 0) {
+      nuevosErrores.cupoMaximo =
+        "El cupo máximo debe ser mayor que cero.";
+    }
 
-      if (!formData.fechaFin) {
-        nuevosErrores.fechaFin =
-          "La fecha final es obligatoria.";
-      }
+    if (esEdicion && cupoMaximo < cuposOcupados) {
+      nuevosErrores.cupoMaximo =
+        `El cupo máximo no puede ser menor que los ${cuposOcupados} lugares ocupados.`;
+    }
 
-      if (
-        formData.fechaInicio &&
-        formData.fechaFin &&
-        formData.fechaInicio >
-          formData.fechaFin
-      ) {
-        nuevosErrores.fechaFin =
-          "La fecha final debe ser igual o posterior a la fecha de inicio.";
-      }
+    if (!Number.isFinite(costoNumero) || costoNumero < 0) {
+      nuevosErrores.costo =
+        "El costo debe ser un número mayor o igual que cero.";
+    }
 
-      if (cupoMaximo <= 0) {
-        nuevosErrores.cupoMaximo =
-          "El cupo máximo debe ser mayor que cero.";
-      }
+    setErrors(nuevosErrores);
+    return Object.keys(nuevosErrores).length === 0;
+  };
 
-      if (
-        esEdicion &&
-        cupoMaximo < cuposOcupados
-      ) {
-        nuevosErrores.cupoMaximo =
-          `El cupo máximo no puede ser menor que los ${cuposOcupados} lugares ocupados.`;
-      }
-
-      if (
-        !Number.isFinite(costoNumero) ||
-        costoNumero < 0
-      ) {
-        nuevosErrores.costo =
-          "El costo debe ser un número mayor o igual que cero.";
-      }
-
-      setErrors(nuevosErrores);
-
-      return (
-        Object.keys(nuevosErrores)
-          .length === 0
-      );
-    };
-
-  const limpiarErrorCampo = (
-    campo: keyof CursoFormData,
-  ) => {
+  const limpiarErrorCampo = (campo: keyof CursoFormData) => {
     if (!errors[campo]) {
       return;
     }
@@ -953,18 +660,17 @@ export function CursoFormModal({
     }));
   };
 
-  const handleChange = (
-    event: ChangeEvent<
-      | HTMLInputElement
-      | HTMLTextAreaElement
-      | HTMLSelectElement
-    >,
-  ) => {
-    const { name, value } =
-      event.target;
+  const invalidarPrediccion = () => {
+    setPrediccionPrecio(null);
+    setErrorPrediccion(null);
+    setDecisionTemporalPrecio(null);
+  };
 
-    const campo =
-      name as keyof CursoFormData;
+  const handleChange = (
+    event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
+  ) => {
+    const { name, value } = event.target;
+    const campo = name as keyof CursoFormData;
 
     setFormData(
       (datosActuales) =>
@@ -974,6 +680,19 @@ export function CursoFormModal({
         }) as CursoFormData,
     );
 
+    if (
+      [
+        "idCategoria",
+        "idModalidad",
+        "idUbicacion",
+        "fechaInicio",
+        "fechaFin",
+        "cupoMaximo",
+      ].includes(String(campo))
+    ) {
+      invalidarPrediccion();
+    }
+
     limpiarErrorCampo(campo);
     setErrorGeneral(null);
   };
@@ -981,16 +700,9 @@ export function CursoFormModal({
   const handleNullableIdChange = (
     event: ChangeEvent<HTMLSelectElement>,
   ) => {
-    const { name, value } =
-      event.target;
-
-    const campo =
-      name as keyof CursoFormData;
-
-    const valor =
-      value === ""
-        ? null
-        : Number(value);
+    const { name, value } = event.target;
+    const campo = name as keyof CursoFormData;
+    const valor = value === "" ? null : Number(value);
 
     setFormData(
       (datosActuales) =>
@@ -1000,97 +712,198 @@ export function CursoFormModal({
         }) as CursoFormData,
     );
 
+    invalidarPrediccion();
     limpiarErrorCampo(campo);
     setErrorGeneral(null);
   };
 
-  const handleNumberChange = (
-    event: ChangeEvent<HTMLInputElement>,
-  ) => {
-    const { name, value } =
-      event.target;
-
-    const campo =
-      name as keyof CursoFormData;
-
-    const valor =
-      value === ""
-        ? 0
-        : Number(value);
+  const handleNumberChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = event.target;
+    const campo = name as keyof CursoFormData;
+    const valor = value === "" ? 0 : Number(value);
 
     setFormData(
       (datosActuales) =>
         ({
           ...datosActuales,
-          [campo]: Number.isFinite(valor)
-            ? valor
-            : 0,
+          [campo]: Number.isFinite(valor) ? valor : 0,
         }) as CursoFormData,
     );
 
+    invalidarPrediccion();
     limpiarErrorCampo(campo);
     setErrorGeneral(null);
   };
 
-  const handleImageUpload = (
-    asset: {
-      url: string;
-      publicId: string;
-    },
-  ) => {
-    setFormData(
-      (datosActuales) => ({
-        ...datosActuales,
-        urlImagenPortada: asset.url,
-      }),
-    );
+  const handleImageUpload = (asset: { url: string; publicId: string }) => {
+    setFormData((datosActuales) => ({
+      ...datosActuales,
+      urlImagenPortada: asset.url,
+    }));
 
     setErrorGeneral(null);
   };
 
   const eliminarImagen = () => {
-    setFormData(
-      (datosActuales) => ({
-        ...datosActuales,
-        urlImagenPortada: "",
-      }),
-    );
+    setFormData((datosActuales) => ({
+      ...datosActuales,
+      urlImagenPortada: "",
+    }));
   };
 
   const cambiarEstado = () => {
-    setFormData(
-      (datosActuales) => ({
-        ...datosActuales,
-        activo: !datosActuales.activo,
-      }),
-    );
+    setFormData((datosActuales) => ({
+      ...datosActuales,
+      activo: !datosActuales.activo,
+    }));
   };
 
-  const abrirPredictorPrecio = () => {
-    if (
-      !onOpenPricePredictor ||
-      saving ||
-      loadingData
-    ) {
+  const calcularPrecioSugerido = async (): Promise<void> => {
+    if (calculandoPrecio || saving || loadingData) {
       return;
     }
 
-    onOpenPricePredictor({
-      ...formData,
-    });
+    setErrorPrediccion(null);
+    setDecisionTemporalPrecio(null);
+
+    const categoriaId = Number(formData.idCategoria);
+    const modalidadId = Number(formData.idModalidad);
+    const ubicacionId =
+      formData.idUbicacion === null || formData.idUbicacion === undefined
+        ? null
+        : Number(formData.idUbicacion);
+    const cupoMaximo = numeroSeguro(formData.cupoMaximo);
+
+    if (!Number.isInteger(categoriaId) || categoriaId <= 0) {
+      setErrorPrediccion(
+        "Selecciona una categoría antes de calcular el precio.",
+      );
+      return;
+    }
+
+    if (!Number.isInteger(modalidadId) || modalidadId <= 0) {
+      setErrorPrediccion(
+        "Selecciona una modalidad antes de calcular el precio.",
+      );
+      return;
+    }
+
+    if (!formData.fechaInicio) {
+      setErrorPrediccion("Selecciona la fecha de inicio.");
+      return;
+    }
+
+    if (!formData.fechaFin) {
+      setErrorPrediccion("Selecciona la fecha final.");
+      return;
+    }
+
+    if (formData.fechaFin < formData.fechaInicio) {
+      setErrorPrediccion(
+        "La fecha final no puede ser anterior a la fecha de inicio.",
+      );
+      return;
+    }
+
+    if (!Number.isInteger(cupoMaximo) || cupoMaximo <= 0) {
+      setErrorPrediccion("El cupo máximo debe ser mayor que cero.");
+      return;
+    }
+
+    setCalculandoPrecio(true);
+
+    try {
+      const response = await fetch(
+        "/api/admin/prediccion-precios/previsualizar",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            categoriaId,
+            modalidadId,
+            ubicacionId,
+            fechaInicio: formData.fechaInicio,
+            fechaFin: formData.fechaFin,
+            cupoMaximo,
+          }),
+        },
+      );
+
+      const resultado =
+        await readJsonResponse<RespuestaPrediccionPrecio>(response);
+
+      if (!response.ok || !resultado.ok) {
+        throw new Error(
+          resultado.message ??
+            "No fue posible calcular el precio sugerido.",
+        );
+      }
+
+      if (
+        typeof resultado.precioSugerido !== "number" ||
+        !Number.isFinite(resultado.precioSugerido)
+      ) {
+        throw new Error(
+          "El servidor no devolvió un precio sugerido válido.",
+        );
+      }
+
+      setPrediccionPrecio({
+        precioSugerido: resultado.precioSugerido,
+        precioMinimoEstimado: resultado.precioMinimoEstimado,
+        precioMaximoEstimado: resultado.precioMaximoEstimado,
+        margenOrientativo: resultado.margenOrientativo,
+        modelo: resultado.modelo,
+        algoritmo: resultado.algoritmo,
+        version: resultado.version,
+        aviso: resultado.aviso,
+        variablesEntrada: resultado.variablesEntrada,
+      });
+    } catch (error: unknown) {
+      console.error("Error calculando precio sugerido:", error);
+      setPrediccionPrecio(null);
+      setErrorPrediccion(
+        error instanceof Error
+          ? error.message
+          : "No fue posible calcular el precio sugerido.",
+      );
+    } finally {
+      setCalculandoPrecio(false);
+    }
+  };
+
+  const aplicarPrecioSugerido = () => {
+    if (!prediccionPrecio) {
+      return;
+    }
+
+    setFormData((datosActuales) => ({
+      ...datosActuales,
+      costo: prediccionPrecio.precioSugerido.toFixed(2),
+    }));
+
+    limpiarErrorCampo("costo");
+    setErrorGeneral(null);
+    setDecisionTemporalPrecio("aceptada");
+  };
+
+  const conservarPrecioCapturado = () => {
+    if (!prediccionPrecio) {
+      return;
+    }
+
+    setDecisionTemporalPrecio("rechazada");
   };
 
   const handleClose = () => {
-    if (saving) {
-      return;
+    if (!saving) {
+      onClose();
     }
-
-    onClose();
   };
 
-  const handleSubmit = async (
-    event: FormEvent<HTMLFormElement>,
-  ) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!validarFormulario()) {
@@ -1101,18 +914,10 @@ export function CursoFormModal({
     setErrorGeneral(null);
 
     try {
-      const cursoData =
-        buildCursoSubmitInput(
-          formData,
-          esEdicion,
-        );
-
+      const cursoData = buildCursoSubmitInput(formData, esEdicion);
       await onSave(cursoData);
     } catch (error: unknown) {
-      console.error(
-        "Error al guardar curso:",
-        error,
-      );
+      console.error("Error al guardar curso:", error);
 
       setErrorGeneral(
         error instanceof Error
@@ -1124,40 +929,42 @@ export function CursoFormModal({
     }
   };
 
-  if (
-    !isOpen ||
-    !mounted
-  ) {
+  if (!isOpen || !mounted) {
     return null;
   }
 
-  const cuposOcupados = numeroSeguro(
-    formData.cuposOcupados,
-  );
-
-  const cupoMaximo = numeroSeguro(
-    formData.cupoMaximo,
-  );
+  const cuposOcupados = numeroSeguro(formData.cuposOcupados);
+  const cupoMaximo = numeroSeguro(formData.cupoMaximo);
 
   const porcentajeOcupacion =
     cupoMaximo > 0
-      ? Math.min(
-          100,
-          Math.round(
-            (cuposOcupados /
-              cupoMaximo) *
-              100,
-          ),
-        )
+      ? Math.min(100, Math.round((cuposOcupados / cupoMaximo) * 100))
       : 0;
+
+  const costoCapturado = Number(formData.costo);
+  const diferenciaAbsoluta =
+    prediccionPrecio && Number.isFinite(costoCapturado)
+      ? costoCapturado - prediccionPrecio.precioSugerido
+      : null;
+
+  const diferenciaPorcentual =
+    prediccionPrecio &&
+    diferenciaAbsoluta !== null &&
+    prediccionPrecio.precioSugerido > 0
+      ? (diferenciaAbsoluta / prediccionPrecio.precioSugerido) * 100
+      : null;
+
+  const formatoMoneda = new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+    minimumFractionDigits: 2,
+  });
 
   const modal = (
     <div
       data-curso-form-modal="true"
       className="fixed bottom-0 left-0 right-0 z-[9000] overflow-hidden"
-      style={{
-        top: `${desplazamientoSuperior}px`,
-      }}
+      style={{ top: `${desplazamientoSuperior}px` }}
     >
       <button
         type="button"
@@ -1173,27 +980,16 @@ export function CursoFormModal({
           role="dialog"
           aria-modal="true"
           aria-labelledby={tituloModalId}
-          aria-describedby={
-            descripcionModalId
-          }
+          aria-describedby={descripcionModalId}
           className="relative flex max-h-full w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl"
-          onClick={(event) => {
-            event.stopPropagation();
-          }}
+          onClick={(event) => event.stopPropagation()}
         >
-          <div
-            className="h-1 w-full shrink-0 bg-[#FFC300]"
-            aria-hidden="true"
-          />
+          <div className="h-1 w-full shrink-0 bg-[#FFC300]" aria-hidden="true" />
 
           <header className="flex shrink-0 items-start justify-between gap-4 border-b border-gray-100 bg-white px-4 py-4 sm:px-6">
             <div className="flex min-w-0 items-start gap-3">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#0A3D62] text-[#FFC300]">
-                <GraduationCap
-                  size={21}
-                  strokeWidth={1.9}
-                  aria-hidden="true"
-                />
+                <GraduationCap size={21} strokeWidth={1.9} aria-hidden="true" />
               </span>
 
               <div className="min-w-0">
@@ -1205,9 +1001,7 @@ export function CursoFormModal({
                   id={tituloModalId}
                   className="mt-1 break-words text-lg font-extrabold leading-tight text-[#0A3D62] sm:text-xl"
                 >
-                  {esEdicion
-                    ? "Editar curso"
-                    : "Registrar curso"}
+                  {esEdicion ? "Editar curso" : "Registrar curso"}
                 </h2>
 
                 <p
@@ -1229,10 +1023,7 @@ export function CursoFormModal({
               aria-label="Cerrar modal"
               title="Cerrar"
             >
-              <X
-                size={18}
-                aria-hidden="true"
-              />
+              <X size={18} aria-hidden="true" />
             </button>
           </header>
 
@@ -1254,7 +1045,6 @@ export function CursoFormModal({
                       className="mt-0.5 shrink-0"
                       aria-hidden="true"
                     />
-
                     <p className="min-w-0 flex-1 break-words text-xs font-semibold leading-5">
                       {errorGeneral}
                     </p>
@@ -1269,7 +1059,6 @@ export function CursoFormModal({
                         className="mt-0.5 shrink-0"
                         aria-hidden="true"
                       />
-
                       <p className="break-words text-xs font-semibold leading-5">
                         {catalogosError}
                       </p>
@@ -1277,21 +1066,15 @@ export function CursoFormModal({
 
                     <button
                       type="button"
-                      onClick={() => {
-                        void cargarCatalogos();
-                      }}
+                      onClick={() => void cargarCatalogos()}
                       disabled={loadingData}
                       className="inline-flex min-h-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-extrabold text-amber-800 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <RefreshCw
                         size={14}
-                        className={cn(
-                          loadingData &&
-                            "animate-spin",
-                        )}
+                        className={cn(loadingData && "animate-spin")}
                         aria-hidden="true"
                       />
-
                       Reintentar
                     </button>
                   </div>
@@ -1300,12 +1083,7 @@ export function CursoFormModal({
                 <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
                   <div className="border-b border-gray-100 bg-[#F8FAFC] px-4 py-3">
                     <EncabezadoSeccion
-                      icono={
-                        <ImageIcon
-                          size={17}
-                          aria-hidden="true"
-                        />
-                      }
+                      icono={<ImageIcon size={17} aria-hidden="true" />}
                       titulo="Imagen de portada"
                       descripcion="Agrega una imagen representativa para identificar el curso."
                     />
@@ -1313,9 +1091,7 @@ export function CursoFormModal({
 
                   <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-[minmax(0,1fr)_190px] sm:items-start">
                     <CloudinaryUploader
-                      onUpload={
-                        handleImageUpload
-                      }
+                      onUpload={handleImageUpload}
                       preset="cursos_preset"
                       folder="centro-medico/cursos"
                       resourceType="image"
@@ -1327,9 +1103,7 @@ export function CursoFormModal({
                         <div className="relative aspect-[4/3] w-full max-w-[180px] overflow-hidden rounded-2xl border border-[#FFC300]/40 bg-gray-100 shadow-sm">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={
-                              formData.urlImagenPortada
-                            }
+                            src={formData.urlImagenPortada}
                             alt={
                               formData.tituloCurso
                                 ? `Vista previa de ${formData.tituloCurso}`
@@ -1340,18 +1114,13 @@ export function CursoFormModal({
 
                           <button
                             type="button"
-                            onClick={
-                              eliminarImagen
-                            }
+                            onClick={eliminarImagen}
                             disabled={saving}
                             className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg bg-red-600 text-white shadow-md transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                             aria-label="Eliminar imagen de portada"
                             title="Eliminar imagen"
                           >
-                            <X
-                              size={15}
-                              aria-hidden="true"
-                            />
+                            <X size={15} aria-hidden="true" />
                           </button>
                         </div>
                       ) : (
@@ -1361,7 +1130,6 @@ export function CursoFormModal({
                             className="text-gray-300"
                             aria-hidden="true"
                           />
-
                           <p className="mt-2 text-[10px] font-semibold leading-4 text-gray-400">
                             Sin imagen de portada
                           </p>
@@ -1373,22 +1141,14 @@ export function CursoFormModal({
 
                 <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
                   <EncabezadoSeccion
-                    icono={
-                      <FileText
-                        size={17}
-                        aria-hidden="true"
-                      />
-                    }
+                    icono={<FileText size={17} aria-hidden="true" />}
                     titulo="Información general"
                     descripcion="Define el nombre y la descripción que se mostrarán a los usuarios."
                   />
 
                   <div className="space-y-4">
                     <div>
-                      <EtiquetaCampo
-                        htmlFor="curso-titulo"
-                        requerido
-                      >
+                      <EtiquetaCampo htmlFor="curso-titulo" requerido>
                         Título del curso
                       </EtiquetaCampo>
 
@@ -1400,22 +1160,14 @@ export function CursoFormModal({
                         />
 
                         <input
-                          ref={
-                            primerCampoRef
-                          }
+                          ref={primerCampoRef}
                           id="curso-titulo"
                           type="text"
                           name="tituloCurso"
-                          value={
-                            formData.tituloCurso
-                          }
-                          onChange={
-                            handleChange
-                          }
+                          value={formData.tituloCurso}
+                          onChange={handleChange}
                           disabled={saving}
-                          aria-invalid={Boolean(
-                            errors.tituloCurso,
-                          )}
+                          aria-invalid={Boolean(errors.tituloCurso)}
                           className={cn(
                             claseCampoBase,
                             "pl-10 pr-3",
@@ -1427,11 +1179,7 @@ export function CursoFormModal({
                         />
                       </div>
 
-                      <MensajeError
-                        mensaje={
-                          errors.tituloCurso
-                        }
-                      />
+                      <MensajeError mensaje={errors.tituloCurso} />
                     </div>
 
                     <div>
@@ -1442,10 +1190,7 @@ export function CursoFormModal({
                       <textarea
                         id="curso-descripcion"
                         name="descripcion"
-                        value={
-                          formData.descripcion ??
-                          ""
-                        }
+                        value={formData.descripcion ?? ""}
                         onChange={handleChange}
                         disabled={saving}
                         rows={4}
@@ -1462,22 +1207,14 @@ export function CursoFormModal({
 
                 <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
                   <EncabezadoSeccion
-                    icono={
-                      <Tag
-                        size={17}
-                        aria-hidden="true"
-                      />
-                    }
+                    icono={<Tag size={17} aria-hidden="true" />}
                     titulo="Clasificación académica"
                     descripcion="Relaciona el curso con sus catálogos académicos y su lugar de impartición."
                   />
 
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
-                      <EtiquetaCampo
-                        htmlFor="curso-instructor"
-                        requerido
-                      >
+                      <EtiquetaCampo htmlFor="curso-instructor" requerido>
                         Instructor
                       </EtiquetaCampo>
 
@@ -1491,20 +1228,10 @@ export function CursoFormModal({
                         <select
                           id="curso-instructor"
                           name="idInstructor"
-                          value={
-                            formData.idInstructor ??
-                            ""
-                          }
-                          onChange={
-                            handleNullableIdChange
-                          }
-                          disabled={
-                            saving ||
-                            loadingData
-                          }
-                          aria-invalid={Boolean(
-                            errors.idInstructor,
-                          )}
+                          value={formData.idInstructor ?? ""}
+                          onChange={handleNullableIdChange}
+                          disabled={saving || loadingData}
+                          aria-invalid={Boolean(errors.idInstructor)}
                           className={cn(
                             claseCampoBase,
                             "cursor-pointer pl-10 pr-3",
@@ -1519,48 +1246,35 @@ export function CursoFormModal({
                               : "Selecciona un instructor"}
                           </option>
 
-                          {instructores.map(
-                            (instructor) => {
-                              const nombre = [
-                                instructor.nombre,
-                                instructor.apellidoPaterno,
-                                instructor.apellidoMaterno,
-                              ]
-                                .filter(Boolean)
-                                .join(" ");
+                          {instructores.map((instructor) => {
+                            const nombre = [
+                              instructor.nombre,
+                              instructor.apellidoPaterno,
+                              instructor.apellidoMaterno,
+                            ]
+                              .filter(Boolean)
+                              .join(" ");
 
-                              return (
-                                <option
-                                  key={
-                                    instructor.idInstructor
-                                  }
-                                  value={
-                                    instructor.idInstructor
-                                  }
-                                >
-                                  {nombre}
-                                  {instructor.especialidad
-                                    ? ` — ${instructor.especialidad}`
-                                    : ""}
-                                </option>
-                              );
-                            },
-                          )}
+                            return (
+                              <option
+                                key={instructor.idInstructor}
+                                value={instructor.idInstructor}
+                              >
+                                {nombre}
+                                {instructor.especialidad
+                                  ? ` — ${instructor.especialidad}`
+                                  : ""}
+                              </option>
+                            );
+                          })}
                         </select>
                       </div>
 
-                      <MensajeError
-                        mensaje={
-                          errors.idInstructor
-                        }
-                      />
+                      <MensajeError mensaje={errors.idInstructor} />
                     </div>
 
                     <div>
-                      <EtiquetaCampo
-                        htmlFor="curso-categoria"
-                        requerido
-                      >
+                      <EtiquetaCampo htmlFor="curso-categoria" requerido>
                         Categoría
                       </EtiquetaCampo>
 
@@ -1574,20 +1288,10 @@ export function CursoFormModal({
                         <select
                           id="curso-categoria"
                           name="idCategoria"
-                          value={
-                            formData.idCategoria ??
-                            ""
-                          }
-                          onChange={
-                            handleNullableIdChange
-                          }
-                          disabled={
-                            saving ||
-                            loadingData
-                          }
-                          aria-invalid={Boolean(
-                            errors.idCategoria,
-                          )}
+                          value={formData.idCategoria ?? ""}
+                          onChange={handleNullableIdChange}
+                          disabled={saving || loadingData}
+                          aria-invalid={Boolean(errors.idCategoria)}
                           className={cn(
                             claseCampoBase,
                             "cursor-pointer pl-10 pr-3",
@@ -1602,37 +1306,22 @@ export function CursoFormModal({
                               : "Selecciona una categoría"}
                           </option>
 
-                          {categorias.map(
-                            (categoria) => (
-                              <option
-                                key={
-                                  categoria.idCategoria
-                                }
-                                value={
-                                  categoria.idCategoria
-                                }
-                              >
-                                {
-                                  categoria.nombreCategoria
-                                }
-                              </option>
-                            ),
-                          )}
+                          {categorias.map((categoria) => (
+                            <option
+                              key={categoria.idCategoria}
+                              value={categoria.idCategoria}
+                            >
+                              {categoria.nombreCategoria}
+                            </option>
+                          ))}
                         </select>
                       </div>
 
-                      <MensajeError
-                        mensaje={
-                          errors.idCategoria
-                        }
-                      />
+                      <MensajeError mensaje={errors.idCategoria} />
                     </div>
 
                     <div>
-                      <EtiquetaCampo
-                        htmlFor="curso-modalidad"
-                        requerido
-                      >
+                      <EtiquetaCampo htmlFor="curso-modalidad" requerido>
                         Modalidad
                       </EtiquetaCampo>
 
@@ -1646,20 +1335,10 @@ export function CursoFormModal({
                         <select
                           id="curso-modalidad"
                           name="idModalidad"
-                          value={
-                            formData.idModalidad ??
-                            ""
-                          }
-                          onChange={
-                            handleNullableIdChange
-                          }
-                          disabled={
-                            saving ||
-                            loadingData
-                          }
-                          aria-invalid={Boolean(
-                            errors.idModalidad,
-                          )}
+                          value={formData.idModalidad ?? ""}
+                          onChange={handleNullableIdChange}
+                          disabled={saving || loadingData}
+                          aria-invalid={Boolean(errors.idModalidad)}
                           className={cn(
                             claseCampoBase,
                             "cursor-pointer pl-10 pr-3",
@@ -1674,30 +1353,18 @@ export function CursoFormModal({
                               : "Selecciona una modalidad"}
                           </option>
 
-                          {modalidades.map(
-                            (modalidad) => (
-                              <option
-                                key={
-                                  modalidad.idModalidad
-                                }
-                                value={
-                                  modalidad.idModalidad
-                                }
-                              >
-                                {capitalizar(
-                                  modalidad.nombreModalidad,
-                                )}
-                              </option>
-                            ),
-                          )}
+                          {modalidades.map((modalidad) => (
+                            <option
+                              key={modalidad.idModalidad}
+                              value={modalidad.idModalidad}
+                            >
+                              {capitalizar(modalidad.nombreModalidad)}
+                            </option>
+                          ))}
                         </select>
                       </div>
 
-                      <MensajeError
-                        mensaje={
-                          errors.idModalidad
-                        }
-                      />
+                      <MensajeError mensaje={errors.idModalidad} />
                     </div>
 
                     <div>
@@ -1715,43 +1382,25 @@ export function CursoFormModal({
                         <select
                           id="curso-ubicacion"
                           name="idUbicacion"
-                          value={
-                            formData.idUbicacion ??
-                            ""
-                          }
-                          onChange={
-                            handleNullableIdChange
-                          }
-                          disabled={
-                            saving ||
-                            loadingData
-                          }
+                          value={formData.idUbicacion ?? ""}
+                          onChange={handleNullableIdChange}
+                          disabled={saving || loadingData}
                           className={cn(
                             claseCampoBase,
                             claseCampoNormal,
                             "cursor-pointer pl-10 pr-3",
                           )}
                         >
-                          <option value="">
-                            Sin ubicación definida
-                          </option>
+                          <option value="">Sin ubicación definida</option>
 
-                          {ubicaciones.map(
-                            (ubicacion) => (
-                              <option
-                                key={
-                                  ubicacion.idUbicacion
-                                }
-                                value={
-                                  ubicacion.idUbicacion
-                                }
-                              >
-                                {
-                                  ubicacion.nombreUbicacion
-                                }
-                              </option>
-                            ),
-                          )}
+                          {ubicaciones.map((ubicacion) => (
+                            <option
+                              key={ubicacion.idUbicacion}
+                              value={ubicacion.idUbicacion}
+                            >
+                              {ubicacion.nombreUbicacion}
+                            </option>
+                          ))}
                         </select>
                       </div>
                     </div>
@@ -1760,22 +1409,14 @@ export function CursoFormModal({
 
                 <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
                   <EncabezadoSeccion
-                    icono={
-                      <Calendar
-                        size={17}
-                        aria-hidden="true"
-                      />
-                    }
+                    icono={<Calendar size={17} aria-hidden="true" />}
                     titulo="Programación"
                     descripcion="Establece el periodo, horario y público al que está dirigido el curso."
                   />
 
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
-                      <EtiquetaCampo
-                        htmlFor="curso-fecha-inicio"
-                        requerido
-                      >
+                      <EtiquetaCampo htmlFor="curso-fecha-inicio" requerido>
                         Fecha de inicio
                       </EtiquetaCampo>
 
@@ -1790,20 +1431,11 @@ export function CursoFormModal({
                           id="curso-fecha-inicio"
                           type="date"
                           name="fechaInicio"
-                          value={
-                            formData.fechaInicio
-                          }
-                          onChange={
-                            handleChange
-                          }
+                          value={formData.fechaInicio}
+                          onChange={handleChange}
                           disabled={saving}
-                          max={
-                            formData.fechaFin ||
-                            undefined
-                          }
-                          aria-invalid={Boolean(
-                            errors.fechaInicio,
-                          )}
+                          max={formData.fechaFin || undefined}
+                          aria-invalid={Boolean(errors.fechaInicio)}
                           className={cn(
                             claseCampoBase,
                             "pl-10 pr-3",
@@ -1814,18 +1446,11 @@ export function CursoFormModal({
                         />
                       </div>
 
-                      <MensajeError
-                        mensaje={
-                          errors.fechaInicio
-                        }
-                      />
+                      <MensajeError mensaje={errors.fechaInicio} />
                     </div>
 
                     <div>
-                      <EtiquetaCampo
-                        htmlFor="curso-fecha-fin"
-                        requerido
-                      >
+                      <EtiquetaCampo htmlFor="curso-fecha-fin" requerido>
                         Fecha final
                       </EtiquetaCampo>
 
@@ -1840,20 +1465,11 @@ export function CursoFormModal({
                           id="curso-fecha-fin"
                           type="date"
                           name="fechaFin"
-                          value={
-                            formData.fechaFin
-                          }
-                          onChange={
-                            handleChange
-                          }
+                          value={formData.fechaFin}
+                          onChange={handleChange}
                           disabled={saving}
-                          min={
-                            formData.fechaInicio ||
-                            undefined
-                          }
-                          aria-invalid={Boolean(
-                            errors.fechaFin,
-                          )}
+                          min={formData.fechaInicio || undefined}
+                          aria-invalid={Boolean(errors.fechaFin)}
                           className={cn(
                             claseCampoBase,
                             "pl-10 pr-3",
@@ -1864,11 +1480,7 @@ export function CursoFormModal({
                         />
                       </div>
 
-                      <MensajeError
-                        mensaje={
-                          errors.fechaFin
-                        }
-                      />
+                      <MensajeError mensaje={errors.fechaFin} />
                     </div>
 
                     <div>
@@ -1887,13 +1499,8 @@ export function CursoFormModal({
                           id="curso-horario"
                           type="text"
                           name="horario"
-                          value={
-                            formData.horario ??
-                            ""
-                          }
-                          onChange={
-                            handleChange
-                          }
+                          value={formData.horario ?? ""}
+                          onChange={handleChange}
                           disabled={saving}
                           className={cn(
                             claseCampoBase,
@@ -1913,9 +1520,7 @@ export function CursoFormModal({
                       <select
                         id="curso-dirigido-a"
                         name="dirigidoA"
-                        value={
-                          formData.dirigidoA
-                        }
+                        value={formData.dirigidoA}
                         onChange={handleChange}
                         disabled={saving}
                         className={cn(
@@ -1924,21 +1529,10 @@ export function CursoFormModal({
                           "cursor-pointer",
                         )}
                       >
-                        <option value="Padres">
-                          Padres
-                        </option>
-
-                        <option value="Niños">
-                          Niños
-                        </option>
-
-                        <option value="Familia">
-                          Familia
-                        </option>
-
-                        <option value="Adolescentes">
-                          Adolescentes
-                        </option>
+                        <option value="Padres">Padres</option>
+                        <option value="Niños">Niños</option>
+                        <option value="Familia">Familia</option>
+                        <option value="Adolescentes">Adolescentes</option>
                       </select>
                     </div>
                   </div>
@@ -1946,22 +1540,14 @@ export function CursoFormModal({
 
                 <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
                   <EncabezadoSeccion
-                    icono={
-                      <DollarSign
-                        size={17}
-                        aria-hidden="true"
-                      />
-                    }
+                    icono={<DollarSign size={17} aria-hidden="true" />}
                     titulo="Capacidad y precio"
                     descripcion="Define el número de lugares y el precio comercial del curso."
                   />
 
                   <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                     <div>
-                      <EtiquetaCampo
-                        htmlFor="curso-cupo-maximo"
-                        requerido
-                      >
+                      <EtiquetaCampo htmlFor="curso-cupo-maximo" requerido>
                         Cupo máximo
                       </EtiquetaCampo>
 
@@ -1976,18 +1562,12 @@ export function CursoFormModal({
                           id="curso-cupo-maximo"
                           type="number"
                           name="cupoMaximo"
-                          value={
-                            formData.cupoMaximo
-                          }
-                          onChange={
-                            handleNumberChange
-                          }
+                          value={formData.cupoMaximo}
+                          onChange={handleNumberChange}
                           disabled={saving}
                           min={1}
                           step={1}
-                          aria-invalid={Boolean(
-                            errors.cupoMaximo,
-                          )}
+                          aria-invalid={Boolean(errors.cupoMaximo)}
                           className={cn(
                             claseCampoBase,
                             "pl-10 pr-3",
@@ -1998,11 +1578,7 @@ export function CursoFormModal({
                         />
                       </div>
 
-                      <MensajeError
-                        mensaje={
-                          errors.cupoMaximo
-                        }
-                      />
+                      <MensajeError mensaje={errors.cupoMaximo} />
                     </div>
 
                     <div>
@@ -2010,7 +1586,6 @@ export function CursoFormModal({
                         <EtiquetaCampo htmlFor="curso-costo">
                           Costo
                         </EtiquetaCampo>
-
                         <span className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-400">
                           MXN
                         </span>
@@ -2027,84 +1602,207 @@ export function CursoFormModal({
                           id="curso-costo"
                           type="number"
                           name="costo"
-                          value={
-                            formData.costo
-                          }
-                          onChange={
-                            handleChange
-                          }
+                          value={formData.costo}
+                          onChange={handleChange}
                           disabled={saving}
                           min={0}
                           step="0.01"
-                          aria-invalid={Boolean(
-                            errors.costo,
-                          )}
+                          aria-invalid={Boolean(errors.costo)}
                           className={cn(
                             claseCampoBase,
                             "pl-10 pr-3",
-                            errors.costo
-                              ? claseCampoError
-                              : claseCampoNormal,
+                            errors.costo ? claseCampoError : claseCampoNormal,
                           )}
                           placeholder="0.00"
                         />
                       </div>
 
-                      <MensajeError
-                        mensaje={errors.costo}
-                      />
+                      <MensajeError mensaje={errors.costo} />
                     </div>
                   </div>
 
-                  {onOpenPricePredictor && (
-                    <div className="mt-5 overflow-hidden rounded-2xl border border-[#0A3D62]/15 bg-[#F2F7FA]">
-                      <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex min-w-0 items-start gap-3">
-                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0A3D62] text-[#FFC300]">
-                            <Calculator
-                              size={19}
-                              aria-hidden="true"
-                            />
-                          </span>
+                  <div className="mt-5 overflow-hidden rounded-2xl border border-[#0A3D62]/15 bg-[#F2F7FA]">
+                    <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0A3D62] text-[#FFC300]">
+                          <Calculator size={19} aria-hidden="true" />
+                        </span>
 
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h4 className="text-sm font-extrabold text-[#0A3D62]">
-                                Predictor de precio
-                              </h4>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4 className="text-sm font-extrabold text-[#0A3D62]">
+                              Asistente de precio
+                            </h4>
 
-                              <span className="rounded-full bg-[#FFC300] px-2 py-1 text-[9px] font-extrabold uppercase tracking-wide text-[#0A3D62]">
-                                Modelo predictivo
-                              </span>
-                            </div>
+                            <span className="rounded-full bg-[#FFC300] px-2 py-1 text-[9px] font-extrabold uppercase tracking-wide text-[#0A3D62]">
+                              Modelo predictivo
+                            </span>
+                          </div>
 
-                            <p className="mt-1 max-w-xl text-xs leading-5 text-gray-600">
-                              Utiliza la información capturada para obtener un precio sugerido. El curso no necesita estar guardado.
+                          <p className="mt-1 max-w-xl text-xs leading-5 text-gray-600">
+                            Utiliza la categoría, modalidad, ubicación, fechas y
+                            cupo para calcular un precio orientativo.
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => void calcularPrecioSugerido()}
+                        disabled={saving || loadingData || calculandoPrecio}
+                        className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-[#0A3D62] bg-white px-4 py-2 text-xs font-extrabold text-[#0A3D62] transition-colors hover:bg-[#0A3D62] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC300] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
+                      >
+                        {calculandoPrecio ? (
+                          <Loader2
+                            size={16}
+                            className="animate-spin"
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <Sparkles size={16} aria-hidden="true" />
+                        )}
+
+                        {calculandoPrecio
+                          ? "Calculando..."
+                          : prediccionPrecio
+                            ? "Volver a calcular"
+                            : "Calcular precio sugerido"}
+                      </button>
+                    </div>
+
+                    {errorPrediccion && (
+                      <div
+                        role="alert"
+                        className="mx-4 mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-xs font-semibold text-red-700"
+                      >
+                        <CircleAlert
+                          size={15}
+                          className="mt-0.5 shrink-0"
+                          aria-hidden="true"
+                        />
+                        <span>{errorPrediccion}</span>
+                      </div>
+                    )}
+
+                    {prediccionPrecio && (
+                      <div className="border-t border-[#0A3D62]/10 bg-white p-4">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                          <div className="rounded-xl border border-gray-200 bg-[#F8FAFC] p-3">
+                            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                              Precio capturado
                             </p>
+                            <p className="mt-1 text-lg font-extrabold text-[#0A3D62]">
+                              {formatoMoneda.format(
+                                Number.isFinite(costoCapturado)
+                                  ? costoCapturado
+                                  : 0,
+                              )}
+                            </p>
+                          </div>
+
+                          <div className="rounded-xl border border-[#FFC300]/40 bg-[#FFF9E6] p-3">
+                            <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                              Precio sugerido
+                            </p>
+                            <p className="mt-1 text-lg font-extrabold text-[#0A3D62]">
+                              {formatoMoneda.format(
+                                prediccionPrecio.precioSugerido,
+                              )}
+                            </p>
+                          </div>
+
+                          <div className="rounded-xl border border-gray-200 bg-[#F8FAFC] p-3">
+                            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                              Rango orientativo
+                            </p>
+                            <p className="mt-1 text-xs font-extrabold leading-5 text-[#0A3D62]">
+                              {typeof prediccionPrecio.precioMinimoEstimado ===
+                                "number" &&
+                              typeof prediccionPrecio.precioMaximoEstimado ===
+                                "number"
+                                ? `${formatoMoneda.format(
+                                    prediccionPrecio.precioMinimoEstimado,
+                                  )} – ${formatoMoneda.format(
+                                    prediccionPrecio.precioMaximoEstimado,
+                                  )}`
+                                : "No disponible"}
+                            </p>
+                          </div>
+
+                          <div className="rounded-xl border border-gray-200 bg-[#F8FAFC] p-3">
+                            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                              Diferencia
+                            </p>
+                            <p className="mt-1 text-sm font-extrabold text-[#0A3D62]">
+                              {diferenciaAbsoluta !== null
+                                ? formatoMoneda.format(diferenciaAbsoluta)
+                                : "No disponible"}
+                            </p>
+
+                            {diferenciaPorcentual !== null && (
+                              <p className="mt-1 text-[10px] font-semibold text-gray-500">
+                                {diferenciaPorcentual >= 0 ? "+" : ""}
+                                {diferenciaPorcentual.toFixed(2)}%
+                              </p>
+                            )}
                           </div>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={
-                            abrirPredictorPrecio
-                          }
-                          disabled={
-                            saving ||
-                            loadingData
-                          }
-                          className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-[#0A3D62] bg-white px-4 py-2 text-xs font-extrabold text-[#0A3D62] transition-colors hover:bg-[#0A3D62] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC300] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
-                        >
-                          <Sparkles
-                            size={16}
-                            aria-hidden="true"
-                          />
+                        <div className="mt-4 flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-extrabold text-[#0A3D62]">
+                              {prediccionPrecio.algoritmo ??
+                                "Modelo de predicción"}
+                              {prediccionPrecio.version
+                                ? ` · versión ${prediccionPrecio.version}`
+                                : ""}
+                            </p>
 
-                          Estimar precio
-                        </button>
+                            <p className="mt-1 text-[10px] leading-4 text-gray-500">
+                              {prediccionPrecio.aviso ??
+                                "La recomendación es orientativa y no modifica el precio automáticamente."}
+                            </p>
+
+                            {decisionTemporalPrecio && (
+                              <p
+                                className={cn(
+                                  "mt-2 text-[11px] font-extrabold",
+                                  decisionTemporalPrecio === "aceptada"
+                                    ? "text-emerald-700"
+                                    : "text-gray-600",
+                                )}
+                              >
+                                {decisionTemporalPrecio === "aceptada"
+                                  ? "Se aplicó el precio sugerido."
+                                  : "Se conservará el precio capturado."}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+                            <button
+                              type="button"
+                              onClick={conservarPrecioCapturado}
+                              disabled={saving}
+                              className="inline-flex min-h-9 items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-extrabold text-gray-600 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Conservar precio capturado
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={aplicarPrecioSugerido}
+                              disabled={saving}
+                              className="inline-flex min-h-9 items-center justify-center gap-2 rounded-xl bg-[#0A3D62] px-4 py-2 text-xs font-extrabold text-white transition-colors hover:bg-[#082F4C] disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <DollarSign size={15} aria-hidden="true" />
+                              Aplicar sugerencia
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
                   {esEdicion && (
                     <div className="mt-5 rounded-xl border border-gray-200 bg-[#F8FAFC] p-4">
@@ -2113,11 +1811,8 @@ export function CursoFormModal({
                           <p className="text-xs font-extrabold text-[#0A3D62]">
                             Ocupación actual
                           </p>
-
                           <p className="mt-1 text-xs leading-5 text-gray-500">
-                            {cuposOcupados} de{" "}
-                            {cupoMaximo} lugares
-                            ocupados.
+                            {cuposOcupados} de {cupoMaximo} lugares ocupados.
                           </p>
                         </div>
 
@@ -2130,22 +1825,19 @@ export function CursoFormModal({
                         <div
                           className={cn(
                             "h-full rounded-full transition-[width]",
-                            porcentajeOcupacion >=
-                              100
+                            porcentajeOcupacion >= 100
                               ? "bg-red-500"
-                              : porcentajeOcupacion >=
-                                  80
+                              : porcentajeOcupacion >= 80
                                 ? "bg-amber-500"
                                 : "bg-emerald-500",
                           )}
-                          style={{
-                            width: `${porcentajeOcupacion}%`,
-                          }}
+                          style={{ width: `${porcentajeOcupacion}%` }}
                         />
                       </div>
 
                       <p className="mt-3 text-[11px] leading-5 text-gray-400">
-                        Los lugares ocupados se actualizan mediante compras, inscripciones y cancelaciones.
+                        Los lugares ocupados se actualizan mediante compras,
+                        inscripciones y cancelaciones.
                       </p>
                     </div>
                   )}
@@ -2158,9 +1850,9 @@ export function CursoFormModal({
                         <h3 className="text-sm font-extrabold text-[#0A3D62]">
                           Estado del curso
                         </h3>
-
                         <p className="mt-1 text-xs leading-5 text-gray-600">
-                          Los cursos inactivos permanecen registrados, pero no se muestran como disponibles.
+                          Los cursos inactivos permanecen registrados, pero no
+                          se muestran como disponibles.
                         </p>
                       </div>
 
@@ -2168,18 +1860,12 @@ export function CursoFormModal({
                         <button
                           type="button"
                           role="switch"
-                          aria-checked={
-                            formData.activo
-                          }
-                          onClick={
-                            cambiarEstado
-                          }
+                          aria-checked={formData.activo}
+                          onClick={cambiarEstado}
                           disabled={saving}
                           className={cn(
                             "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFC300] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
-                            formData.activo
-                              ? "bg-emerald-500"
-                              : "bg-gray-300",
+                            formData.activo ? "bg-emerald-500" : "bg-gray-300",
                           )}
                           aria-label="Cambiar estado del curso"
                         >
@@ -2201,9 +1887,7 @@ export function CursoFormModal({
                               : "text-gray-500",
                           )}
                         >
-                          {formData.activo
-                            ? "Activo"
-                            : "Inactivo"}
+                          {formData.activo ? "Activo" : "Inactivo"}
                         </span>
                       </div>
                     </div>
@@ -2230,9 +1914,7 @@ export function CursoFormModal({
                 <button
                   type="submit"
                   disabled={
-                    saving ||
-                    loadingData ||
-                    Boolean(catalogosError)
+                    saving || loadingData || Boolean(catalogosError)
                   }
                   className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#FFC300] px-5 py-2 text-xs font-extrabold text-[#0A3D62] shadow-sm transition-colors hover:bg-[#EAB308] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0A3D62] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none"
                 >
@@ -2243,10 +1925,7 @@ export function CursoFormModal({
                       aria-hidden="true"
                     />
                   ) : (
-                    <Save
-                      size={16}
-                      aria-hidden="true"
-                    />
+                    <Save size={16} aria-hidden="true" />
                   )}
 
                   {saving
@@ -2263,8 +1942,5 @@ export function CursoFormModal({
     </div>
   );
 
-  return createPortal(
-    modal,
-    document.body,
-  );
+  return createPortal(modal, document.body);
 }
