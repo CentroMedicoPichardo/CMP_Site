@@ -1,44 +1,74 @@
-// src/app/api/soporte/faq/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  or,
+  type SQL,
+} from "drizzle-orm";
+import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { preguntasFrecuentes, categoriasAyuda } from "@/lib/schema/index";
-import { eq, asc, and, like, or, SQL } from "drizzle-orm";
+import {
+  categoriasAyuda,
+  preguntasFrecuentes,
+  valoracionesFaq,
+} from "@/lib/schema/index";
+import { parseIdPositivo } from "@/lib/soporte/validaciones";
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const categoria = searchParams.get("categoria");
-    const busqueda = searchParams.get("busqueda");
+    const categoriaTexto = searchParams.get("categoria");
+    const busqueda = searchParams.get("busqueda")?.trim() ?? "";
+    const categoria = categoriaTexto
+      ? parseIdPositivo(categoriaTexto)
+      : null;
 
-    // Iniciar con la condición base
-    let where: SQL<unknown> = eq(preguntasFrecuentes.activo, true);
-
-    // Filtrar por categoría
-    if (categoria && categoria !== "null") {
-      where = and(where, eq(preguntasFrecuentes.idCategoria, parseInt(categoria)))!;
+    if (categoriaTexto && categoria === null) {
+      return NextResponse.json(
+        { error: "La categoría seleccionada no es válida." },
+        { status: 400 },
+      );
     }
 
-    // Búsqueda por texto
+    const condiciones: SQL[] = [
+      eq(preguntasFrecuentes.activo, true),
+      eq(categoriasAyuda.activo, true),
+    ];
+
+    if (categoria !== null) {
+      condiciones.push(eq(preguntasFrecuentes.idCategoria, categoria));
+    }
+
     if (busqueda) {
-      where = and(
-        where,
+      const patron = `%${busqueda}%`;
+      condiciones.push(
         or(
-          like(preguntasFrecuentes.pregunta, `%${busqueda}%`),
-          like(preguntasFrecuentes.respuesta, `%${busqueda}%`)
-        )
-      )!;
+          ilike(preguntasFrecuentes.pregunta, patron),
+          ilike(preguntasFrecuentes.respuesta, patron),
+          ilike(categoriasAyuda.nombreCategoria, patron),
+        )!,
+      );
     }
 
     const faqs = await db
       .select({
         idPregunta: preguntasFrecuentes.idPregunta,
+        idCategoria: preguntasFrecuentes.idCategoria,
         pregunta: preguntasFrecuentes.pregunta,
         respuesta: preguntasFrecuentes.respuesta,
+        orden: preguntasFrecuentes.orden,
         vecesUtil: preguntasFrecuentes.vecesUtil,
         vecesNoUtil: preguntasFrecuentes.vecesNoUtil,
+        activo: preguntasFrecuentes.activo,
         esDestacada: preguntasFrecuentes.esDestacada,
         tags: preguntasFrecuentes.tags,
-        orden: preguntasFrecuentes.orden,
+        createdAt: preguntasFrecuentes.createdAt,
+        updatedAt: preguntasFrecuentes.updatedAt,
+        creadoPor: preguntasFrecuentes.creadoPor,
         categoria: {
           idCategoria: categoriasAyuda.idCategoria,
           nombreCategoria: categoriasAyuda.nombreCategoria,
@@ -46,19 +76,56 @@ export async function GET(request: NextRequest) {
         },
       })
       .from(preguntasFrecuentes)
-      .leftJoin(
+      .innerJoin(
         categoriasAyuda,
-        eq(preguntasFrecuentes.idCategoria, categoriasAyuda.idCategoria)
+        eq(preguntasFrecuentes.idCategoria, categoriasAyuda.idCategoria),
       )
-      .where(where)
-      .orderBy(asc(preguntasFrecuentes.orden));
+      .where(and(...condiciones))
+      .orderBy(
+        desc(preguntasFrecuentes.esDestacada),
+        asc(preguntasFrecuentes.orden),
+        asc(preguntasFrecuentes.pregunta),
+      );
 
-    return NextResponse.json(faqs);
-  } catch (error) {
+    const session = await auth();
+    const ids = faqs.map((faq) => faq.idPregunta);
+    const valoraciones =
+      session?.user && ids.length > 0
+        ? await db
+            .select({
+              idPreguntaFaq: valoracionesFaq.idPreguntaFaq,
+              esUtil: valoracionesFaq.esUtil,
+            })
+            .from(valoracionesFaq)
+            .where(
+              and(
+                eq(valoracionesFaq.idUsuario, session.user.id),
+                inArray(valoracionesFaq.idPreguntaFaq, ids),
+              ),
+            )
+        : [];
+
+    const mapaValoraciones = new Map(
+      valoraciones.map((item) => [item.idPreguntaFaq, item.esUtil]),
+    );
+
+    return NextResponse.json(
+      faqs.map((faq) => ({
+        ...faq,
+        orden: faq.orden ?? 0,
+        vecesUtil: faq.vecesUtil ?? 0,
+        vecesNoUtil: faq.vecesNoUtil ?? 0,
+        activo: faq.activo ?? true,
+        esDestacada: faq.esDestacada ?? false,
+        valoracionUsuario:
+          mapaValoraciones.get(faq.idPregunta) ?? null,
+      })),
+    );
+  } catch (error: unknown) {
     console.error("Error al obtener FAQ:", error);
     return NextResponse.json(
-      { error: "Error al obtener preguntas frecuentes" },
-      { status: 500 }
+      { error: "No fue posible obtener las preguntas frecuentes." },
+      { status: 500 },
     );
   }
 }

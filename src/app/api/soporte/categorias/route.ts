@@ -1,23 +1,25 @@
-// src/app/api/soporte/categorias/route.ts
 import { NextResponse } from "next/server";
+import { asc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { categoriasAyuda } from "@/lib/schema/index";
-import { eq, asc } from "drizzle-orm";
 
 export async function GET() {
   try {
-    const result = await db
+    const categorias = await db
       .select()
       .from(categoriasAyuda)
       .where(eq(categoriasAyuda.activo, true))
-      .orderBy(asc(categoriasAyuda.orden));
+      .orderBy(
+        asc(categoriasAyuda.orden),
+        asc(categoriasAyuda.nombreCategoria),
+      );
 
-    return NextResponse.json(result);
-  } catch (error) {
+    return NextResponse.json(categorias);
+  } catch (error: unknown) {
     console.error("Error al obtener categorías:", error);
     return NextResponse.json(
-      { error: "Error al obtener categorías de ayuda" },
-      { status: 500 }
+      { error: "No fue posible obtener las categorías de ayuda." },
+      { status: 500 },
     );
   }
 }

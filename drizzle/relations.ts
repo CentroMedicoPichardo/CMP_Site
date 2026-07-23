@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm/relations";
-import { categoriasAyudaInSoporte, preguntasUsuariosInSoporte, preguntasFrecuentesInSoporte, usuariosInSeguridad, comprascursosinacademiaInAcademia, pagosCursosInAcademia, metodosPagoCursosInAcademia, medicosInClinica, publicacionesInAcademia, rolesInSeguridad, respuestasAyudaInSoporte, categoriasCursosInAcademia, cursosInAcademia, instructoresInAcademia, modalidadesInAcademia, ubicacionesCursosInAcademia, academiaInfantilInAcademia, encuestasInAcademia, respuestasEncuestasInAcademia, contenidoSaberPediatricoInAcademia, valoracionesFaqInSoporte, estadocomprainacademiaInAcademia, compraParticipantesInAcademia, inscripcionesCursosInAcademia, participantesInAcademia, historialEstadosCompraInAcademia, movimientosCuposCursoInAcademia, historialEstadosCursoInAcademia, sesionesCursoInAcademia, asistenciasCursoInAcademia, progresoCursoInAcademia, evaluacionesCursoInAcademia, resultadosEvaluacionesInAcademia, notificacionesAcademicasInAcademia, certificadosCursoInAcademia, requisitosAprobacionCursoInAcademia, datasetReglasAsociacionInAnalitica, datasetSegmentacionClientesInAnalitica, datasetRegresionPrecioCursosInAnalitica, modelosMlInAnalitica, recomendacionesCursosInAnalitica, segmentosClientesInAnalitica, prediccionesPrecioCursosInAnalitica } from "./schema";
+import { categoriasAyudaInSoporte, preguntasUsuariosInSoporte, preguntasFrecuentesInSoporte, usuariosInSeguridad, comprascursosinacademiaInAcademia, pagosCursosInAcademia, metodosPagoCursosInAcademia, medicosInClinica, publicacionesInAcademia, rolesInSeguridad, respuestasAyudaInSoporte, categoriasCursosInAcademia, cursosInAcademia, instructoresInAcademia, modalidadesInAcademia, ubicacionesCursosInAcademia, requisitosAprobacionCursoInAcademia, academiaInfantilInAcademia, encuestasInAcademia, respuestasEncuestasInAcademia, contenidoSaberPediatricoInAcademia, valoracionesFaqInSoporte, estadocomprainacademiaInAcademia, compraParticipantesInAcademia, inscripcionesCursosInAcademia, participantesInAcademia, historialEstadosCompraInAcademia, movimientosCuposCursoInAcademia, historialEstadosCursoInAcademia, sesionesCursoInAcademia, asistenciasCursoInAcademia, progresoCursoInAcademia, evaluacionesCursoInAcademia, resultadosEvaluacionesInAcademia, notificacionesAcademicasInAcademia, certificadosCursoInAcademia, datasetReglasAsociacionInAnalitica, datasetSegmentacionClientesInAnalitica, datasetRegresionPrecioCursosInAnalitica, modelosMlInAnalitica, recomendacionesCursosInAnalitica, segmentosClientesInAnalitica, prediccionesPrecioCursosInAnalitica } from "./schema";
 
 export const preguntasUsuariosInSoporteRelations = relations(preguntasUsuariosInSoporte, ({one, many}) => ({
 	categoriasAyudaInSoporte: one(categoriasAyudaInSoporte, {
@@ -163,6 +163,7 @@ export const cursosInAcademiaRelations = relations(cursosInAcademia, ({one, many
 		fields: [cursosInAcademia.idUbicacion],
 		references: [ubicacionesCursosInAcademia.idUbicacion]
 	}),
+	requisitosAprobacionCursoInAcademias: many(requisitosAprobacionCursoInAcademia),
 	comprascursosinacademiaInAcademias: many(comprascursosinacademiaInAcademia),
 	inscripcionesCursosInAcademias: many(inscripcionesCursosInAcademia),
 	movimientosCuposCursoInAcademias: many(movimientosCuposCursoInAcademia),
@@ -170,7 +171,6 @@ export const cursosInAcademiaRelations = relations(cursosInAcademia, ({one, many
 	sesionesCursoInAcademias: many(sesionesCursoInAcademia),
 	evaluacionesCursoInAcademias: many(evaluacionesCursoInAcademia),
 	notificacionesAcademicasInAcademias: many(notificacionesAcademicasInAcademia),
-	requisitosAprobacionCursoInAcademias: many(requisitosAprobacionCursoInAcademia),
 	datasetReglasAsociacionInAnaliticas: many(datasetReglasAsociacionInAnalitica),
 	datasetRegresionPrecioCursosInAnaliticas: many(datasetRegresionPrecioCursosInAnalitica),
 	recomendacionesCursosInAnaliticas_cursoRecomendadoId: many(recomendacionesCursosInAnalitica, {
@@ -198,6 +198,13 @@ export const modalidadesInAcademiaRelations = relations(modalidadesInAcademia, (
 export const ubicacionesCursosInAcademiaRelations = relations(ubicacionesCursosInAcademia, ({many}) => ({
 	cursosInAcademias: many(cursosInAcademia),
 	sesionesCursoInAcademias: many(sesionesCursoInAcademia),
+}));
+
+export const requisitosAprobacionCursoInAcademiaRelations = relations(requisitosAprobacionCursoInAcademia, ({one}) => ({
+	cursosInAcademia: one(cursosInAcademia, {
+		fields: [requisitosAprobacionCursoInAcademia.cursoId],
+		references: [cursosInAcademia.idCurso]
+	}),
 }));
 
 export const academiaInfantilInAcademiaRelations = relations(academiaInfantilInAcademia, ({one}) => ({
@@ -448,13 +455,6 @@ export const certificadosCursoInAcademiaRelations = relations(certificadosCursoI
 		fields: [certificadosCursoInAcademia.usuarioRevoca],
 		references: [usuariosInSeguridad.id],
 		relationName: "certificadosCursoInAcademia_usuarioRevoca_usuariosInSeguridad_id"
-	}),
-}));
-
-export const requisitosAprobacionCursoInAcademiaRelations = relations(requisitosAprobacionCursoInAcademia, ({one}) => ({
-	cursosInAcademia: one(cursosInAcademia, {
-		fields: [requisitosAprobacionCursoInAcademia.cursoId],
-		references: [cursosInAcademia.idCurso]
 	}),
 }));
 

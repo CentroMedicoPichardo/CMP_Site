@@ -7,6 +7,7 @@ import {
   Archive,
   BadgeCheck,
   CalendarDays,
+  CheckCircle2,
   ChevronRight,
   CircleGauge,
   Clock3,
@@ -176,6 +177,23 @@ export default function MisPreguntasList({
     ? preguntas
     : [];
 
+  const totalPendientes = listaPreguntas.filter(
+    (pregunta) =>
+      normalizarValor(pregunta.estado) === "pendiente",
+  ).length;
+
+  const totalAtendidas = listaPreguntas.filter(
+    (pregunta) => {
+      const estado = normalizarValor(pregunta.estado);
+
+      return (
+        estado === "respondida" ||
+        estado === "cerrada" ||
+        estado === "convertida_faq"
+      );
+    },
+  ).length;
+
   if (loading) {
     return <MisPreguntasSkeleton />;
   }
@@ -211,12 +229,27 @@ export default function MisPreguntasList({
           </div>
         </div>
 
-        <span className="inline-flex shrink-0 items-center justify-center rounded-full border border-[#0A3D62]/10 bg-[#F7FAFC] px-2.5 py-1 text-[10px] font-extrabold text-[#0A3D62]">
-          {listaPreguntas.length}{" "}
-          {listaPreguntas.length === 1
-            ? "pregunta"
-            : "preguntas"}
-        </span>
+        <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+          {totalAtendidas > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-extrabold text-emerald-700">
+              <CheckCircle2
+                size={11}
+                aria-hidden="true"
+              />
+              {totalAtendidas} atendidas
+            </span>
+          )}
+
+          {totalPendientes > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-extrabold text-amber-700">
+              <Clock3
+                size={11}
+                aria-hidden="true"
+              />
+              {totalPendientes} pendientes
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -275,6 +308,7 @@ export default function MisPreguntasList({
                 pregunta.createdAt,
               )}
               estado={estado}
+              estadoNormalizado={estadoNormalizado}
               prioridad={prioridad}
               disabled={!puedeAbrirse}
               onClick={() => {
@@ -300,6 +334,7 @@ interface PreguntaCardProps {
   categoria: string;
   fecha: string;
   estado: ConfiguracionBadge;
+  estadoNormalizado: string;
   prioridad: ConfiguracionBadge;
   disabled: boolean;
   onClick: () => void;
@@ -311,6 +346,7 @@ function PreguntaCard({
   categoria,
   fecha,
   estado,
+  estadoNormalizado,
   prioridad,
   disabled,
   onClick,
@@ -318,10 +354,34 @@ function PreguntaCard({
   const EstadoIcono = estado.Icono;
   const PrioridadIcono = prioridad.Icono;
 
+  const estaPendiente =
+    estadoNormalizado === "pendiente";
+
+  const estaAtendida =
+    estadoNormalizado === "respondida" ||
+    estadoNormalizado === "cerrada" ||
+    estadoNormalizado === "convertida_faq";
+
   return (
-    <article className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_5px_18px_rgba(10,61,98,0.05)] transition-all duration-300 hover:border-[#0A3D62]/20 hover:shadow-[0_12px_30px_rgba(10,61,98,0.09)]">
+    <article
+      className={cn(
+        "group relative overflow-hidden rounded-2xl border bg-white shadow-[0_5px_18px_rgba(10,61,98,0.05)] transition-all duration-300 hover:shadow-[0_12px_30px_rgba(10,61,98,0.09)]",
+        estaAtendida
+          ? "border-emerald-200 hover:border-emerald-300"
+          : estaPendiente
+            ? "border-amber-200 hover:border-amber-300"
+            : "border-gray-200 hover:border-[#0A3D62]/20",
+      )}
+    >
       <span
-        className="absolute bottom-0 left-0 top-0 w-1 bg-[#0A3D62] opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+        className={cn(
+          "absolute bottom-0 left-0 top-0 w-1",
+          estaAtendida
+            ? "bg-emerald-500"
+            : estaPendiente
+              ? "bg-amber-400"
+              : "bg-[#0A3D62]",
+        )}
         aria-hidden="true"
       />
 
@@ -332,12 +392,29 @@ function PreguntaCard({
         aria-label={`Abrir pregunta: ${titulo}`}
         className="flex w-full items-start gap-3 px-4 py-4 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#FFC300] disabled:cursor-default sm:gap-4 sm:px-5"
       >
-        <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#EAF2F8] text-[#0A3D62] transition-colors duration-200 group-hover:bg-[#0A3D62] group-hover:text-[#FFC300]">
-          <MessageCircleQuestion
-            size={19}
-            strokeWidth={1.9}
-            aria-hidden="true"
-          />
+        <span
+          className={cn(
+            "mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors duration-200",
+            estaAtendida
+              ? "bg-emerald-100 text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white"
+              : estaPendiente
+                ? "bg-amber-100 text-amber-700 group-hover:bg-amber-500 group-hover:text-white"
+                : "bg-[#EAF2F8] text-[#0A3D62] group-hover:bg-[#0A3D62] group-hover:text-[#FFC300]",
+          )}
+        >
+          {estaAtendida ? (
+            <CheckCircle2
+              size={19}
+              strokeWidth={2}
+              aria-hidden="true"
+            />
+          ) : (
+            <MessageCircleQuestion
+              size={19}
+              strokeWidth={1.9}
+              aria-hidden="true"
+            />
+          )}
         </span>
 
         <span className="min-w-0 flex-1">
@@ -349,6 +426,37 @@ function PreguntaCard({
 
               <span className="mt-1.5 line-clamp-2 block text-xs leading-5 text-gray-500 sm:text-sm">
                 {descripcion}
+              </span>
+
+              <span
+                className={cn(
+                  "mt-2 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.08em]",
+                  estaAtendida
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : estaPendiente
+                      ? "border-amber-200 bg-amber-50 text-amber-700"
+                      : "border-gray-200 bg-gray-50 text-gray-600",
+                )}
+              >
+                {estaAtendida ? (
+                  <>
+                    <MessageSquareReply
+                      size={11}
+                      aria-hidden="true"
+                    />
+                    Respuesta disponible
+                  </>
+                ) : estaPendiente ? (
+                  <>
+                    <Clock3
+                      size={11}
+                      aria-hidden="true"
+                    />
+                    Esperando respuesta
+                  </>
+                ) : (
+                  estado.label
+                )}
               </span>
             </span>
 
@@ -395,9 +503,19 @@ function PreguntaCard({
           </span>
         </span>
 
-        <span className="mt-1 hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-400 transition-all duration-200 group-hover:translate-x-0.5 group-hover:border-[#0A3D62]/20 group-hover:bg-[#F7FAFC] group-hover:text-[#0A3D62] sm:flex">
+        <span
+          className={cn(
+            "mt-1 hidden shrink-0 items-center justify-center gap-1.5 rounded-lg border bg-white px-2.5 py-2 text-[10px] font-extrabold transition-all duration-200 group-hover:translate-x-0.5 sm:flex",
+            estaAtendida
+              ? "border-emerald-200 text-emerald-700 group-hover:bg-emerald-50"
+              : "border-gray-200 text-gray-500 group-hover:border-[#0A3D62]/20 group-hover:bg-[#F7FAFC] group-hover:text-[#0A3D62]",
+          )}
+        >
+          {estaAtendida
+            ? "Ver respuesta"
+            : "Ver seguimiento"}
           <ChevronRight
-            size={16}
+            size={14}
             strokeWidth={2}
             aria-hidden="true"
           />

@@ -1,50 +1,84 @@
-// src/app/api/soporte/preguntas/[id]/respuestas/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { asc, eq } from "drizzle-orm";
+import { normalizeRole, requireApiAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { respuestasAyuda, preguntasUsuarios, usuarios } from "@/lib/schema/index";
-import { eq, asc } from "drizzle-orm";
-import { auth } from "@/lib/auth";
-import { CrearRespuestaDTO } from "@/types/help";
+import {
+  preguntasUsuarios,
+  respuestasAyuda,
+  usuarios,
+} from "@/lib/schema/index";
+import {
+  parseIdPositivo,
+  validarContenidoRespuesta,
+} from "@/lib/soporte/validaciones";
+import type { CrearRespuestaDTO } from "@/types/help";
+
+async function obtenerPregunta(idPregunta: number) {
+  const [pregunta] = await db
+    .select({
+      idPregunta: preguntasUsuarios.idPregunta,
+      idUsuario: preguntasUsuarios.idUsuario,
+      estado: preguntasUsuarios.estado,
+    })
+    .from(preguntasUsuarios)
+    .where(eq(preguntasUsuarios.idPregunta, idPregunta))
+    .limit(1);
+
+  return pregunta ?? null;
+}
 
 export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> } // 👈 1. Corregido para Next.js 15+
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { session, error } = await requireApiAuth();
+
+  if (error) {
+    return error;
+  }
+
+  if (!session) {
+    return NextResponse.json(
+      { message: "No autenticado" },
+      { status: 401 },
+    );
+  }
+
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-    }
-
-    // 👈 2. Extraer ID de forma asíncrona
     const { id } = await params;
-    const idPregunta = parseInt(id);
+    const idPregunta = parseIdPositivo(id);
 
-    // Verificar que la pregunta existe
-    const [pregunta] = await db
-      .select()
-      .from(preguntasUsuarios)
-      .where(eq(preguntasUsuarios.idPregunta, idPregunta));
-
-    if (!pregunta) {
+    if (idPregunta === null) {
       return NextResponse.json(
-        { error: "Pregunta no encontrada" },
-        { status: 404 }
+        { error: "El identificador de la pregunta no es válido." },
+        { status: 400 },
       );
     }
 
-    // Si es privada, solo el dueño o admin pueden ver respuestas
-    if (pregunta.esPrivada) {
-      const esAdmin = session.user.rol === "admin";
-      const esDueno = pregunta.idUsuario === Number(session.user.id);
-      if (!esAdmin && !esDueno) {
-        return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-      }
+    const pregunta = await obtenerPregunta(idPregunta);
+
+    if (!pregunta) {
+      return NextResponse.json(
+        { error: "Pregunta no encontrada." },
+        { status: 404 },
+      );
+    }
+
+    const esAdmin = normalizeRole(session.user.rol) === "admin";
+    const esDueno = pregunta.idUsuario === session.user.id;
+
+    if (!esAdmin && !esDueno) {
+      return NextResponse.json(
+        { error: "No tienes permiso para consultar esta conversación." },
+        { status: 403 },
+      );
     }
 
     const respuestas = await db
       .select({
         idRespuesta: respuestasAyuda.idRespuesta,
+        idPregunta: respuestasAyuda.idPregunta,
+        idUsuario: respuestasAyuda.idUsuario,
         contenido: respuestasAyuda.contenido,
         esRespuestaAdmin: respuestasAyuda.esRespuestaAdmin,
         esSolucion: respuestasAyuda.esSolucion,
@@ -56,107 +90,134 @@ export async function GET(
         },
       })
       .from(respuestasAyuda)
-      .leftJoin(usuarios, eq(respuestasAyuda.idUsuario, usuarios.id))
+      .innerJoin(
+        usuarios,
+        eq(respuestasAyuda.idUsuario, usuarios.id),
+      )
       .where(eq(respuestasAyuda.idPregunta, idPregunta))
       .orderBy(asc(respuestasAyuda.createdAt));
 
-    return NextResponse.json(respuestas);
-  } catch (error) {
-    console.error("Error al obtener respuestas:", error);
     return NextResponse.json(
-      { error: "Error al obtener respuestas" },
-      { status: 500 }
+      respuestas.map((respuesta) => ({
+        ...respuesta,
+        esRespuestaAdmin: respuesta.esRespuestaAdmin ?? false,
+        esSolucion: respuesta.esSolucion ?? false,
+      })),
+    );
+  } catch (errorConsulta: unknown) {
+    console.error("Error al obtener respuestas:", errorConsulta);
+    return NextResponse.json(
+      { error: "No fue posible obtener las respuestas." },
+      { status: 500 },
     );
   }
 }
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> } // 👈 1. Corregido para Next.js 15+
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { session, error } = await requireApiAuth();
+
+  if (error) {
+    return error;
+  }
+
+  if (!session) {
+    return NextResponse.json(
+      { message: "No autenticado" },
+      { status: 401 },
+    );
+  }
+
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-    }
+    const { id } = await params;
+    const idPregunta = parseIdPositivo(id);
 
-    const body: CrearRespuestaDTO = await request.json();
-
-    if (!body.contenido || !body.contenido.trim()) {
+    if (idPregunta === null) {
       return NextResponse.json(
-        { error: "El contenido de la respuesta es requerido" },
-        { status: 400 }
+        { error: "El identificador de la pregunta no es válido." },
+        { status: 400 },
       );
     }
 
-    // 👈 2. Extraer ID de forma asíncrona
-    const { id } = await params;
-    const idPregunta = parseInt(id);
+    const body = (await request.json()) as CrearRespuestaDTO;
+    const errorContenido = validarContenidoRespuesta(body.contenido);
 
-    // Verificar que la pregunta existe
-    const [pregunta] = await db
-      .select()
-      .from(preguntasUsuarios)
-      .where(eq(preguntasUsuarios.idPregunta, idPregunta));
+    if (errorContenido) {
+      return NextResponse.json(
+        { error: errorContenido },
+        { status: 400 },
+      );
+    }
+
+    const pregunta = await obtenerPregunta(idPregunta);
 
     if (!pregunta) {
       return NextResponse.json(
-        { error: "Pregunta no encontrada" },
-        { status: 404 }
+        { error: "Pregunta no encontrada." },
+        { status: 404 },
       );
     }
 
-    // Verificar permisos
-    const esAdmin = session.user.rol === "admin";
-    const esDueno = pregunta.idUsuario === Number(session.user.id);
+    const esAdmin = normalizeRole(session.user.rol) === "admin";
+    const esDueno = pregunta.idUsuario === session.user.id;
 
     if (!esAdmin && !esDueno) {
       return NextResponse.json(
-        { error: "No tienes permiso para responder esta pregunta" },
-        { status: 403 }
+        { error: "No tienes permiso para responder esta pregunta." },
+        { status: 403 },
       );
     }
 
-    // Si la pregunta está cerrada, solo admin puede responder
-    if (pregunta.estado === "cerrada" && !esAdmin) {
+    if (
+      pregunta.estado === "convertida_faq" ||
+      (!esAdmin && pregunta.estado === "cerrada")
+    ) {
       return NextResponse.json(
-        { error: "No puedes responder una pregunta cerrada" },
-        { status: 400 }
+        { error: "Esta conversación ya no admite mensajes." },
+        { status: 409 },
       );
     }
 
-    const [respuesta] = await db
-      .insert(respuestasAyuda)
-      .values({
-        idPregunta: idPregunta,
-        idUsuario: Number(session.user.id),
-        contenido: body.contenido.trim(),
-        esRespuestaAdmin: esAdmin,
-        esSolucion: esAdmin && (body.esSolucion || false),
-      })
-      .returning();
+    const respuesta = await db.transaction(async (tx) => {
+      const esSolucion = esAdmin && body.esSolucion === true;
 
-    // Actualizar estado de la pregunta
-    const nuevoEstado = esAdmin
-      ? body.esSolucion
-        ? "respondida"
-        : "respondida"
-      : "pendiente";
+      if (esSolucion) {
+        await tx
+          .update(respuestasAyuda)
+          .set({ esSolucion: false })
+          .where(eq(respuestasAyuda.idPregunta, idPregunta));
+      }
 
-    await db
-      .update(preguntasUsuarios)
-      .set({
-        estado: nuevoEstado,
-        updatedAt: new Date().toISOString(),
-      })
-      .where(eq(preguntasUsuarios.idPregunta, idPregunta));
+      const [creada] = await tx
+        .insert(respuestasAyuda)
+        .values({
+          idPregunta,
+          idUsuario: session.user.id,
+          contenido: body.contenido.trim(),
+          esRespuestaAdmin: esAdmin,
+          esSolucion,
+        })
+        .returning();
+
+      await tx
+        .update(preguntasUsuarios)
+        .set({
+          estado: esAdmin ? "respondida" : "pendiente",
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(preguntasUsuarios.idPregunta, idPregunta));
+
+      return creada;
+    });
 
     return NextResponse.json(respuesta, { status: 201 });
-  } catch (error) {
-    console.error("Error al crear respuesta:", error);
+  } catch (errorCreacion: unknown) {
+    console.error("Error al crear respuesta:", errorCreacion);
     return NextResponse.json(
-      { error: "Error al crear la respuesta" },
-      { status: 500 }
+      { error: "No fue posible enviar la respuesta." },
+      { status: 500 },
     );
   }
 }

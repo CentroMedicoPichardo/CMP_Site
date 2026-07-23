@@ -21,6 +21,7 @@ import {
   GraduationCap,
   Activity,
   AlertTriangle,
+  LifeBuoy,
   Eye,
   Gauge,
   History,
@@ -54,18 +55,6 @@ export const clientSidebarItems: SidebarItem[] = [
     href: clienteRoutes.misCursos,
     icon: BookOpen,
     description: "Cursos inscritos",
-  },
-  {
-    label: "Perfil",
-    href: clienteRoutes.perfil,
-    icon: User,
-    description: "Tus datos personales",
-  },
-  {
-    label: "Foros",
-    href: clienteRoutes.foros,
-    icon: MessageCircle,
-    description: "Participa en la comunidad",
   },
   {
     label: "Saber Pediátrico",
@@ -212,12 +201,9 @@ export const adminSidebarItems: SidebarItem[] = [
     ]
   },
   
-  // ========== CONFIGURACIÓN DEL SISTEMA ==========
   {
-    label: "Configuración",
-    href: adminRoutes.configuracion,
-    icon: Settings,
-    description: "Ajustes del sistema",
-    category: "SISTEMA"
+    label: "Soporte y ayuda",
+    href: adminRoutes.soporte,
+    icon: LifeBuoy,
   }
 ];

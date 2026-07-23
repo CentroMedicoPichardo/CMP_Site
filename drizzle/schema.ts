@@ -1,4 +1,4 @@
-import { pgTable, pgSchema, index, customType, foreignKey, serial, integer, varchar, text, boolean, timestamp, check, bigserial, bigint, smallint, numeric, date, jsonb, unique, inet, uniqueIndex, smallserial, time } from "drizzle-orm/pg-core"
+import { pgTable, pgSchema, index, foreignKey, serial, integer, varchar, text, boolean, timestamp, check, bigserial, bigint, smallint, numeric, date, jsonb, unique, inet, uniqueIndex, smallserial, time } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 export const soporte = pgSchema("soporte");
@@ -9,16 +9,6 @@ export const auditoria = pgSchema("auditoria");
 export const analitica = pgSchema("analitica");
 
 export const seqFolioCompraInAcademia = academia.sequence("seq_folio_compra", {  startWith: "1", increment: "1", minValue: "1", maxValue: "9223372036854775807", cache: "1", cycle: false })
-
-const bytea = customType<{
-  data: Buffer;
-  driverData: Buffer;
-}>({
-  dataType() {
-	return "bytea";
-  },
-});
-
 
 export const preguntasUsuariosInSoporte = soporte.table("preguntas_usuarios", {
 	idPregunta: serial("id_pregunta").primaryKey().notNull(),
@@ -359,6 +349,38 @@ export const cursosInAcademia = academia.table("cursos", {
 	check("cursos_cupos_ocupados_check", sql`cupos_ocupados >= 0`),
 ]);
 
+export const requisitosAprobacionCursoInAcademia = academia.table("requisitos_aprobacion_curso", {
+	idRequisitoAprobacion: bigserial("id_requisito_aprobacion", { mode: "bigint" }).primaryKey().notNull(),
+	cursoId: integer("curso_id").notNull(),
+	porcentajeAsistenciaMinima: numeric("porcentaje_asistencia_minima", { precision: 5, scale:  2 }).default('80').notNull(),
+	calificacionMinima: numeric("calificacion_minima", { precision: 5, scale:  2 }).default('70').notNull(),
+	porcentajeAvanceMinimo: numeric("porcentaje_avance_minimo", { precision: 5, scale:  2 }).default('100').notNull(),
+	requiereEvaluacionesObligatorias: boolean("requiere_evaluaciones_obligatorias").default(true).notNull(),
+	requiereEvaluacionFinal: boolean("requiere_evaluacion_final").default(false).notNull(),
+	permiteFaltasJustificadas: boolean("permite_faltas_justificadas").default(true).notNull(),
+	maximoFaltasInjustificadas: smallint("maximo_faltas_injustificadas"),
+	requierePagoValidado: boolean("requiere_pago_validado").default(true).notNull(),
+	emiteCertificado: boolean("emite_certificado").default(true).notNull(),
+	vigente: boolean().default(true).notNull(),
+	observaciones: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+	tipoSeguimiento: varchar("tipo_seguimiento", { length: 30 }).default('Solo asistencia').notNull(),
+}, (table) => [
+	index("idx_requisitos_aprobacion_vigentes").using("btree", table.cursoId.asc().nullsLast().op("int4_ops")).where(sql`(vigente = true)`),
+	foreignKey({
+			columns: [table.cursoId],
+			foreignColumns: [cursosInAcademia.idCurso],
+			name: "fk_requisito_aprobacion_curso"
+		}).onDelete("restrict"),
+	unique("uq_requisito_aprobacion_curso").on(table.cursoId),
+	check("chk_requisito_asistencia", sql`(porcentaje_asistencia_minima >= (0)::numeric) AND (porcentaje_asistencia_minima <= (100)::numeric)`),
+	check("chk_requisito_avance", sql`(porcentaje_avance_minimo >= (0)::numeric) AND (porcentaje_avance_minimo <= (100)::numeric)`),
+	check("chk_requisito_calificacion", sql`(calificacion_minima >= (0)::numeric) AND (calificacion_minima <= (100)::numeric)`),
+	check("chk_requisito_faltas", sql`(maximo_faltas_injustificadas IS NULL) OR (maximo_faltas_injustificadas >= 0)`),
+	check("chk_requisito_tipo_seguimiento", sql`(tipo_seguimiento)::text = ANY ((ARRAY['Solo asistencia'::character varying, 'Evaluaciones opcionales'::character varying, 'Evaluaciones obligatorias'::character varying])::text[])`),
+]);
+
 export const medicosInClinica = clinica.table("medicos", {
 	idMedico: serial("id_medico").primaryKey().notNull(),
 	nombres: varchar({ length: 100 }).notNull(),
@@ -537,179 +559,64 @@ export const valoracionesFaqInSoporte = soporte.table("valoraciones_faq", {
 	unique("unique_valoracion_usuario_faq").on(table.idPreguntaFaq, table.idUsuario),
 ]);
 
-export const comprascursosinacademiaInAcademia = academia.table(
-  "comprascursosinacademia",
-  {
-	idcompra: bigserial({ mode: "bigint" })
-	  .primaryKey()
-	  .notNull(),
-
-	foliocompra: varchar({ length: 20 })
-	  .default(sql`academia.generar_folio_compra()`)
-	  .notNull(),
-
+export const comprascursosinacademiaInAcademia = academia.table("comprascursosinacademia", {
+	idcompra: bigserial({ mode: "bigint" }).primaryKey().notNull(),
+	foliocompra: varchar({ length: 20 }).default(academia.generar_folio_compra()).notNull(),
 	idusuario: integer().notNull(),
 	idcurso: integer().notNull(),
 	idestadocompra: smallint().notNull(),
 	cantidadcupos: smallint().notNull(),
-
-	preciounitario: numeric({
-	  precision: 10,
-	  scale: 2,
-	}).notNull(),
-
-	subtotal: numeric({
-	  precision: 10,
-	  scale: 2,
-	}).notNull(),
-
-	descuento: numeric({
-	  precision: 10,
-	  scale: 2,
-	})
-	  .default("0")
-	  .notNull(),
-
-	total: numeric({
-	  precision: 10,
-	  scale: 2,
-	}).notNull(),
-
-	fechacompra: timestamp({ mode: "string" })
-	  .default(sql`CURRENT_TIMESTAMP`)
-	  .notNull(),
-
-	fechalimitepago: timestamp({ mode: "string" }).notNull(),
-	fechapago: timestamp({ mode: "string" }),
-	fechavalidacion: timestamp({ mode: "string" }),
-
+	preciounitario: numeric({ precision: 10, scale:  2 }).notNull(),
+	subtotal: numeric({ precision: 10, scale:  2 }).notNull(),
+	descuento: numeric({ precision: 10, scale:  2 }).default('0').notNull(),
+	total: numeric({ precision: 10, scale:  2 }).notNull(),
+	fechacompra: timestamp({ mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+	fechalimitepago: timestamp({ mode: 'string' }).notNull(),
+	fechapago: timestamp({ mode: 'string' }),
+	fechavalidacion: timestamp({ mode: 'string' }),
 	usuariovalida: integer(),
 	observaciones: text(),
-  },
-  (table) => [
-	index("idx_compra_curso").using(
-	  "btree",
-	  table.idcurso.asc().nullsLast().op("int4_ops"),
-	),
-
-	index("idx_compra_estado").using(
-	  "btree",
-	  table.idestadocompra.asc().nullsLast().op("int2_ops"),
-	),
-
-	index("idx_compra_fecha").using(
-	  "btree",
-	  table.fechacompra.asc().nullsLast().op("timestamp_ops"),
-	),
-
-	index("idx_compra_usuario").using(
-	  "btree",
-	  table.idusuario.asc().nullsLast().op("int4_ops"),
-	),
-
-	index("idx_compras_cursos_curso").using(
-	  "btree",
-	  table.idcurso.asc().nullsLast().op("int4_ops"),
-	),
-
-	index("idx_compras_cursos_curso_estado").using(
-	  "btree",
-	  table.idcurso.asc().nullsLast().op("int4_ops"),
-	  table.idestadocompra.asc().nullsLast().op("int2_ops"),
-	),
-
-	index("idx_compras_cursos_estado").using(
-	  "btree",
-	  table.idestadocompra.asc().nullsLast().op("int2_ops"),
-	),
-
-	index("idx_compras_cursos_fecha").using(
-	  "btree",
-	  table.fechacompra.asc().nullsLast().op("timestamp_ops"),
-	),
-
-	index("idx_compras_cursos_limite_pago")
-	  .using(
-		"btree",
-		table.fechalimitepago.asc().nullsLast().op("timestamp_ops"),
-		table.idcompra.asc().nullsLast().op("int8_ops"),
-	  )
-	  .where(sql`${table.fechalimitepago} IS NOT NULL`),
-
-	index("idx_compras_cursos_usuario").using(
-	  "btree",
-	  table.idusuario.asc().nullsLast().op("int4_ops"),
-	),
-
-	index("idx_compras_cursos_usuario_fecha").using(
-	  "btree",
-	  table.idusuario.asc().nullsLast().op("int4_ops"),
-	  table.fechacompra.desc().nullsFirst().op("timestamp_ops"),
-	),
-
-	uniqueIndex("uq_compras_cursos_folio").using(
-	  "btree",
-	  table.foliocompra.asc().nullsLast().op("text_ops"),
-	),
-
+}, (table) => [
+	index("idx_compra_curso").using("btree", table.idcurso.asc().nullsLast().op("int4_ops")),
+	index("idx_compra_estado").using("btree", table.idestadocompra.asc().nullsLast().op("int2_ops")),
+	index("idx_compra_fecha").using("btree", table.fechacompra.asc().nullsLast().op("timestamp_ops")),
+	index("idx_compra_usuario").using("btree", table.idusuario.asc().nullsLast().op("int4_ops")),
+	index("idx_compras_cursos_curso").using("btree", table.idcurso.asc().nullsLast().op("int4_ops")),
+	index("idx_compras_cursos_curso_estado").using("btree", table.idcurso.asc().nullsLast().op("int4_ops"), table.idestadocompra.asc().nullsLast().op("int2_ops")),
+	index("idx_compras_cursos_estado").using("btree", table.idestadocompra.asc().nullsLast().op("int2_ops")),
+	index("idx_compras_cursos_fecha").using("btree", table.fechacompra.asc().nullsLast().op("timestamp_ops")),
+	index("idx_compras_cursos_limite_pago").using("btree", table.fechalimitepago.asc().nullsLast().op("int8_ops"), table.idcompra.asc().nullsLast().op("int8_ops")).where(sql`(fechalimitepago IS NOT NULL)`),
+	index("idx_compras_cursos_usuario").using("btree", table.idusuario.asc().nullsLast().op("int4_ops")),
+	index("idx_compras_cursos_usuario_fecha").using("btree", table.idusuario.asc().nullsLast().op("timestamp_ops"), table.fechacompra.desc().nullsFirst().op("timestamp_ops")),
+	uniqueIndex("uq_compras_cursos_folio").using("btree", table.foliocompra.asc().nullsLast().op("text_ops")),
 	foreignKey({
-	  columns: [table.usuariovalida],
-	  foreignColumns: [usuariosInSeguridad.id],
-	  name: "fk_compra_admin",
-	}),
-
+			columns: [table.usuariovalida],
+			foreignColumns: [usuariosInSeguridad.id],
+			name: "fk_compra_admin"
+		}),
 	foreignKey({
-	  columns: [table.idcurso],
-	  foreignColumns: [cursosInAcademia.idCurso],
-	  name: "fk_compra_curso",
-	}),
-
+			columns: [table.idcurso],
+			foreignColumns: [cursosInAcademia.idCurso],
+			name: "fk_compra_curso"
+		}),
 	foreignKey({
-	  columns: [table.idestadocompra],
-	  foreignColumns: [
-		estadocomprainacademiaInAcademia.idestadocompra,
-	  ],
-	  name: "fk_compra_estado",
-	}),
-
+			columns: [table.idestadocompra],
+			foreignColumns: [estadocomprainacademiaInAcademia.idestadocompra],
+			name: "fk_compra_estado"
+		}),
 	foreignKey({
-	  columns: [table.idusuario],
-	  foreignColumns: [usuariosInSeguridad.id],
-	  name: "fk_compra_usuario",
-	}),
-
-	unique("comprascursosinacademia_foliocompra_key").on(
-	  table.foliocompra,
-	),
-
-	check("chk_cantidad", sql`${table.cantidadcupos} > 0`),
-
-	check(
-	  "chk_descuento",
-	  sql`${table.descuento} >= 0 AND ${table.descuento} <= ${table.subtotal}`,
-	),
-
-	check(
-	  "chk_precio",
-	  sql`${table.preciounitario} >= 0`,
-	),
-
-	check(
-	  "chk_subtotal",
-	  sql`${table.subtotal} >= 0`,
-	),
-
-	check(
-	  "chk_total",
-	  sql`${table.total} >= 0`,
-	),
-
-	check(
-	  "chk_total_calculado",
-	  sql`${table.total} = ${table.subtotal} - ${table.descuento}`,
-	),
-  ],
-);
+			columns: [table.idusuario],
+			foreignColumns: [usuariosInSeguridad.id],
+			name: "fk_compra_usuario"
+		}),
+	unique("comprascursosinacademia_foliocompra_key").on(table.foliocompra),
+	check("chk_cantidad", sql`cantidadcupos > 0`),
+	check("chk_descuento", sql`(descuento >= (0)::numeric) AND (descuento <= subtotal)`),
+	check("chk_precio", sql`preciounitario >= (0)::numeric`),
+	check("chk_subtotal", sql`subtotal >= (0)::numeric`),
+	check("chk_total", sql`total >= (0)::numeric`),
+	check("chk_total_calculado", sql`total = (subtotal - descuento)`),
+]);
 
 export const estadocomprainacademiaInAcademia = academia.table("estadocomprainacademia", {
 	idestadocompra: smallserial().primaryKey().notNull(),
@@ -1310,36 +1217,6 @@ export const certificadosCursoInAcademia = academia.table("certificados_curso", 
 	check("chk_certificado_revocado", sql`((estado)::text <> 'Revocado'::text) OR ((fecha_revocacion IS NOT NULL) AND (motivo_revocacion IS NOT NULL) AND (length(TRIM(BOTH FROM motivo_revocacion)) > 0))`),
 ]);
 
-export const requisitosAprobacionCursoInAcademia = academia.table("requisitos_aprobacion_curso", {
-	idRequisitoAprobacion: bigserial("id_requisito_aprobacion", { mode: "bigint" }).primaryKey().notNull(),
-	cursoId: integer("curso_id").notNull(),
-	porcentajeAsistenciaMinima: numeric("porcentaje_asistencia_minima", { precision: 5, scale:  2 }).default('80').notNull(),
-	calificacionMinima: numeric("calificacion_minima", { precision: 5, scale:  2 }).default('70').notNull(),
-	porcentajeAvanceMinimo: numeric("porcentaje_avance_minimo", { precision: 5, scale:  2 }).default('100').notNull(),
-	requiereEvaluacionesObligatorias: boolean("requiere_evaluaciones_obligatorias").default(true).notNull(),
-	requiereEvaluacionFinal: boolean("requiere_evaluacion_final").default(false).notNull(),
-	permiteFaltasJustificadas: boolean("permite_faltas_justificadas").default(true).notNull(),
-	maximoFaltasInjustificadas: smallint("maximo_faltas_injustificadas"),
-	requierePagoValidado: boolean("requiere_pago_validado").default(true).notNull(),
-	emiteCertificado: boolean("emite_certificado").default(true).notNull(),
-	vigente: boolean().default(true).notNull(),
-	observaciones: text(),
-	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
-	updatedAt: timestamp("updated_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
-}, (table) => [
-	index("idx_requisitos_aprobacion_vigentes").using("btree", table.cursoId.asc().nullsLast().op("int4_ops")).where(sql`(vigente = true)`),
-	foreignKey({
-			columns: [table.cursoId],
-			foreignColumns: [cursosInAcademia.idCurso],
-			name: "fk_requisito_aprobacion_curso"
-		}).onDelete("restrict"),
-	unique("uq_requisito_aprobacion_curso").on(table.cursoId),
-	check("chk_requisito_asistencia", sql`(porcentaje_asistencia_minima >= (0)::numeric) AND (porcentaje_asistencia_minima <= (100)::numeric)`),
-	check("chk_requisito_avance", sql`(porcentaje_avance_minimo >= (0)::numeric) AND (porcentaje_avance_minimo <= (100)::numeric)`),
-	check("chk_requisito_calificacion", sql`(calificacion_minima >= (0)::numeric) AND (calificacion_minima <= (100)::numeric)`),
-	check("chk_requisito_faltas", sql`(maximo_faltas_injustificadas IS NULL) OR (maximo_faltas_injustificadas >= 0)`),
-]);
-
 export const datasetReglasAsociacionInAnalitica = analitica.table("dataset_reglas_asociacion", {
 	idRegistro: bigserial("id_registro", { mode: "bigint" }).primaryKey().notNull(),
 	idTransaccionAnalitica: varchar("id_transaccion_analitica", { length: 100 }).notNull(),
@@ -1733,7 +1610,7 @@ export const backupsInAuditoria = auditoria.table("backups", {
 	archivoUrl: text("archivo_url"),
 	estado: varchar({ length: 20 }).default('exitoso'),
 	// TODO: failed to parse database type 'bytea'
-	contenido: bytea("contenido"),
+	contenido: unknown("contenido"),
 	nombreArchivo: text("nombre_archivo"),
 	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
 	"tamañoBytes": bigint("tamaño_bytes", { mode: "number" }),

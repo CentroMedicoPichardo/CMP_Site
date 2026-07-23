@@ -9,6 +9,9 @@ export const publicRoutes = {
   quienesSomos: "/quienes-somos",
   contacto: "/contacto",
   ayuda: "/ayuda",
+  ayudaPreguntas: "/ayuda/preguntas",
+  ayudaNuevaPregunta: "/ayuda/preguntas/nueva",
+  ayudaPreguntaDetalle: (id: number) => `/ayuda/preguntas/${id}`,
   acceder: "/acceder",
   registro: "/registro",
   privacidad: "/privacidad",
@@ -19,9 +22,11 @@ export const clienteRoutes = {
   dashboard: "/dashboard",
   misComprasCursos: "/mis-compras/cursos",
   misCursos: "/mis-cursos",
+  miCursoDetalle: (idInscripcion: number) =>
+    `/mis-cursos/${idInscripcion}`,
   perfil: "/perfil",
   foros: "/foros",
-  saberPediatrico: "/dashboard/saber-pediatrico",
+  saberPediatrico: "/saber-pediatrico",
 } as const;
 
 export const adminRoutes = {
@@ -51,6 +56,10 @@ export const adminRoutes = {
     `/gestion-academica/cursos/${id}`,
   gestionAcademicaAsistencia: (id: number) =>
     `/gestion-academica/sesiones/${id}/asistencia`,
+  soporte: "/soporte-admin",
+  soportePregunta: (id: number) => `/soporte-admin/preguntas/${id}`,
+  soporteFaqs: "/soporte-admin/faqs",
+  soporteCategorias: "/soporte-admin/categorias",
 } as const;
 
 export const navigationItems = [

@@ -1,4 +1,28 @@
-// src/types/help.ts
+export const ESTADOS_PREGUNTA = [
+  "pendiente",
+  "respondida",
+  "cerrada",
+  "convertida_faq",
+] as const;
+
+export const PRIORIDADES_PREGUNTA = [
+  "baja",
+  "normal",
+  "alta",
+  "urgente",
+] as const;
+
+export type EstadoPregunta =
+  (typeof ESTADOS_PREGUNTA)[number];
+
+export type PrioridadPregunta =
+  (typeof PRIORIDADES_PREGUNTA)[number];
+
+export type OrdenPreguntasAdmin =
+  | "prioridad"
+  | "recientes"
+  | "antiguas"
+  | "actividad";
 
 export interface CategoriaAyuda {
   idCategoria: number;
@@ -7,8 +31,17 @@ export interface CategoriaAyuda {
   icono: string | null;
   orden: number;
   activo: boolean;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+  totalFaqs?: number;
+  totalPreguntas?: number;
+}
+
+export interface UsuarioAyudaResumen {
+  id: number;
+  nombre: string;
+  apellidoPaterno: string;
+  correo?: string;
 }
 
 export interface PreguntaFrecuente {
@@ -22,16 +55,12 @@ export interface PreguntaFrecuente {
   activo: boolean;
   esDestacada: boolean;
   tags: string[] | null;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string | null;
+  updatedAt: string | null;
   creadoPor: number | null;
-  // Relaciones
-  categoria?: CategoriaAyuda;
-  creador?: {
-    id: number;
-    nombre: string;
-    apellidoPaterno: string;
-  };
+  valoracionUsuario?: boolean | null;
+  categoria?: Pick<CategoriaAyuda, "idCategoria" | "nombreCategoria" | "icono"> | null;
+  creador?: UsuarioAyudaResumen | null;
 }
 
 export interface PreguntaUsuario {
@@ -40,21 +69,15 @@ export interface PreguntaUsuario {
   idCategoria: number | null;
   titulo: string;
   descripcion: string;
-  estado: 'pendiente' | 'respondida' | 'cerrada' | 'convertida_faq';
-  prioridad: 'baja' | 'normal' | 'alta' | 'urgente';
+  estado: EstadoPregunta;
+  prioridad: PrioridadPregunta;
   esPrivada: boolean;
-  idPreguntaFAQ: number | null;
-  createdAt: string;
-  updatedAt: string;
-  // Relaciones
-  usuario?: {
-    id: number;
-    nombre: string;
-    apellidoPaterno: string;
-    correo: string;
-  };
+  idPreguntaFaq: number | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  usuario?: UsuarioAyudaResumen | null;
   respuestas?: RespuestaAyuda[];
-  categoria?: CategoriaAyuda;
+  categoria?: Pick<CategoriaAyuda, "idCategoria" | "nombreCategoria"> | null;
 }
 
 export interface RespuestaAyuda {
@@ -64,13 +87,8 @@ export interface RespuestaAyuda {
   contenido: string;
   esRespuestaAdmin: boolean;
   esSolucion: boolean;
-  createdAt: string;
-  // Relaciones
-  usuario?: {
-    id: number;
-    nombre: string;
-    apellidoPaterno: string;
-  };
+  createdAt: string | null;
+  usuario?: Omit<UsuarioAyudaResumen, "correo"> | null;
 }
 
 export interface ValoracionFAQ {
@@ -79,14 +97,14 @@ export interface ValoracionFAQ {
   idUsuario: number;
   esUtil: boolean;
   comentario: string | null;
-  createdAt: string;
+  createdAt: string | null;
 }
 
 export interface CrearPreguntaUsuarioDTO {
-  idCategoria?: number;
+  idCategoria?: number | null;
   titulo: string;
   descripcion: string;
-  prioridad?: 'baja' | 'normal' | 'alta' | 'urgente';
+  prioridad?: PrioridadPregunta;
   esPrivada?: boolean;
 }
 
@@ -96,10 +114,86 @@ export interface CrearRespuestaDTO {
 }
 
 export interface ActualizarPreguntaDTO {
-  titulo?: string;
-  descripcion?: string;
-  idCategoria?: number;
-  prioridad?: 'baja' | 'normal' | 'alta' | 'urgente';
-  estado?: 'pendiente' | 'respondida' | 'cerrada' | 'convertida_faq';
+  idCategoria?: number | null;
+  prioridad?: PrioridadPregunta;
+  estado?: EstadoPregunta;
   esPrivada?: boolean;
+}
+
+export interface ResumenSoporteCliente {
+  total: number;
+  pendientes: number;
+  atendidas: number;
+  cerradas: number;
+  ultimaAtendida: {
+    idPregunta: number;
+    titulo: string;
+    estado: EstadoPregunta;
+    updatedAt: string | null;
+    createdAt: string | null;
+  } | null;
+}
+
+export interface ResumenSoporteAdmin {
+  total: number;
+  pendientes: number;
+  respondidas: number;
+  cerradas: number;
+  urgentes: number;
+}
+
+export interface PaginacionSoporte {
+  pagina: number;
+  limite: number;
+  total: number;
+  totalPaginas: number;
+}
+
+export interface PreguntasAdminResponse {
+  preguntas: PreguntaUsuario[];
+  resumen: ResumenSoporteAdmin;
+  orden?: OrdenPreguntasAdmin;
+  paginacion: PaginacionSoporte;
+}
+
+export interface PreguntaAdminDetalleResponse {
+  pregunta: PreguntaUsuario;
+  respuestas: RespuestaAyuda[];
+  categorias: CategoriaAyuda[];
+}
+
+export interface CrearFaqDTO {
+  idCategoria: number;
+  pregunta: string;
+  respuesta: string;
+  orden?: number;
+  activo?: boolean;
+  esDestacada?: boolean;
+  tags?: string[] | null;
+}
+
+export interface ActualizarFaqDTO {
+  idCategoria?: number;
+  pregunta?: string;
+  respuesta?: string;
+  orden?: number;
+  activo?: boolean;
+  esDestacada?: boolean;
+  tags?: string[] | null;
+}
+
+export interface CrearCategoriaAyudaDTO {
+  nombreCategoria: string;
+  descripcion?: string | null;
+  icono?: string | null;
+  orden?: number;
+  activo?: boolean;
+}
+
+export interface ActualizarCategoriaAyudaDTO {
+  nombreCategoria?: string;
+  descripcion?: string | null;
+  icono?: string | null;
+  orden?: number;
+  activo?: boolean;
 }

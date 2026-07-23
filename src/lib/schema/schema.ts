@@ -1326,6 +1326,7 @@ export const requisitosAprobacionCursoInAcademia = academia.table("requisitos_ap
 	observaciones: text(),
 	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 	updatedAt: timestamp("updated_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+	tipoSeguimiento: varchar("tipo_seguimiento", { length: 30 }).default('Solo asistencia').notNull(),
 }, (table) => [
 	index("idx_requisitos_aprobacion_vigentes").using("btree", table.cursoId.asc().nullsLast().op("int4_ops")).where(sql`(vigente = true)`),
 	foreignKey({
@@ -1338,6 +1339,7 @@ export const requisitosAprobacionCursoInAcademia = academia.table("requisitos_ap
 	check("chk_requisito_avance", sql`(porcentaje_avance_minimo >= (0)::numeric) AND (porcentaje_avance_minimo <= (100)::numeric)`),
 	check("chk_requisito_calificacion", sql`(calificacion_minima >= (0)::numeric) AND (calificacion_minima <= (100)::numeric)`),
 	check("chk_requisito_faltas", sql`(maximo_faltas_injustificadas IS NULL) OR (maximo_faltas_injustificadas >= 0)`),
+	check("chk_requisito_tipo_seguimiento", sql`(tipo_seguimiento)::text = ANY ((ARRAY['Solo asistencia'::character varying, 'Evaluaciones opcionales'::character varying, 'Evaluaciones obligatorias'::character varying])::text[])`),
 ]);
 
 export const datasetReglasAsociacionInAnalitica = analitica.table("dataset_reglas_asociacion", {

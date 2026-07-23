@@ -9,7 +9,6 @@ import { NextResponse } from "next/server";
 
 import { requireApiRole } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { recalcularProgresoCurso } from "@/lib/gestion-academica/recalcular-progreso";
 import {
   asistenciasCurso,
   cursos,
@@ -732,13 +731,10 @@ export async function PUT(
       }
     });
 
-    const progreso = await recalcularProgresoCurso(sesion.cursoId);
-
     return NextResponse.json({
       success: true,
       message: "Asistencia guardada correctamente",
       totalGuardados: validated.length,
-      progreso,
     });
   } catch (requestError: unknown) {
     console.error("Error al guardar asistencias:", requestError);
