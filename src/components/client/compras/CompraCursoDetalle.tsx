@@ -11,6 +11,8 @@ import {
   ExternalLink,
   FileImage,
   FileText,
+  Info,
+  Landmark,
   Loader2,
   ReceiptText,
   RefreshCw,
@@ -69,6 +71,13 @@ const INITIAL_FORM: FormularioPago = {
   comprobanteConfirmado: false,
   observaciones: "",
 };
+
+const DATOS_TRANSFERENCIA = {
+  beneficiario: "Dr. Francisco Javier Moreno Pichardo",
+  banco: "BBVA",
+  clabeFormateada: "012 180 01560203736 1",
+  clabeSinEspacios: "012180015602037361",
+} as const;
 
 function isRecord(
   value: unknown
@@ -978,6 +987,111 @@ export function CompraCursoDetalle({
                 <CreditCard size={21} />
                 Reportar pago
               </h2>
+
+              <div className="mt-5 overflow-hidden rounded-2xl border border-[#0A3D62]/15 bg-[#F7FAFC]">
+                <div className="flex items-start gap-3 bg-[#0A3D62] px-4 py-4 text-white">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-[#FFC300]">
+                    <Landmark size={20} strokeWidth={1.9} />
+                  </span>
+
+                  <div>
+                    <p className="text-sm font-extrabold">
+                      Datos para transferencia bancaria
+                    </p>
+
+                    <p className="mt-1 text-xs leading-5 text-blue-100">
+                      Utiliza estos datos y registra exactamente el concepto indicado.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4 p-4">
+                  <dl className="space-y-3 text-sm">
+                    <div>
+                      <dt className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        Beneficiario
+                      </dt>
+
+                      <dd className="mt-1 font-bold text-gray-900">
+                        {DATOS_TRANSFERENCIA.beneficiario}
+                      </dd>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                      <div>
+                        <dt className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                          Banco
+                        </dt>
+
+                        <dd className="mt-1 font-bold text-gray-900">
+                          {DATOS_TRANSFERENCIA.banco}
+                        </dd>
+                      </div>
+
+                      <div>
+                        <dt className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                          Importe sugerido
+                        </dt>
+
+                        <dd className="mt-1 font-bold text-[#0A3D62]">
+                          {formatMoney(data.resumenPago.saldoPendiente)}
+                        </dd>
+                      </div>
+                    </div>
+
+                    <div>
+                      <dt className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        CLABE interbancaria
+                      </dt>
+
+                      <dd className="mt-1 break-all font-mono text-base font-extrabold tracking-wide text-[#0A3D62]">
+                        {DATOS_TRANSFERENCIA.clabeFormateada}
+                      </dd>
+
+                      <p className="mt-1 text-xs text-gray-500">
+                        Captura los 18 dígitos sin espacios: {DATOS_TRANSFERENCIA.clabeSinEspacios}
+                      </p>
+                    </div>
+                  </dl>
+
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    <p className="flex items-center gap-2 text-sm font-extrabold text-amber-900">
+                      <Info size={17} />
+                      Concepto obligatorio
+                    </p>
+
+                    <p className="mt-2 text-xs leading-5 text-amber-800">
+                      En el concepto de la transferencia escribe únicamente el folio de esta compra, sin agregar nombres, curso u otro texto.
+                    </p>
+
+                    <p className="mt-3 break-all rounded-lg border border-amber-200 bg-white px-3 py-2 text-center font-mono text-base font-extrabold tracking-wide text-[#0A3D62]">
+                      {compra.folioCompra}
+                    </p>
+                  </div>
+
+                  <ol className="space-y-2 text-xs leading-5 text-gray-600">
+                    <li>
+                      <span className="font-bold text-[#0A3D62]">1.</span>{" "}
+                      Verifica que el beneficiario sea {DATOS_TRANSFERENCIA.beneficiario}.
+                    </li>
+
+                    <li>
+                      <span className="font-bold text-[#0A3D62]">2.</span>{" "}
+                      Transfiere el saldo pendiente y usa exactamente el folio mostrado como concepto.
+                    </li>
+
+                    <li>
+                      <span className="font-bold text-[#0A3D62]">3.</span>{" "}
+                      Guarda el comprobante y repórtalo en el formulario de esta página.
+                    </li>
+
+                    <li>
+                      <span className="font-bold text-[#0A3D62]">4.</span>{" "}
+                      En el campo Referencia captura el número de operación, autorización o rastreo que aparezca en tu comprobante.
+                    </li>
+                  </ol>
+                </div>
+              </div>
 
               {compraExpirada ? (
                 <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">
