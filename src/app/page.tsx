@@ -30,9 +30,9 @@ export default function HomePublico() {
         ]);
 
         const [servs, curs, meds, blogResponse] = await Promise.all([
-          resServicios.json(), 
-          resCursos.json(), 
-          resMedicos.json(), 
+          resServicios.json(),
+          resCursos.json(),
+          resMedicos.json(),
           resBlog.json()
         ]);
 
@@ -101,22 +101,30 @@ export default function HomePublico() {
   return (
     <main className="bg-white">
       <HeroSection />
-      <SaberPediatricoSection noticias={data.todasLasNoticias} />
-      <ServiciosSection servicios={data.servicios} />
-      
+
       {data.medicoDestacado && (
-        <section className="py-20 bg-gray-50">
+        <section className="bg-gray-50 py-20">
           <Container>
-            <div className="max-w-4xl mx-auto">
-              <MedicoDestacadoSection medico={data.medicoDestacado} />
+            <div className="mx-auto max-w-4xl">
+              <MedicoDestacadoSection
+                medico={data.medicoDestacado}
+              />
             </div>
           </Container>
         </section>
       )}
-      
+
       {data.cursos.length > 0 && (
         <CursosSection cursos={data.cursos} />
       )}
+
+      <SaberPediatricoSection
+        noticias={data.todasLasNoticias}
+      />
+
+      <ServiciosSection
+        servicios={data.servicios}
+      />
     </main>
   );
 }
