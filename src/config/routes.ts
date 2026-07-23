@@ -31,6 +31,7 @@ export const clienteRoutes = {
 
 export const adminRoutes = {
   dashboard: "/dashboard-admin",
+  segmentacionClientes: "/segmentacion-clientes",
   usuarios: "/usuarios",
   medicos: "/medicos",
   servicios: "/adminservicios",

@@ -1,41 +1,34 @@
-// src/config/sidebarItems.ts (actualizado con las rutas)
+// src/config/sidebarItems.ts
 
 import {
-  LayoutDashboard,
-  Users,
-  Stethoscope,
-  BookOpen,
-  FileText,
-  Image,
-  Settings,
-  Database,
-  BarChart3,
-  Newspaper,
-  Video,
-  Info,
-  Shield,
-  HardDrive,
-  HelpCircle,
-  MessageCircle,
-  User,
-  GraduationCap,
   Activity,
-  AlertTriangle,
-  LifeBuoy,
-  Eye,
-  Gauge,
-  History,
-  Server,
-  Bell,
-  Youtube,
-  FileQuestion,
-  WalletCards,
-  FileArchive,
-  ShoppingBag,
+  BookOpen,
+  BrainCircuit,
+  ChartNoAxesCombined,
   ClipboardCheck,
+  Database,
+  FileArchive,
+  FileQuestion,
+  FileText,
+  GraduationCap,
+  HelpCircle,
+  History,
+  LayoutDashboard,
+  LifeBuoy,
+  ShoppingBag,
+  Stethoscope,
+  Users,
+  WalletCards,
+  Youtube,
 } from "lucide-react";
-import { SidebarItem } from '@/types/sidebar.types';
-import { adminRoutes, clienteRoutes, publicRoutes } from './routes';
+
+import type { SidebarItem } from "@/types/sidebar.types";
+
+import {
+  adminRoutes,
+  clienteRoutes,
+  publicRoutes,
+} from "./routes";
 
 export const clientSidebarItems: SidebarItem[] = [
   {
@@ -70,17 +63,33 @@ export const clientSidebarItems: SidebarItem[] = [
   },
 ];
 
-// Items para administradores (con rutas actualizadas)
 export const adminSidebarItems: SidebarItem[] = [
-  // DASHBOARD PRINCIPAL
+  // ========== PRINCIPAL ==========
   {
     label: "Dashboard",
     href: adminRoutes.dashboard,
     icon: LayoutDashboard,
     description: "Resumen general del sistema",
-    category: "PRINCIPAL"
+    category: "PRINCIPAL",
   },
-  
+
+  // ========== ANALÍTICA ==========
+  {
+    label: "Analítica",
+    icon: ChartNoAxesCombined,
+    description: "Modelos y análisis de datos",
+    category: "ANALÍTICA",
+    children: [
+      {
+        label: "Segmentación de clientes",
+        href: adminRoutes.segmentacionClientes,
+        icon: BrainCircuit,
+        description:
+          "Clasificación de clientes mediante K-Means",
+      },
+    ],
+  },
+
   // ========== MONITOREO Y SEGURIDAD ==========
   {
     label: "Monitoreo",
@@ -92,17 +101,17 @@ export const adminSidebarItems: SidebarItem[] = [
         label: "Auditoría",
         href: adminRoutes.auditoria,
         icon: History,
-        description: "Historial de cambios y eventos"
+        description: "Historial de cambios y eventos",
       },
       {
         label: "Backups",
         href: adminRoutes.backups,
         icon: Database,
-        description: "Respaldo de base de datos"
-      }
-    ]
+        description: "Respaldo de base de datos",
+      },
+    ],
   },
-  
+
   // ========== GESTIÓN DE CONTENIDO ==========
   {
     label: "Contenido Médico",
@@ -114,30 +123,30 @@ export const adminSidebarItems: SidebarItem[] = [
         label: "Médicos",
         href: adminRoutes.medicos,
         icon: Stethoscope,
-        description: "CRUD de médicos"
+        description: "CRUD de médicos",
       },
       {
         label: "Servicios",
         href: adminRoutes.servicios,
         icon: FileText,
-        description: "Servicios médicos"
+        description: "Servicios médicos",
       },
       {
         label: "Cursos",
         href: adminRoutes.cursosadm,
         icon: GraduationCap,
-        description: "Cursos y talleres"
+        description: "Cursos y talleres",
       },
       {
         label: "Pagos de cursos",
         href: adminRoutes.comprasCursos,
         icon: WalletCards,
-        description: "Validar compras y pagos de cursos",
+        description:
+          "Validar compras y pagos de cursos",
       },
       {
         label: "Gestión académica",
-        href:
-          adminRoutes.gestionAcademica,
+        href: adminRoutes.gestionAcademica,
         icon: ClipboardCheck,
         description:
           "Sesiones, alumnos y asistencia",
@@ -145,65 +154,77 @@ export const adminSidebarItems: SidebarItem[] = [
       {
         label: "Quiénes Somos",
         href: adminRoutes.quienesSomos,
-        icon: Info,
-        description: "Editar información institucional"
-      }
-    ]
+        icon: FileText,
+        description:
+          "Editar información institucional",
+      },
+    ],
   },
-  
+
   // ========== SABER PEDIÁTRICO ==========
   {
     label: "Saber Pediátrico",
     icon: GraduationCap,
-    description: "Gestión de contenido educativo",
+    description:
+      "Gestión de contenido educativo",
     category: "GESTIÓN",
     children: [
       {
         label: "Artículos",
-        href: adminRoutes.saberPediatricoArticulos,
+        href:
+          adminRoutes.saberPediatricoArticulos,
         icon: FileText,
-        description: "Gestionar artículos"
+        description: "Gestionar artículos",
       },
       {
         label: "Videos",
-        href: adminRoutes.saberPediatricoVideos,
+        href:
+          adminRoutes.saberPediatricoVideos,
         icon: Youtube,
-        description: "Gestionar videos"
+        description: "Gestionar videos",
       },
       {
         label: "Documentos",
-        href: adminRoutes.saberPediatricoDocumentos,
+        href:
+          adminRoutes.saberPediatricoDocumentos,
         icon: FileArchive,
-        description: "Gestionar documentos"
+        description: "Gestionar documentos",
       },
       {
         label: "Encuestas",
-        href: adminRoutes.saberPediatricoEncuestas,
+        href:
+          adminRoutes.saberPediatricoEncuestas,
         icon: FileQuestion,
-        description: "Gestionar encuestas"
-      }
-    ]
+        description: "Gestionar encuestas",
+      },
+    ],
   },
-  
+
   // ========== USUARIOS ==========
   {
     label: "Usuarios",
     icon: Users,
-    description: "Gestión de usuarios del sistema",
+    description:
+      "Gestión de usuarios del sistema",
     category: "USUARIOS",
     children: [
       {
         label: "Gestión de Usuarios",
         href: adminRoutes.usuarios,
         icon: Users,
-        description: "Lista y administración de usuarios"
-      }
-    ]
+        description:
+          "Lista y administración de usuarios",
+      },
+    ],
   },
-  
+
+  // ========== SOPORTE ==========
   {
     label: "Soporte y ayuda",
     href: adminRoutes.soporte,
     icon: LifeBuoy,
-  }
+    description:
+      "Solicitudes y atención a usuarios",
+    category: "SOPORTE",
+  },
 ];
