@@ -533,18 +533,31 @@ export async function POST(
             );
           }
 
-          const fechaInicio =
-            new Date(
-              `${curso.fechaInicio}T00:00:00`
-            );
+          // A37: se permite comprar hasta antes del inicio real.
+          // Si existen sesiones, toma la primera no cancelada.
+          // Sin sesiones, la fecha de inicio cierra a las 00:00.
+          // La comparación usa el huso horario de PostgreSQL.
+          const inicioCurso = await tx
+            .select({
+              admiteCompra: sql<boolean>`
+                LOCALTIMESTAMP < COALESCE(
+                  (
+                    SELECT sc.fecha + sc.hora_inicio
+                    FROM academia.sesiones_curso sc
+                    WHERE sc.curso_id = ${input.cursoId}
+                      AND sc.estado <> 'Cancelada'
+                    ORDER BY sc.fecha, sc.hora_inicio
+                    LIMIT 1
+                  ),
+                  ${cursos.fechaInicio}::timestamp
+                )
+              `,
+            })
+            .from(cursos)
+            .where(eq(cursos.idCurso, input.cursoId))
+            .limit(1);
 
-          if (
-            Number.isNaN(
-              fechaInicio.getTime()
-            ) ||
-            fechaInicio.getTime() <
-              Date.now()
-          ) {
+          if (inicioCurso[0]?.admiteCompra !== true) {
             throw new CompraCursoError(
               "El curso ya inició y no acepta nuevas compras",
               409
@@ -612,8 +625,10 @@ export async function POST(
                   [...ESTADOS_CON_RESERVA]
                 ),
                 sql`
-                  ${comprasCursos.fechalimitepago}
-                  > CURRENT_TIMESTAMP
+                  (
+                    ${estadosCompra.nombre} <> ${ESTADO_PENDIENTE_PAGO}
+                    OR ${comprasCursos.fechalimitepago} > CURRENT_TIMESTAMP
+                  )
                 `
               )
             );
