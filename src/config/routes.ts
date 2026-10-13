@@ -58,6 +58,7 @@ export const adminRoutes = {
   gestionAcademicaAsistencia: (id: number) =>
     `/gestion-academica/sesiones/${id}/asistencia`,
   soporte: "/soporte-admin",
+  arcoCancelaciones: "/arco/cancelaciones",
   soportePregunta: (id: number) => `/soporte-admin/preguntas/${id}`,
   soporteFaqs: "/soporte-admin/faqs",
   soporteCategorias: "/soporte-admin/categorias",

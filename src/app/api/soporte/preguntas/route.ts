@@ -1,19 +1,41 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { and, desc, eq } from "drizzle-orm";
+
 import { requireApiAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
+
 import {
   categoriasAyuda,
   preguntasUsuarios,
   usuarios,
 } from "@/lib/schema/index";
+
 import {
   esPrioridadPregunta,
   parseIdPositivo,
   validarDescripcionPregunta,
   validarTituloPregunta,
 } from "@/lib/soporte/validaciones";
+
 import type { CrearPreguntaUsuarioDTO } from "@/types/help";
+
+/**
+ * Identifica títulos reservados para el
+ * procedimiento especializado de derechos ARCO.
+ *
+ * Una pregunta normal de Soporte no puede
+ * hacerse pasar por una solicitud de cancelación.
+ */
+function esTituloArcoReservado(titulo: string): boolean {
+  const normalizado = titulo
+    .normalize("NFKC")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+
+  return normalizado.startsWith("solicitud arco");
+}
 
 export async function GET() {
   const { session, error } = await requireApiAuth();
@@ -61,9 +83,17 @@ export async function GET() {
       )
       .leftJoin(
         categoriasAyuda,
-        eq(preguntasUsuarios.idCategoria, categoriasAyuda.idCategoria),
+        eq(
+          preguntasUsuarios.idCategoria,
+          categoriasAyuda.idCategoria,
+        ),
       )
-      .where(eq(preguntasUsuarios.idUsuario, session.user.id))
+      .where(
+        eq(
+          preguntasUsuarios.idUsuario,
+          session.user.id,
+        ),
+      )
       .orderBy(desc(preguntasUsuarios.createdAt));
 
     return NextResponse.json(
@@ -75,9 +105,15 @@ export async function GET() {
       })),
     );
   } catch (errorConsulta: unknown) {
-    console.error("Error al obtener preguntas:", errorConsulta);
+    console.error(
+      "Error al obtener preguntas:",
+      errorConsulta,
+    );
+
     return NextResponse.json(
-      { error: "No fue posible obtener tus preguntas." },
+      {
+        error: "No fue posible obtener tus preguntas.",
+      },
       { status: 500 },
     );
   }
@@ -98,13 +134,54 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = (await request.json()) as CrearPreguntaUsuarioDTO;
-    const errorTitulo = validarTituloPregunta(body.titulo);
-    const errorDescripcion = validarDescripcionPregunta(body.descripcion);
+    const body = (await request.json().catch(() => null)) as CrearPreguntaUsuarioDTO | null;
+
+    if (
+      !body ||
+      typeof body !== "object" ||
+      Array.isArray(body) ||
+      typeof body.titulo !== "string" ||
+      typeof body.descripcion !== "string"
+    ) {
+      return NextResponse.json(
+        {
+          error: "El formato de la pregunta no es válido.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const errorTitulo =
+      validarTituloPregunta(body.titulo);
+
+    const errorDescripcion =
+      validarDescripcionPregunta(body.descripcion);
 
     if (errorTitulo || errorDescripcion) {
       return NextResponse.json(
-        { error: errorTitulo ?? errorDescripcion },
+        {
+          error: errorTitulo ?? errorDescripcion,
+        },
+        { status: 400 },
+      );
+    }
+
+    /*
+     * A17 - Protección de Cancelación.
+     *
+     * Las solicitudes ARCO únicamente se
+     * registran mediante DELETE /api/account,
+     * donde se requiere confirmar identidad.
+     */
+    if (esTituloArcoReservado(body.titulo)) {
+      return NextResponse.json(
+        {
+          error:
+            "Las solicitudes de derechos ARCO " +
+            "deben realizarse desde el " +
+            "procedimiento de privacidad " +
+            "correspondiente.",
+        },
         { status: 400 },
       );
     }
@@ -114,13 +191,16 @@ export async function POST(request: NextRequest) {
       !esPrioridadPregunta(body.prioridad)
     ) {
       return NextResponse.json(
-        { error: "La prioridad seleccionada no es válida." },
+        {
+          error: "La prioridad seleccionada no es válida.",
+        },
         { status: 400 },
       );
     }
 
     const idCategoria =
-      body.idCategoria === undefined || body.idCategoria === null
+      body.idCategoria === undefined ||
+      body.idCategoria === null
         ? null
         : parseIdPositivo(body.idCategoria);
 
@@ -130,14 +210,18 @@ export async function POST(request: NextRequest) {
       idCategoria === null
     ) {
       return NextResponse.json(
-        { error: "La categoría seleccionada no es válida." },
+        {
+          error: "La categoría seleccionada no es válida.",
+        },
         { status: 400 },
       );
     }
 
     if (idCategoria !== null) {
       const [categoria] = await db
-        .select({ idCategoria: categoriasAyuda.idCategoria })
+        .select({
+          idCategoria: categoriasAyuda.idCategoria,
+        })
         .from(categoriasAyuda)
         .where(
           and(
@@ -149,7 +233,10 @@ export async function POST(request: NextRequest) {
 
       if (!categoria) {
         return NextResponse.json(
-          { error: "La categoría no existe o está desactivada." },
+          {
+            error:
+              "La categoría no existe o está desactivada.",
+          },
           { status: 400 },
         );
       }
@@ -169,11 +256,20 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
-    return NextResponse.json(nuevaPregunta, { status: 201 });
-  } catch (errorCreacion: unknown) {
-    console.error("Error al crear pregunta:", errorCreacion);
     return NextResponse.json(
-      { error: "No fue posible crear la pregunta." },
+      nuevaPregunta,
+      { status: 201 },
+    );
+  } catch (errorCreacion: unknown) {
+    console.error(
+      "Error al crear pregunta:",
+      errorCreacion,
+    );
+
+    return NextResponse.json(
+      {
+        error: "No fue posible crear la pregunta.",
+      },
       { status: 500 },
     );
   }

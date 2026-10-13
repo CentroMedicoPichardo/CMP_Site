@@ -1,22 +1,52 @@
-import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
-import { requireApiRole } from "@/lib/auth";
-import { db } from "@/lib/db";
+
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
+
+import {
+  and,
+  eq,
+  ne,
+} from "drizzle-orm";
+
+import {
+  requireApiRole,
+} from "@/lib/auth";
+
+import {
+  db,
+} from "@/lib/db";
+
 import {
   preguntasUsuarios,
   respuestasAyuda,
 } from "@/lib/schema/index";
+
 import {
   parseIdPositivo,
   validarContenidoRespuesta,
 } from "@/lib/soporte/validaciones";
-import type { CrearRespuestaDTO } from "@/types/help";
+
+import type {
+  CrearRespuestaDTO,
+} from "@/types/help";
+
+const TITULO_SOLICITUD_ARCO =
+  "Solicitud ARCO - Eliminacion de cuenta";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  {
+    params,
+  }: {
+    params: Promise<{
+      id: string;
+    }>;
+  }
 ) {
-  const { session, error } = await requireApiRole("admin");
+  const { session, error } =
+    await requireApiRole("admin");
 
   if (error) {
     return error;
@@ -24,104 +54,256 @@ export async function POST(
 
   if (!session) {
     return NextResponse.json(
-      { message: "No autenticado" },
-      { status: 401 },
+      {
+        message:
+          "No autenticado",
+      },
+      {
+        status: 401,
+      }
     );
   }
 
   try {
     const { id } = await params;
-    const idPregunta = parseIdPositivo(id);
+
+    const idPregunta =
+      parseIdPositivo(id);
 
     if (idPregunta === null) {
       return NextResponse.json(
-        { error: "El identificador de la pregunta no es válido." },
-        { status: 400 },
+        {
+          error:
+            "El identificador de la pregunta no es válido.",
+        },
+        {
+          status: 400,
+        }
       );
     }
 
-    const body = (await request.json()) as CrearRespuestaDTO;
-    const errorContenido = validarContenidoRespuesta(body.contenido);
+    const body =
+      (await request.json()) as
+        CrearRespuestaDTO;
+
+    const errorContenido =
+      validarContenidoRespuesta(
+        body.contenido
+      );
 
     if (errorContenido) {
       return NextResponse.json(
-        { error: errorContenido },
-        { status: 400 },
+        {
+          error:
+            errorContenido,
+        },
+        {
+          status: 400,
+        }
       );
     }
 
-    const respuesta = await db.transaction(async (tx) => {
-      const [pregunta] = await tx
-        .select({
-          idPregunta: preguntasUsuarios.idPregunta,
-          estado: preguntasUsuarios.estado,
-        })
-        .from(preguntasUsuarios)
-        .where(eq(preguntasUsuarios.idPregunta, idPregunta))
-        .limit(1);
+    const respuesta =
+      await db.transaction(
+        async (tx) => {
+          const [pregunta] =
+            await tx
+              .select({
+                idPregunta:
+                  preguntasUsuarios.idPregunta,
+                estado:
+                  preguntasUsuarios.estado,
+                titulo:
+                  preguntasUsuarios.titulo,
+              })
+              .from(
+                preguntasUsuarios
+              )
+              .where(
+                eq(
+                  preguntasUsuarios.idPregunta,
+                  idPregunta
+                )
+              )
+              .limit(1);
 
-      if (!pregunta) {
-        return null;
-      }
+          if (!pregunta) {
+            return null;
+          }
 
-      if (pregunta.estado === "convertida_faq") {
-        throw new Error("CONVERTIDA_FAQ");
-      }
+          /*
+           * Las respuestas ARCO se
+           * gestionarán desde su
+           * propio módulo.
+           *
+           * No debemos alterar su
+           * estado mediante Soporte.
+           */
+          if (
+            pregunta.titulo ===
+            TITULO_SOLICITUD_ARCO
+          ) {
+            throw new Error(
+              "SOLICITUD_ARCO"
+            );
+          }
 
-      const esSolucion = body.esSolucion === true;
+          if (
+            pregunta.estado ===
+            "convertida_faq"
+          ) {
+            throw new Error(
+              "CONVERTIDA_FAQ"
+            );
+          }
 
-      if (esSolucion) {
-        await tx
-          .update(respuestasAyuda)
-          .set({ esSolucion: false })
-          .where(eq(respuestasAyuda.idPregunta, idPregunta));
-      }
+          const esSolucion =
+            body.esSolucion === true;
 
-      const [creada] = await tx
-        .insert(respuestasAyuda)
-        .values({
-          idPregunta,
-          idUsuario: session.user.id,
-          contenido: body.contenido.trim(),
-          esRespuestaAdmin: true,
-          esSolucion,
-        })
-        .returning();
+          if (esSolucion) {
+            await tx
+              .update(
+                respuestasAyuda
+              )
+              .set({
+                esSolucion:
+                  false,
+              })
+              .where(
+                eq(
+                  respuestasAyuda.idPregunta,
+                  idPregunta
+                )
+              );
+          }
 
-      await tx
-        .update(preguntasUsuarios)
-        .set({
-          estado: "respondida",
-          updatedAt: new Date().toISOString(),
-        })
-        .where(eq(preguntasUsuarios.idPregunta, idPregunta));
+          const [creada] = await tx
+            .insert(
+              respuestasAyuda
+            )
+            .values({
+              idPregunta,
+              idUsuario:
+                session.user.id,
+              contenido:
+                body.contenido.trim(),
+              esRespuestaAdmin:
+                true,
+              esSolucion,
+            })
+            .returning();
 
-      return creada;
-    });
+          /*
+           * Solo una pregunta
+           * normal puede cambiar
+           * a "respondida".
+           */
+          const [actualizada] =
+            await tx
+              .update(
+                preguntasUsuarios
+              )
+              .set({
+                estado:
+                  "respondida",
+                updatedAt:
+                  new Date().toISOString(),
+              })
+              .where(
+                and(
+                  eq(
+                    preguntasUsuarios.idPregunta,
+                    idPregunta
+                  ),
+                  ne(
+                    preguntasUsuarios.titulo,
+                    TITULO_SOLICITUD_ARCO
+                  )
+                )
+              )
+              .returning({
+                idPregunta:
+                  preguntasUsuarios.idPregunta,
+              });
+
+          if (!actualizada) {
+            throw new Error(
+              "SOLICITUD_ARCO"
+            );
+          }
+
+          return creada;
+        }
+      );
 
     if (!respuesta) {
       return NextResponse.json(
-        { error: "Pregunta no encontrada." },
-        { status: 404 },
+        {
+          error:
+            "Pregunta no encontrada.",
+        },
+        {
+          status: 404,
+        }
       );
     }
 
-    return NextResponse.json(respuesta, { status: 201 });
-  } catch (errorCreacion: unknown) {
-    if (
-      errorCreacion instanceof Error &&
-      errorCreacion.message === "CONVERTIDA_FAQ"
-    ) {
-      return NextResponse.json(
-        { error: "La solicitud ya fue convertida en FAQ." },
-        { status: 409 },
-      );
-    }
-
-    console.error("Error al responder solicitud:", errorCreacion);
     return NextResponse.json(
-      { error: "No fue posible registrar la respuesta." },
-      { status: 500 },
+      respuesta,
+      {
+        status: 201,
+      }
+    );
+  } catch (
+    errorCreacion: unknown
+  ) {
+    if (
+      errorCreacion instanceof Error
+    ) {
+      if (
+        errorCreacion.message ===
+        "SOLICITUD_ARCO"
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Las solicitudes de eliminación de cuenta deben atenderse desde el módulo ARCO.",
+          },
+          {
+            status: 409,
+          }
+        );
+      }
+
+      if (
+        errorCreacion.message ===
+        "CONVERTIDA_FAQ"
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "La solicitud ya fue convertida en FAQ.",
+          },
+          {
+            status: 409,
+          }
+        );
+      }
+    }
+
+    console.error(
+      "Error al responder solicitud:",
+      errorCreacion
+    );
+
+    return NextResponse.json(
+      {
+        error:
+          "No fue posible registrar la respuesta.",
+      },
+      {
+        status: 500,
+      }
     );
   }
 }

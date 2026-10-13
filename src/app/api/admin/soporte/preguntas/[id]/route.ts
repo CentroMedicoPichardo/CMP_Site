@@ -1,25 +1,65 @@
-import { NextRequest, NextResponse } from "next/server";
-import { asc, eq } from "drizzle-orm";
-import { requireApiRole } from "@/lib/auth";
-import { db } from "@/lib/db";
+
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
+
+import {
+  and,
+  asc,
+  eq,
+  ne,
+} from "drizzle-orm";
+
+import {
+  requireApiRole,
+} from "@/lib/auth";
+
+import {
+  db,
+} from "@/lib/db";
+
 import {
   categoriasAyuda,
   preguntasUsuarios,
   respuestasAyuda,
   usuarios,
 } from "@/lib/schema/index";
+
 import {
   esEstadoPregunta,
   esPrioridadPregunta,
   parseIdPositivo,
 } from "@/lib/soporte/validaciones";
-import type { ActualizarPreguntaDTO } from "@/types/help";
 
+import type {
+  ActualizarPreguntaDTO,
+} from "@/types/help";
+
+const TITULO_SOLICITUD_ARCO =
+  "Solicitud ARCO - Eliminacion de cuenta";
+
+type RouteContext = {
+  params: Promise<{
+    id: string;
+  }>;
+};
+
+/**
+ * Consultar una pregunta de soporte.
+ *
+ * Conservamos la consulta existente
+ * para evitar afectar al módulo
+ * administrativo de Soporte.
+ */
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: RouteContext,
 ) {
-  const { session, error } = await requireApiRole("admin");
+  const {
+    session,
+    error,
+  } = await requireApiRole("admin");
 
   if (error) {
     return error;
@@ -27,125 +67,265 @@ export async function GET(
 
   if (!session) {
     return NextResponse.json(
-      { message: "No autenticado" },
-      { status: 401 },
+      {
+        message: "No autenticado",
+      },
+      {
+        status: 401,
+      },
     );
   }
 
   try {
     const { id } = await params;
-    const idPregunta = parseIdPositivo(id);
+
+    const idPregunta =
+      parseIdPositivo(id);
 
     if (idPregunta === null) {
       return NextResponse.json(
-        { error: "El identificador de la pregunta no es válido." },
-        { status: 400 },
+        {
+          error:
+            "El identificador de la pregunta no es válido.",
+        },
+        {
+          status: 400,
+        },
       );
     }
 
     const [pregunta] = await db
       .select({
-        idPregunta: preguntasUsuarios.idPregunta,
-        idUsuario: preguntasUsuarios.idUsuario,
-        idCategoria: preguntasUsuarios.idCategoria,
-        titulo: preguntasUsuarios.titulo,
-        descripcion: preguntasUsuarios.descripcion,
-        estado: preguntasUsuarios.estado,
-        prioridad: preguntasUsuarios.prioridad,
-        esPrivada: preguntasUsuarios.esPrivada,
-        idPreguntaFaq: preguntasUsuarios.idPreguntaFaq,
-        createdAt: preguntasUsuarios.createdAt,
-        updatedAt: preguntasUsuarios.updatedAt,
+        idPregunta:
+          preguntasUsuarios.idPregunta,
+
+        idUsuario:
+          preguntasUsuarios.idUsuario,
+
+        idCategoria:
+          preguntasUsuarios.idCategoria,
+
+        titulo:
+          preguntasUsuarios.titulo,
+
+        descripcion:
+          preguntasUsuarios.descripcion,
+
+        estado:
+          preguntasUsuarios.estado,
+
+        prioridad:
+          preguntasUsuarios.prioridad,
+
+        esPrivada:
+          preguntasUsuarios.esPrivada,
+
+        idPreguntaFaq:
+          preguntasUsuarios.idPreguntaFaq,
+
+        createdAt:
+          preguntasUsuarios.createdAt,
+
+        updatedAt:
+          preguntasUsuarios.updatedAt,
+
         usuario: {
-          id: usuarios.id,
-          nombre: usuarios.nombre,
-          apellidoPaterno: usuarios.apellidoPaterno,
-          correo: usuarios.correo,
+          id:
+            usuarios.id,
+
+          nombre:
+            usuarios.nombre,
+
+          apellidoPaterno:
+            usuarios.apellidoPaterno,
+
+          correo:
+            usuarios.correo,
         },
+
         categoria: {
-          idCategoria: categoriasAyuda.idCategoria,
-          nombreCategoria: categoriasAyuda.nombreCategoria,
+          idCategoria:
+            categoriasAyuda.idCategoria,
+
+          nombreCategoria:
+            categoriasAyuda.nombreCategoria,
         },
       })
       .from(preguntasUsuarios)
       .innerJoin(
         usuarios,
-        eq(preguntasUsuarios.idUsuario, usuarios.id),
+        eq(
+          preguntasUsuarios.idUsuario,
+          usuarios.id,
+        ),
       )
       .leftJoin(
         categoriasAyuda,
-        eq(preguntasUsuarios.idCategoria, categoriasAyuda.idCategoria),
+        eq(
+          preguntasUsuarios.idCategoria,
+          categoriasAyuda.idCategoria,
+        ),
       )
-      .where(eq(preguntasUsuarios.idPregunta, idPregunta))
+      .where(
+        eq(
+          preguntasUsuarios.idPregunta,
+          idPregunta,
+        ),
+      )
       .limit(1);
 
     if (!pregunta) {
       return NextResponse.json(
-        { error: "Pregunta no encontrada." },
-        { status: 404 },
+        {
+          error:
+            "Pregunta no encontrada.",
+        },
+        {
+          status: 404,
+        },
       );
     }
 
-    const [respuestas, categorias] = await Promise.all([
+    const [
+      respuestas,
+      categorias,
+    ] = await Promise.all([
       db
         .select({
-          idRespuesta: respuestasAyuda.idRespuesta,
-          idPregunta: respuestasAyuda.idPregunta,
-          idUsuario: respuestasAyuda.idUsuario,
-          contenido: respuestasAyuda.contenido,
-          esRespuestaAdmin: respuestasAyuda.esRespuestaAdmin,
-          esSolucion: respuestasAyuda.esSolucion,
-          createdAt: respuestasAyuda.createdAt,
+          idRespuesta:
+            respuestasAyuda.idRespuesta,
+
+          idPregunta:
+            respuestasAyuda.idPregunta,
+
+          idUsuario:
+            respuestasAyuda.idUsuario,
+
+          contenido:
+            respuestasAyuda.contenido,
+
+          esRespuestaAdmin:
+            respuestasAyuda.esRespuestaAdmin,
+
+          esSolucion:
+            respuestasAyuda.esSolucion,
+
+          createdAt:
+            respuestasAyuda.createdAt,
+
           usuario: {
-            id: usuarios.id,
-            nombre: usuarios.nombre,
-            apellidoPaterno: usuarios.apellidoPaterno,
+            id:
+              usuarios.id,
+
+            nombre:
+              usuarios.nombre,
+
+            apellidoPaterno:
+              usuarios.apellidoPaterno,
           },
         })
         .from(respuestasAyuda)
         .innerJoin(
           usuarios,
-          eq(respuestasAyuda.idUsuario, usuarios.id),
+          eq(
+            respuestasAyuda.idUsuario,
+            usuarios.id,
+          ),
         )
-        .where(eq(respuestasAyuda.idPregunta, idPregunta))
-        .orderBy(asc(respuestasAyuda.createdAt)),
+        .where(
+          eq(
+            respuestasAyuda.idPregunta,
+            idPregunta,
+          ),
+        )
+        .orderBy(
+          asc(
+            respuestasAyuda.createdAt,
+          ),
+        ),
+
       db
         .select()
         .from(categoriasAyuda)
         .orderBy(
-          asc(categoriasAyuda.orden),
-          asc(categoriasAyuda.nombreCategoria),
+          asc(
+            categoriasAyuda.orden,
+          ),
+          asc(
+            categoriasAyuda.nombreCategoria,
+          ),
         ),
     ]);
 
     return NextResponse.json({
       pregunta: {
         ...pregunta,
-        estado: pregunta.estado ?? "pendiente",
-        prioridad: pregunta.prioridad ?? "normal",
-        esPrivada: pregunta.esPrivada ?? false,
+
+        estado:
+          pregunta.estado ??
+          "pendiente",
+
+        prioridad:
+          pregunta.prioridad ??
+          "normal",
+
+        esPrivada:
+          pregunta.esPrivada ??
+          false,
       },
-      respuestas: respuestas.map((respuesta) => ({
-        ...respuesta,
-        esRespuestaAdmin: respuesta.esRespuestaAdmin ?? false,
-        esSolucion: respuesta.esSolucion ?? false,
-      })),
+
+      respuestas:
+        respuestas.map(
+          respuesta => ({
+            ...respuesta,
+
+            esRespuestaAdmin:
+              respuesta.esRespuestaAdmin ??
+              false,
+
+            esSolucion:
+              respuesta.esSolucion ??
+              false,
+          }),
+        ),
+
       categorias,
     });
   } catch (errorConsulta: unknown) {
-    console.error("Error al obtener detalle de soporte:", errorConsulta);
+    console.error(
+      "Error al obtener detalle de soporte:",
+      errorConsulta,
+    );
+
     return NextResponse.json(
-      { error: "No fue posible cargar la solicitud." },
-      { status: 500 },
+      {
+        error:
+          "No fue posible cargar la solicitud.",
+      },
+      {
+        status: 500,
+      },
     );
   }
 }
 
+/**
+ * Actualizar una pregunta normal
+ * del módulo de Soporte.
+ *
+ * A17:
+ * Las solicitudes de Cancelación
+ * no pueden modificarse mediante
+ * esta API genérica.
+ */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: RouteContext,
 ) {
-  const { session, error } = await requireApiRole("admin");
+  const {
+    session,
+    error,
+  } = await requireApiRole("admin");
 
   if (error) {
     return error;
@@ -153,104 +333,266 @@ export async function PATCH(
 
   if (!session) {
     return NextResponse.json(
-      { message: "No autenticado" },
-      { status: 401 },
+      {
+        message: "No autenticado",
+      },
+      {
+        status: 401,
+      },
     );
   }
 
   try {
     const { id } = await params;
-    const idPregunta = parseIdPositivo(id);
+
+    const idPregunta =
+      parseIdPositivo(id);
 
     if (idPregunta === null) {
       return NextResponse.json(
-        { error: "El identificador de la pregunta no es válido." },
-        { status: 400 },
+        {
+          error:
+            "El identificador de la pregunta no es válido.",
+        },
+        {
+          status: 400,
+        },
       );
     }
 
-    const body = (await request.json()) as ActualizarPreguntaDTO;
+    /*
+     * Identificamos el tipo de
+     * solicitud antes de actualizarla.
+     */
+    const [preguntaActual] = await db
+      .select({
+        idPregunta:
+          preguntasUsuarios.idPregunta,
+
+        titulo:
+          preguntasUsuarios.titulo,
+      })
+      .from(preguntasUsuarios)
+      .where(
+        eq(
+          preguntasUsuarios.idPregunta,
+          idPregunta,
+        ),
+      )
+      .limit(1);
+
+    if (!preguntaActual) {
+      return NextResponse.json(
+        {
+          error:
+            "Pregunta no encontrada.",
+        },
+        {
+          status: 404,
+        },
+      );
+    }
+
+    /*
+     * Una solicitud ARCO no debe
+     * cerrarse, hacerse pública,
+     * cambiarse de categoría ni
+     * marcarse como atendida
+     * desde Soporte normal.
+     */
+    if (
+      preguntaActual.titulo ===
+      TITULO_SOLICITUD_ARCO
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Las solicitudes de eliminación " +
+            "de cuenta deben administrarse " +
+            "desde el módulo especializado " +
+            "de derechos ARCO.",
+        },
+        {
+          status: 409,
+        },
+      );
+    }
+
+    const body =
+      (await request.json()) as
+        ActualizarPreguntaDTO;
+
     const cambios: {
       estado?: string;
       prioridad?: string;
       idCategoria?: number | null;
       esPrivada?: boolean;
       updatedAt: string;
-    } = { updatedAt: new Date().toISOString() };
+    } = {
+      updatedAt:
+        new Date().toISOString(),
+    };
 
     if (body.estado !== undefined) {
-      if (!esEstadoPregunta(body.estado)) {
+      if (
+        !esEstadoPregunta(
+          body.estado,
+        )
+      ) {
         return NextResponse.json(
-          { error: "El estado seleccionado no es válido." },
-          { status: 400 },
+          {
+            error:
+              "El estado seleccionado no es válido.",
+          },
+          {
+            status: 400,
+          },
         );
       }
+
       cambios.estado = body.estado;
     }
 
-    if (body.prioridad !== undefined) {
-      if (!esPrioridadPregunta(body.prioridad)) {
+    if (
+      body.prioridad !== undefined
+    ) {
+      if (
+        !esPrioridadPregunta(
+          body.prioridad,
+        )
+      ) {
         return NextResponse.json(
-          { error: "La prioridad seleccionada no es válida." },
-          { status: 400 },
+          {
+            error:
+              "La prioridad seleccionada no es válida.",
+          },
+          {
+            status: 400,
+          },
         );
       }
-      cambios.prioridad = body.prioridad;
+
+      cambios.prioridad =
+        body.prioridad;
     }
 
-    if (body.idCategoria !== undefined) {
+    if (
+      body.idCategoria !== undefined
+    ) {
       const idCategoria =
         body.idCategoria === null
           ? null
-          : parseIdPositivo(body.idCategoria);
+          : parseIdPositivo(
+              body.idCategoria,
+            );
 
-      if (body.idCategoria !== null && idCategoria === null) {
+      if (
+        body.idCategoria !== null &&
+        idCategoria === null
+      ) {
         return NextResponse.json(
-          { error: "La categoría seleccionada no es válida." },
-          { status: 400 },
+          {
+            error:
+              "La categoría seleccionada no es válida.",
+          },
+          {
+            status: 400,
+          },
         );
       }
 
       if (idCategoria !== null) {
         const [categoria] = await db
-          .select({ idCategoria: categoriasAyuda.idCategoria })
+          .select({
+            idCategoria:
+              categoriasAyuda.idCategoria,
+          })
           .from(categoriasAyuda)
-          .where(eq(categoriasAyuda.idCategoria, idCategoria))
+          .where(
+            eq(
+              categoriasAyuda.idCategoria,
+              idCategoria,
+            ),
+          )
           .limit(1);
 
         if (!categoria) {
           return NextResponse.json(
-            { error: "La categoría seleccionada no existe." },
-            { status: 400 },
+            {
+              error:
+                "La categoría seleccionada no existe.",
+            },
+            {
+              status: 400,
+            },
           );
         }
       }
-      cambios.idCategoria = idCategoria;
+
+      cambios.idCategoria =
+        idCategoria;
     }
 
-    if (body.esPrivada !== undefined) {
-      cambios.esPrivada = body.esPrivada === true;
+    if (
+      body.esPrivada !== undefined
+    ) {
+      cambios.esPrivada =
+        body.esPrivada === true;
     }
 
+    /*
+     * Segunda protección:
+     * la condición se verifica
+     * también al actualizar.
+     */
     const [actualizada] = await db
       .update(preguntasUsuarios)
       .set(cambios)
-      .where(eq(preguntasUsuarios.idPregunta, idPregunta))
+      .where(
+        and(
+          eq(
+            preguntasUsuarios.idPregunta,
+            idPregunta,
+          ),
+          ne(
+            preguntasUsuarios.titulo,
+            TITULO_SOLICITUD_ARCO,
+          ),
+        ),
+      )
       .returning();
 
     if (!actualizada) {
       return NextResponse.json(
-        { error: "Pregunta no encontrada." },
-        { status: 404 },
+        {
+          error:
+            "La solicitud no pudo actualizarse.",
+        },
+        {
+          status: 409,
+        },
       );
     }
 
-    return NextResponse.json(actualizada);
-  } catch (errorActualizacion: unknown) {
-    console.error("Error al actualizar solicitud:", errorActualizacion);
     return NextResponse.json(
-      { error: "No fue posible actualizar la solicitud." },
-      { status: 500 },
+      actualizada,
+    );
+  } catch (
+    errorActualizacion: unknown
+  ) {
+    console.error(
+      "Error al actualizar solicitud:",
+      errorActualizacion,
+    );
+
+    return NextResponse.json(
+      {
+        error:
+          "No fue posible actualizar la solicitud.",
+      },
+      {
+        status: 500,
+      },
     );
   }
 }
