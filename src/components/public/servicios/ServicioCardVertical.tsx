@@ -1,4 +1,7 @@
+"use client";
+
 import Image from "next/image";
+import { useState } from "react";
 import { HeartPulse, ShieldCheck } from "lucide-react";
 
 interface ServicioCardVerticalProps {
@@ -9,7 +12,7 @@ interface ServicioCardVerticalProps {
   linkVerMas?: string;
 }
 
-const DEFAULT_IMAGE = "/images/default-servicio.jpg";
+const DEFAULT_IMAGE = "/headerimg.png";
 
 export function ServicioCardVertical({
   id,
@@ -24,8 +27,10 @@ export function ServicioCardVertical({
     descripcion?.trim() ||
     "Atención especializada con profesionales comprometidos con tu salud y bienestar.";
 
-  const imagenMostrada =
-    imagenSrc?.trim() || DEFAULT_IMAGE;
+  const [imageFailed, setImageFailed] = useState(false);
+  const imagenMostrada = imageFailed || !imagenSrc?.trim() || imagenSrc.includes("default-service.jpg")
+    ? DEFAULT_IMAGE
+    : imagenSrc;
 
   return (
     <article
@@ -36,6 +41,7 @@ export function ServicioCardVertical({
       <div className="relative h-48 shrink-0 overflow-hidden bg-[#EAF2F8] sm:h-52">
         <Image
           src={imagenMostrada}
+          onError={() => setImageFailed(true)}
           alt={`Servicio de ${tituloMostrado}`}
           fill
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"

@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useState } from "react";
 import {
   BadgeCheck,
   Building2,
@@ -23,13 +24,18 @@ export function MedicoCard({
   hospital,
   direccion,
 }: MedicoCardProps) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const image = imageFailed || !imagenSrc || imagenSrc.includes("default-doctor.jpg")
+    ? "/no_imagen_uwvduy.png"
+    : imagenSrc;
+  const isGeneric = image === "/no_imagen_uwvduy.png";
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-[0_10px_30px_rgba(10,61,98,0.08)] transition-all duration-300 hover:-translate-y-1 hover:border-[#0A3D62]/20 hover:shadow-[0_18px_40px_rgba(10,61,98,0.14)]">
       {/* Fotografía */}
       <div className="relative h-64 shrink-0 overflow-hidden bg-[#DDE8EF] sm:h-72">
         {/* Fondo desenfocado para rellenar el espacio */}
         <Image
-          src={imagenSrc}
+          src={image}
           alt=""
           fill
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
@@ -46,8 +52,9 @@ export function MedicoCard({
         {/* Imagen principal completa */}
         <div className="absolute inset-2 overflow-hidden rounded-2xl sm:inset-3">
           <Image
-            src={imagenSrc}
-            alt={`Fotografía de ${nombre}`}
+            src={image}
+            alt={isGeneric ? "Imagen genérica de especialista" : `Fotografía de ${nombre}`}
+            onError={() => setImageFailed(true)}
             fill
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
             className="object-contain object-center transition-transform duration-500 group-hover:scale-[1.02]"

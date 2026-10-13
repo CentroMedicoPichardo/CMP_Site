@@ -65,16 +65,20 @@ export default function HomePublico() {
           })),
           medicoDestacado: (() => {
             const listaMeds = Array.isArray(meds) ? meds : [];
-            const pichardo = listaMeds.find((m: any) => m.nombre?.toUpperCase().includes("PICHARDO")) || listaMeds[0];
-            if (!pichardo) return null;
+            const pichardo = listaMeds.find((m: any) =>
+              [m.nombres, m.apellidoPaterno, m.apellidoMaterno]
+                .filter(Boolean)
+                .join(" ")
+                .toUpperCase()
+                .includes("PICHARDO")
+            );
             return {
-              ...pichardo,
-              id: pichardo.id || `medico-${Math.random()}`,
-              imagenSrc: pichardo.imagen || "/Pichardo.jpg",
-              nombre: pichardo.nombre || "Dr. Francisco Javier Moreno Pichardo",
-              especialidad: pichardo.especialidad || "Pediatría",
-              hospital: pichardo.hospital || "Centro Médico Pichardo",
-              direccion: pichardo.direccion || "Huejutla, Hidalgo"
+              id: pichardo?.idMedico ?? "dr-pichardo",
+              imagenSrc: "/Pichardo.jpg",
+              nombre: "Dr. Francisco Javier Moreno Pichardo",
+              especialidad: pichardo?.especialidad || "Pediatría",
+              hospital: pichardo?.hospitalClinica || "Centro Médico Pichardo",
+              direccion: pichardo?.direccion || "Información no disponible"
             };
           })(),
           todasLasNoticias: blogResponse.data || []

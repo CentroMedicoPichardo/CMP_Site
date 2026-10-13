@@ -42,10 +42,10 @@ export default function DirectorioMedicoPage() {
           .trim();
 
         // 👇 CORREGIR LA URL DE LA IMAGEN
-        let imagenSrc = "/default-doctor.jpg"; // Valor por defecto
+        let imagenSrc = "/no_imagen_uwvduy.png";
         
         // Si existe urlFoto y no es "no_imagen_uwvduy", usarla
-        if (m.urlFoto && m.urlFoto !== "no_imagen_uwvduy") {
+        if (m.urlFoto && m.urlFoto !== "no_imagen_uwvduy" && !m.urlFoto.includes("default-doctor.jpg")) {
           // Si la URL no comienza con http o /, agregar / para que sea relativa
           if (m.urlFoto.startsWith('http')) {
             imagenSrc = m.urlFoto; // URL absoluta

@@ -7,6 +7,8 @@ import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Footer } from "@/components/layout/Footer";
 import { SWRProvider } from "@/lib/swr-provider";
+import { PwaRegistration } from "@/components/PwaRegistration";
+import { PublicOfflineSync } from "@/components/PublicOfflineSync";
 
 import { ToastContainer } from "react-toastify";
 
@@ -17,8 +19,10 @@ export const dynamic = "force-dynamic";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Centro Médico",
-  description: "Sistema de gestión médica",
+  title: "Centro Médico Pichardo",
+  description: "Servicios, médicos y educación del Centro Médico Pichardo",
+  applicationName: "Centro Médico Pichardo",
+  appleWebApp: { capable: true, title: "CMP" },
 };
 
 type RootLayoutProps = Readonly<{
@@ -37,6 +41,8 @@ export default async function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="es">
       <body className={inter.className}>
+        <PwaRegistration />
+        <PublicOfflineSync />
         <SWRProvider>
           <Header initialUser={user} initialRol={rol} />
 

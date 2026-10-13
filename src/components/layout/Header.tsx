@@ -19,7 +19,6 @@ import {
 
 import {
   navigationItems,
-  topBarInfo,
   publicRoutes,
 } from "@/config/routes";
 
@@ -335,13 +334,13 @@ export function Header({
   const empresaSubnombre = "Pichardo";
 
   const telefonoEmpresa =
-    empresaInfo?.telefono || topBarInfo.phone;
+    empresaInfo?.telefono?.trim() || null;
 
   const direccionEmpresa =
-    empresaInfo?.direccion || topBarInfo.location;
+    empresaInfo?.direccion?.trim() || null;
 
   const horarioEmpresa =
-    empresaInfo?.horario || topBarInfo.schedule;
+    empresaInfo?.horario?.trim() || null;
 
   /*
    * HEADER PARA ADMINISTRADOR
@@ -447,7 +446,7 @@ export function Header({
         <Container>
           <div className="flex items-center justify-between">
             <div className="flex min-w-0 items-center gap-5">
-              <div className="flex items-center gap-2">
+              {telefonoEmpresa ? <div className="flex items-center gap-2">
                 <Phone
                   size={14}
                   className="shrink-0 text-[#FFC300]"
@@ -456,9 +455,9 @@ export function Header({
                 <span className="text-white/80">
                   {telefonoEmpresa}
                 </span>
-              </div>
+              </div> : <span className="text-white/70">Contacto no disponible</span>}
 
-              <div className="hidden items-center gap-2 lg:flex">
+              {horarioEmpresa && <div className="hidden items-center gap-2 lg:flex">
                 <Clock
                   size={14}
                   className="shrink-0 text-[#FFC300]"
@@ -467,9 +466,9 @@ export function Header({
                 <span className="line-clamp-1 text-white/80">
                   {horarioEmpresa}
                 </span>
-              </div>
+              </div>}
 
-              <div className="hidden min-w-0 items-center gap-2 xl:flex">
+              {direccionEmpresa && <div className="hidden min-w-0 items-center gap-2 xl:flex">
                 <MapPin
                   size={14}
                   className="shrink-0 text-[#FFC300]"
@@ -478,7 +477,7 @@ export function Header({
                 <span className="max-w-[280px] truncate text-white/80">
                   {direccionEmpresa}
                 </span>
-              </div>
+              </div>}
             </div>
 
             <a

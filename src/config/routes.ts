@@ -1,5 +1,4 @@
 // src/config/routes.ts
-
 export const publicRoutes = {
   home: "/",
   servicios: "/servicios",
@@ -72,10 +71,3 @@ export const navigationItems = [
   { label: "Cursos", href: publicRoutes.cursos },
   { label: "Quiénes Somos", href: publicRoutes.quienesSomos },
 ];
-
-export const topBarInfo = {
-  phone: "(771) 123-4567",
-  location: "Huejutla de Reyes, Hgo.",
-  schedule: "Lun - Sab: 8:00 - 20:00",
-  email: "contacto@cmpichardo.com",
-};

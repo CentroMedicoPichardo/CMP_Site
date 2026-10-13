@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es-MX">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0A3D62" />
+    <meta name="description" content="Información pública guardada del Centro Médico Pichardo" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="stylesheet" href="/offline.css" />
+    <title>Información sin conexión | Centro Médico Pichardo</title>
+    <script src="/offline.js" defer></script>
+  </head>
+  <body>
+    <div class="notice" role="status">Estás viendo datos guardados. Algunos datos podrían haber cambiado.</div>
+    <header class="site-header">
+      <div class="shell header-inner">
+        <a class="brand" href="/" aria-label="Centro Médico Pichardo: inicio">
+          <img src="/logo.png" width="54" height="54" alt="" />
+          <span>Centro Médico <strong>Pichardo</strong></span>
+        </a>
+        <nav class="main-nav" aria-label="Secciones disponibles sin conexión">
+          <a href="/" data-route="/">Inicio</a>
+          <a href="/quienes-somos" data-route="/quienes-somos">Quiénes somos</a>
+          <a href="/servicios" data-route="/servicios">Servicios</a>
+          <a href="/directorio-medico" data-route="/directorio-medico">Directorio médico</a>
+        </nav>
+      </div>
+    </header>
+    <main id="offline-content" class="shell" tabindex="-1">
+      <section class="empty-state">
+        <h1>Información sin conexión</h1>
+        <p>Preparando la información pública que quedó guardada en este dispositivo.</p>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <div class="shell footer-grid">
+        <div class="footer-brand">
+          <img src="/logo.png" width="70" height="70" alt="" />
+          <div><strong>Centro Médico Pichardo</strong><p>Atención cercana para cada familia.</p></div>
+        </div>
+        <div>
+          <h2>Secciones</h2>
+          <a href="/">Inicio</a>
+          <a href="/quienes-somos">Quiénes somos</a>
+          <a href="/servicios">Servicios</a>
+          <a href="/directorio-medico">Directorio médico</a>
+        </div>
+        <div id="footer-contact"><h2>Contacto</h2><p>Información aún no disponible sin conexión.</p></div>
+      </div>
+    </footer>
+  </body>
+</html>

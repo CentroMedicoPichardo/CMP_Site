@@ -44,7 +44,7 @@ export function MedicoDestacadoSection({
 
   const direccion =
     medico?.direccion?.trim() ||
-    "Huejutla de Reyes, Hidalgo";
+    "Información no disponible";
 
   const imagenSrc =
     medico?.imagenSrc?.trim() || null;

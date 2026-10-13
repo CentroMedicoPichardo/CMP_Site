@@ -1,5 +1,8 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import {
   ArrowRight,
   Clock3,
@@ -29,6 +32,20 @@ const indicadores = [
 ];
 
 export function HeroSection() {
+  const [contact, setContact] = useState<{ horario: string; direccion: string } | null>(null);
+  useEffect(() => {
+    let active = true;
+    fetch("/api/empresa-info", { credentials: "omit", cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((value) => {
+        if (active && value) setContact({
+          horario: typeof value.horario === "string" ? value.horario : "",
+          direccion: typeof value.direccion === "string" ? value.direccion : "",
+        });
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
   return (
     <section className="relative isolate overflow-hidden bg-[#061C2E] text-white">
       {/* Imagen principal */}
@@ -179,7 +196,7 @@ export function HeroSection() {
                   </p>
 
                   <p className="truncate text-xs font-semibold text-white/90">
-                    Lun–Vie 8:00–20:00 · Sáb 8:00–14:00
+                    {contact?.horario || "Información no disponible"}
                   </p>
                 </div>
               </div>
@@ -204,7 +221,7 @@ export function HeroSection() {
                   </p>
 
                   <p className="truncate text-xs font-semibold text-white/90">
-                    Huejutla de Reyes, Hidalgo
+                    {contact?.direccion || "Información no disponible"}
                   </p>
                 </div>
               </div>

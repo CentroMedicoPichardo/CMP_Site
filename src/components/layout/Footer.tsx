@@ -75,14 +75,13 @@ export function Footer() {
     empresaInfo?.nombre || "Centro Médico Pichardo";
 
   const direccionEmpresa =
-    empresaInfo?.direccion ||
-    "Av. Benito Juárez S/N, Huejutla de Reyes, Hidalgo. CP 43000";
+    empresaInfo?.direccion?.trim() || null;
 
   const telefonoEmpresa =
-    empresaInfo?.telefono || "(771) 123-4567";
+    empresaInfo?.telefono?.trim() || null;
 
   const correoEmpresa =
-    empresaInfo?.correo || "contacto@cmpichardo.com";
+    empresaInfo?.correo?.trim() || null;
 
   const logoUrl =
     empresaInfo?.logoUrl || "/logo.png";
@@ -90,7 +89,7 @@ export function Footer() {
   const facebookUrl = empresaInfo?.facebook;
   const instagramUrl = empresaInfo?.instagram;
 
-  const telefonoLimpio = telefonoEmpresa.replace(
+  const telefonoLimpio = (telefonoEmpresa || "").replace(
     /[^\d+]/g,
     "",
   );
@@ -334,7 +333,7 @@ export function Footer() {
               </h4>
 
               <ul className="space-y-5">
-                <li className="flex items-start gap-3 text-[0.95rem] leading-relaxed text-[#D2D8DF]">
+                {direccionEmpresa && <li className="flex items-start gap-3 text-[0.95rem] leading-relaxed text-[#D2D8DF]">
                   <MapPin
                     size={21}
                     className="mt-0.5 shrink-0 text-[#FFC300]"
@@ -342,9 +341,9 @@ export function Footer() {
                   />
 
                   <span>{direccionEmpresa}</span>
-                </li>
+                </li>}
 
-                <li className="flex items-center gap-3 text-[0.95rem] text-[#D2D8DF]">
+                {telefonoEmpresa && <li className="flex items-center gap-3 text-[0.95rem] text-[#D2D8DF]">
                   <Phone
                     size={21}
                     className="shrink-0 text-[#FFC300]"
@@ -357,9 +356,9 @@ export function Footer() {
                   >
                     {telefonoEmpresa}
                   </a>
-                </li>
+                </li>}
 
-                <li className="flex min-w-0 items-center gap-3 text-[#D2D8DF]">
+                {correoEmpresa && <li className="flex min-w-0 items-center gap-3 text-[#D2D8DF]">
                   <Mail
                     size={21}
                     className="shrink-0 text-[#FFC300]"
@@ -377,7 +376,10 @@ export function Footer() {
                   >
                     {correoEmpresa}
                   </a>
-                </li>
+                </li>}
+                {!direccionEmpresa && !telefonoEmpresa && !correoEmpresa && (
+                  <li className="text-[#D2D8DF]">Información de contacto no disponible.</li>
+                )}
               </ul>
             </div>
           </div>

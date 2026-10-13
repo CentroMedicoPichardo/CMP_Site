@@ -195,7 +195,7 @@ export function MedicoLayout({
               }
               imagenSrc={
                 medico.imagenSrc?.trim() ||
-                "/images/default-medico.jpg"
+                "/no_imagen_uwvduy.png"
               }
             />
           ))}
