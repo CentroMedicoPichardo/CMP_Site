@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, type ChangeEvent } from "react";
@@ -61,7 +62,9 @@ interface Dependencias {
 }
 
 interface RespuestaDetalle {
-  solicitud: SolicitudArco & { descripcion: string };
+  solicitud: SolicitudArco & {
+    descripcion: string;
+  };
   dependencias: Dependencias;
   revision: {
     requiereRevisionAdministrativa: boolean;
@@ -80,6 +83,7 @@ interface ResultadoOperacion {
   estadoSolicitud: string;
   registrosEliminados: number;
   datosPersonalesEliminados: boolean;
+  modalidadConfirmada?: boolean;
   ejecucionHabilitada?: boolean;
   accionesPrevistas?: string[];
   sesionesInvalidadas?: boolean;
@@ -101,10 +105,17 @@ const RESUMEN_INICIAL: ResumenArco = {
 
 const CONFIRMACION_REQUERIDA = "DESACTIVAR CUENTA";
 
+const MARCADOR_CONSENTIMIENTO =
+  "[BAJA_LOGICA_CONFIRMADA_WEB]";
+
 function formatearFecha(valor: string | null): string {
   if (!valor) return "Sin fecha";
+
   const fecha = new Date(valor);
-  if (Number.isNaN(fecha.getTime())) return "Fecha inválida";
+
+  if (Number.isNaN(fecha.getTime())) {
+    return "Fecha inválida";
+  }
 
   return new Intl.DateTimeFormat("es-MX", {
     dateStyle: "medium",
@@ -112,12 +123,26 @@ function formatearFecha(valor: string | null): string {
   }).format(fecha);
 }
 
-async function obtenerMensajeError(response: Response): Promise<string> {
+function esSolicitudBajaLogica(
+  descripcion: string,
+): boolean {
+  return descripcion.includes(MARCADOR_CONSENTIMIENTO);
+}
+
+async function obtenerMensajeError(
+  response: Response,
+): Promise<string> {
   const data: unknown = await response.json().catch(() => null);
-  if (data && typeof data === "object" && "message" in data) {
-    const mensaje = data.message;
-    if (typeof mensaje === "string") return mensaje;
+
+  if (
+    data &&
+    typeof data === "object" &&
+    "message" in data &&
+    typeof data.message === "string"
+  ) {
+    return data.message;
   }
+
   return `Error HTTP ${response.status}`;
 }
 
@@ -131,7 +156,9 @@ async function solicitarOperacion(
       method: "POST",
       credentials: "same-origin",
       cache: "no-store",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(body),
     },
   );
@@ -141,21 +168,28 @@ async function solicitarOperacion(
   }
 
   const payload = (await response.json()) as RespuestaOperacion;
+
   if (
     !payload ||
     payload.status !== 200 ||
     !payload.datos ||
     payload.datos.solicitudId !== solicitudId
   ) {
-    throw new Error("El servidor devolvió una respuesta inesperada.");
+    throw new Error(
+      "El servidor devolvió una respuesta inesperada.",
+    );
   }
 
   return payload.datos;
 }
 
 export default function CancelacionesAdmin() {
-  const [solicitudes, setSolicitudes] = useState<SolicitudArco[]>([]);
-  const [resumen, setResumen] = useState<ResumenArco>(RESUMEN_INICIAL);
+  const [solicitudes, setSolicitudes] =
+    useState<SolicitudArco[]>([]);
+
+  const [resumen, setResumen] =
+    useState<ResumenArco>(RESUMEN_INICIAL);
+
   const [pagina, setPagina] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(1);
   const [estado, setEstado] = useState("");
@@ -163,14 +197,22 @@ export default function CancelacionesAdmin() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
 
-  const [detalle, setDetalle] = useState<RespuestaDetalle | null>(null);
+  const [detalle, setDetalle] =
+    useState<RespuestaDetalle | null>(null);
+
   const [cargandoDetalle, setCargandoDetalle] = useState(false);
   const [errorDetalle, setErrorDetalle] = useState("");
-  const [simulacion, setSimulacion] = useState<ResultadoOperacion | null>(null);
-  const [resultadoReal, setResultadoReal] = useState<ResultadoOperacion | null>(null);
+
+  const [simulacion, setSimulacion] =
+    useState<ResultadoOperacion | null>(null);
+
+  const [resultadoReal, setResultadoReal] =
+    useState<ResultadoOperacion | null>(null);
+
   const [simulando, setSimulando] = useState(false);
   const [ejecutando, setEjecutando] = useState(false);
   const [errorOperacion, setErrorOperacion] = useState("");
+
   const [idConfirmado, setIdConfirmado] = useState("");
   const [confirmacion, setConfirmacion] = useState("");
 
@@ -180,40 +222,67 @@ export default function CancelacionesAdmin() {
     async function cargarSolicitudes() {
       setCargando(true);
       setError("");
+
       try {
-        const params = new URLSearchParams({ pagina: String(pagina) });
-        if (estado) params.set("estado", estado);
+        const params = new URLSearchParams({
+          pagina: String(pagina),
+        });
+
+        if (estado) {
+          params.set("estado", estado);
+        }
 
         const response = await fetch(
           `/api/admin/arco/cancelaciones?${params.toString()}`,
-          { credentials: "same-origin", cache: "no-store" },
+          {
+            credentials: "same-origin",
+            cache: "no-store",
+          },
         );
-        if (!response.ok) throw new Error(await obtenerMensajeError(response));
 
-        const data = (await response.json()) as RespuestaListado;
-        if (!Array.isArray(data.solicitudes)) {
-          throw new Error("La respuesta del servidor no es válida.");
+        if (!response.ok) {
+          throw new Error(await obtenerMensajeError(response));
         }
+
+        const data =
+          (await response.json()) as RespuestaListado;
+
+        if (!Array.isArray(data.solicitudes)) {
+          throw new Error(
+            "La respuesta del servidor no es válida.",
+          );
+        }
+
         if (!vigente) return;
 
         setSolicitudes(data.solicitudes);
         setResumen(data.resumen ?? RESUMEN_INICIAL);
-        setTotalPaginas(Math.max(1, data.paginacion?.totalPaginas ?? 1));
+
+        setTotalPaginas(
+          Math.max(1, data.paginacion?.totalPaginas ?? 1),
+        );
       } catch (errorConsulta) {
         if (!vigente) return;
+
         setSolicitudes([]);
+
         setError(
           errorConsulta instanceof Error
             ? errorConsulta.message
             : "No fue posible cargar las solicitudes.",
         );
       } finally {
-        if (vigente) setCargando(false);
+        if (vigente) {
+          setCargando(false);
+        }
       }
     }
 
     void cargarSolicitudes();
-    return () => { vigente = false; };
+
+    return () => {
+      vigente = false;
+    };
   }, [pagina, estado, recarga]);
 
   function limpiarConfirmacion() {
@@ -233,13 +302,28 @@ export default function CancelacionesAdmin() {
     try {
       const response = await fetch(
         `/api/admin/arco/cancelaciones/${solicitudId}`,
-        { credentials: "same-origin", cache: "no-store" },
+        {
+          credentials: "same-origin",
+          cache: "no-store",
+        },
       );
-      if (!response.ok) throw new Error(await obtenerMensajeError(response));
-      const data = (await response.json()) as RespuestaDetalle;
-      if (!data.solicitud || data.solicitud.solicitudId !== solicitudId) {
-        throw new Error("El detalle de la solicitud no es válido.");
+
+      if (!response.ok) {
+        throw new Error(await obtenerMensajeError(response));
       }
+
+      const data =
+        (await response.json()) as RespuestaDetalle;
+
+      if (
+        !data.solicitud ||
+        data.solicitud.solicitudId !== solicitudId
+      ) {
+        throw new Error(
+          "El detalle de la solicitud no es válido.",
+        );
+      }
+
       setDetalle(data);
     } catch (errorConsulta) {
       setErrorDetalle(
@@ -253,18 +337,31 @@ export default function CancelacionesAdmin() {
   }
 
   async function simularBaja() {
-    if (!detalle) return;
+    if (!detalle || simulando || ejecutando) return;
+
     const solicitudId = detalle.solicitud.solicitudId;
+
     setSimulando(true);
     limpiarConfirmacion();
 
     try {
-      const resultado = await solicitarOperacion(solicitudId, {
-        modo: "simular",
-      });
-      if (resultado.modo !== "simular" || resultado.ejecutada !== false) {
-        throw new Error("La simulación devolvió un resultado inesperado.");
+      const resultado = await solicitarOperacion(
+        solicitudId,
+        {
+          modo: "simular",
+        },
+      );
+
+      if (
+        resultado.modo !== "simular" ||
+        resultado.ejecutada !== false ||
+        typeof resultado.modalidadConfirmada !== "boolean"
+      ) {
+        throw new Error(
+          "La simulación devolvió un resultado inesperado.",
+        );
       }
+
       setSimulacion(resultado);
     } catch (errorConsulta) {
       setErrorOperacion(
@@ -278,20 +375,32 @@ export default function CancelacionesAdmin() {
   }
 
   async function ejecutarBaja() {
-    if (!detalle || !simulacion || ejecutando) return;
+    if (!detalle || !simulacion || ejecutando || simulando) {
+      return;
+    }
+
     const solicitudId = detalle.solicitud.solicitudId;
     const usuarioId = detalle.solicitud.usuarioId;
 
+    // El backend vuelve a comprobar todos estos requisitos.
+    // La interfaz nunca constituye autorización suficiente.
     if (
+      simulacion.modalidadConfirmada !== true ||
       simulacion.ejecucionHabilitada !== true ||
       simulacion.solicitudId !== solicitudId ||
       simulacion.usuarioId !== usuarioId ||
       simulacion.cuentaActiva !== true ||
       simulacion.estadoSolicitud !== "pendiente" ||
+      detalle.solicitud.estado !== "pendiente" ||
+      detalle.solicitud.esPrivada !== true ||
+      detalle.solicitud.usuario?.activo !== true ||
       idConfirmado.trim() !== String(usuarioId) ||
       confirmacion.trim() !== CONFIRMACION_REQUERIDA
     ) {
-      setErrorOperacion("Verifica el ID del cliente y la frase de confirmación.");
+      setErrorOperacion(
+        "No se cumplen las condiciones para desactivar la cuenta. " +
+          "Verifica el consentimiento, el ID y la confirmación.",
+      );
       return;
     }
 
@@ -299,18 +408,24 @@ export default function CancelacionesAdmin() {
     setErrorOperacion("");
 
     try {
-      const resultado = await solicitarOperacion(solicitudId, {
-        modo: "ejecutar",
-        usuarioIdConfirmado: usuarioId,
-        confirmacion: CONFIRMACION_REQUERIDA,
-      });
+      const resultado = await solicitarOperacion(
+        solicitudId,
+        {
+          modo: "ejecutar",
+          usuarioIdConfirmado: usuarioId,
+          confirmacion: CONFIRMACION_REQUERIDA,
+        },
+      );
 
       if (
         resultado.modo !== "ejecutar" ||
         resultado.ejecutada !== true ||
-        resultado.cuentaActiva !== false
+        resultado.cuentaActiva !== false ||
+        resultado.modalidadConfirmada !== true
       ) {
-        throw new Error("No fue posible confirmar la desactivación del acceso.");
+        throw new Error(
+          "No fue posible confirmar la desactivación del acceso.",
+        );
       }
 
       setResultadoReal(resultado);
@@ -319,21 +434,29 @@ export default function CancelacionesAdmin() {
       setConfirmacion("");
       setRecarga((actual) => actual + 1);
 
-      // La operación ya se confirmó: una falla al refrescar el detalle
-      // no debe presentarse como fallo de desactivación.
+      // Una falla al actualizar el detalle no revierte
+      // una operación ya confirmada por el servidor.
       try {
         const detalleResponse = await fetch(
           `/api/admin/arco/cancelaciones/${solicitudId}`,
-          { credentials: "same-origin", cache: "no-store" },
+          {
+            credentials: "same-origin",
+            cache: "no-store",
+          },
         );
+
         if (detalleResponse.ok) {
-          const actualizado = (await detalleResponse.json()) as RespuestaDetalle;
-          if (actualizado.solicitud?.solicitudId === solicitudId) {
+          const actualizado =
+            (await detalleResponse.json()) as RespuestaDetalle;
+
+          if (
+            actualizado.solicitud?.solicitudId === solicitudId
+          ) {
             setDetalle(actualizado);
           }
         }
       } catch {
-        // La lista principal puede actualizarse con el botón Actualizar.
+        // La bandeja puede actualizarse manualmente.
       }
     } catch (errorConsulta) {
       setErrorOperacion(
@@ -346,14 +469,38 @@ export default function CancelacionesAdmin() {
     }
   }
 
-  const pendiente = detalle?.solicitud.estado === "pendiente";
-  const cuentaActiva = detalle?.solicitud.usuario?.activo === true;
+  const pendiente =
+    detalle?.solicitud.estado === "pendiente";
+
+  const cuentaActiva =
+    detalle?.solicitud.usuario?.activo === true;
+
+  const solicitudPrivada =
+    detalle?.solicitud.esPrivada === true;
+
+  // Identificación informativa desde el detalle.
+  // La simulación del backend es la confirmación autoritativa.
+  const modalidadEnDetalle = Boolean(
+    detalle &&
+      esSolicitudBajaLogica(detalle.solicitud.descripcion),
+  );
+
+  const modalidadVerificada =
+    simulacion?.modalidadConfirmada === true;
+
   const confirmacionValida = Boolean(
-    simulacion?.ejecucionHabilitada === true &&
-    pendiente &&
-    cuentaActiva &&
-    idConfirmado.trim() === String(detalle?.solicitud.usuarioId) &&
-    confirmacion.trim() === CONFIRMACION_REQUERIDA,
+    simulacion &&
+      modalidadVerificada &&
+      simulacion.ejecucionHabilitada === true &&
+      simulacion.solicitudId === detalle?.solicitud.solicitudId &&
+      simulacion.usuarioId === detalle?.solicitud.usuarioId &&
+      simulacion.estadoSolicitud === "pendiente" &&
+      simulacion.cuentaActiva === true &&
+      pendiente &&
+      cuentaActiva &&
+      solicitudPrivada &&
+      idConfirmado.trim() === String(detalle?.solicitud.usuarioId) &&
+      confirmacion.trim() === CONFIRMACION_REQUERIDA,
   );
 
   return (
@@ -363,32 +510,55 @@ export default function CancelacionesAdmin() {
           <div className="flex items-center gap-3">
             <ShieldAlert size={28} aria-hidden="true" />
             <div>
-              <p className="text-xs font-semibold text-slate-500">Derechos ARCO</p>
-              <h1 className="text-2xl font-bold">Cancelación de cuentas</h1>
+              <p className="text-xs font-semibold text-slate-500">
+                Derechos ARCO
+              </p>
+              <h1 className="text-2xl font-bold">
+                Cancelación de cuentas
+              </h1>
             </div>
           </div>
+
           <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-600">
-            Revisa las solicitudes y simula la baja lógica de acceso. La baja lógica
-            desactiva la cuenta y sus sesiones, pero no elimina los datos personales,
-            compras, pagos ni inscripciones almacenados.
+            Esta bandeja reúne solicitudes de eliminación de datos
+            personales y solicitudes de baja lógica de acceso.
+            Son procedimientos diferentes y no deben confundirse.
           </p>
+
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
+            La baja lógica desactiva el acceso y revoca los tokens
+            utilizados por el sistema, pero conserva los datos
+            personales, compras, pagos, inscripciones y participantes.
+          </p>
+
           <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-            Esta modalidad no constituye una eliminación de datos personales. La
-            ejecución real permanece bloqueada en el servidor salvo autorización
-            expresa mediante configuración segura.
+            La desactivación real permanece bloqueada por defecto
+            en el servidor. Una solicitud de eliminación de datos
+            no puede cerrarse como baja lógica sin consentimiento
+            expreso del titular.
           </p>
         </header>
 
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Resumen de solicitudes">
+        <section
+          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+          aria-label="Resumen de solicitudes"
+        >
           {[
             { titulo: "Total de solicitudes", valor: resumen.total },
             { titulo: "Pendientes", valor: resumen.pendientes },
             { titulo: "Respondidas", valor: resumen.respondidas },
             { titulo: "Cerradas", valor: resumen.cerradas },
           ].map((item) => (
-            <div key={item.titulo} className="rounded-xl border border-slate-200 bg-white p-4">
-              <p className="text-sm text-slate-600">{item.titulo}</p>
-              <p className="mt-2 text-3xl font-bold">{item.valor}</p>
+            <div
+              key={item.titulo}
+              className="rounded-xl border border-slate-200 bg-white p-4"
+            >
+              <p className="text-sm text-slate-600">
+                {item.titulo}
+              </p>
+              <p className="mt-2 text-3xl font-bold">
+                {item.valor}
+              </p>
             </div>
           ))}
         </section>
@@ -396,22 +566,29 @@ export default function CancelacionesAdmin() {
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="flex items-center gap-2 text-lg font-bold">
-              <ClipboardList size={20} aria-hidden="true" /> Solicitudes registradas
+              <ClipboardList size={20} aria-hidden="true" />
+              Solicitudes registradas
             </h2>
+
             <button
               type="button"
               onClick={() => setRecarga((actual) => actual + 1)}
               disabled={cargando || ejecutando || simulando}
               className="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-50"
             >
-              <RefreshCw size={16} aria-hidden="true" /> Actualizar
+              <RefreshCw size={16} aria-hidden="true" />
+              Actualizar
             </button>
           </div>
 
           <div className="mt-4">
-            <label htmlFor="filtro-estado-arco" className="mb-2 block text-sm font-semibold">
+            <label
+              htmlFor="filtro-estado-arco"
+              className="mb-2 block text-sm font-semibold"
+            >
               Filtrar por estado
             </label>
+
             <select
               id="filtro-estado-arco"
               value={estado}
@@ -426,16 +603,26 @@ export default function CancelacionesAdmin() {
               <option value="pendiente">Pendientes</option>
               <option value="respondida">Respondidas</option>
               <option value="cerrada">Cerradas</option>
-              <option value="convertida_faq">Convertidas en FAQ (revisión)</option>
+              <option value="convertida_faq">
+                Convertidas en FAQ (revisión)
+              </option>
             </select>
           </div>
 
           {cargando ? (
             <p className="mt-5 flex items-center gap-2 py-8 text-sm text-slate-600">
-              <Loader2 size={18} className="animate-spin" aria-hidden="true" /> Cargando solicitudes...
+              <Loader2
+                size={18}
+                className="animate-spin"
+                aria-hidden="true"
+              />
+              Cargando solicitudes...
             </p>
           ) : error ? (
-            <p role="alert" className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <p
+              role="alert"
+              className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+            >
               {error}
             </p>
           ) : solicitudes.length === 0 ? (
@@ -445,36 +632,55 @@ export default function CancelacionesAdmin() {
           ) : (
             <div className="mt-5 space-y-3">
               {solicitudes.map((item) => (
-                <article key={item.solicitudId} className="rounded-xl border border-slate-200 p-4">
+                <article
+                  key={item.solicitudId}
+                  className="rounded-xl border border-slate-200 p-4"
+                >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-bold">Solicitud #{item.solicitudId}</p>
+                      <p className="text-sm font-bold">
+                        Solicitud #{item.solicitudId}
+                      </p>
+
                       <p className="mt-1 text-sm">
                         {item.usuario
                           ? `${item.usuario.nombre} ${item.usuario.apellidoPaterno}`
                           : "Usuario no disponible"}
                       </p>
+
                       <p className="break-all text-xs text-slate-500">
                         {item.usuario?.correo ?? "Sin correo disponible"}
                       </p>
+
                       <p className="mt-1 text-xs text-slate-500">
-                        Usuario #{item.usuarioId} · {formatearFecha(item.fechaSolicitud)}
+                        Usuario #{item.usuarioId} ·{" "}
+                        {formatearFecha(item.fechaSolicitud)}
                       </p>
+
                       {item.usuario?.activo === false && (
-                        <p className="mt-1 text-xs font-semibold text-slate-700">Acceso inactivo</p>
+                        <p className="mt-1 text-xs font-semibold text-slate-700">
+                          Acceso inactivo
+                        </p>
                       )}
                     </div>
+
                     <div className="flex flex-col items-end gap-2">
                       <span className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold">
                         {item.estado ?? "Sin estado"}
                       </span>
+
                       <button
                         type="button"
-                        disabled={cargandoDetalle || ejecutando || simulando}
-                        onClick={() => void consultarDetalle(item.solicitudId)}
+                        disabled={
+                          cargandoDetalle || ejecutando || simulando
+                        }
+                        onClick={() =>
+                          void consultarDetalle(item.solicitudId)
+                        }
                         className="flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
                       >
-                        <FileSearch size={15} aria-hidden="true" /> Ver revisión
+                        <FileSearch size={15} aria-hidden="true" />
+                        Ver revisión
                       </button>
                     </div>
                   </div>
@@ -486,38 +692,68 @@ export default function CancelacionesAdmin() {
           <div className="mt-5 flex items-center justify-between border-t border-slate-200 pt-4">
             <button
               type="button"
-              disabled={pagina <= 1 || cargando || ejecutando || simulando}
-              onClick={() => setPagina((actual) => Math.max(1, actual - 1))}
+              disabled={
+                pagina <= 1 || cargando || ejecutando || simulando
+              }
+              onClick={() =>
+                setPagina((actual) => Math.max(1, actual - 1))
+              }
               className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-40"
             >
-              <ChevronLeft size={16} aria-hidden="true" /> Anterior
+              <ChevronLeft size={16} aria-hidden="true" />
+              Anterior
             </button>
-            <p className="text-xs text-slate-600">Página {pagina} de {totalPaginas}</p>
+
+            <p className="text-xs text-slate-600">
+              Página {pagina} de {totalPaginas}
+            </p>
+
             <button
               type="button"
-              disabled={pagina >= totalPaginas || cargando || ejecutando || simulando}
-              onClick={() => setPagina((actual) => Math.min(totalPaginas, actual + 1))}
+              disabled={
+                pagina >= totalPaginas ||
+                cargando ||
+                ejecutando ||
+                simulando
+              }
+              onClick={() =>
+                setPagina((actual) =>
+                  Math.min(totalPaginas, actual + 1),
+                )
+              }
               className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-40"
             >
-              Siguiente <ChevronRight size={16} aria-hidden="true" />
+              Siguiente
+              <ChevronRight size={16} aria-hidden="true" />
             </button>
           </div>
         </section>
 
         {cargandoDetalle && (
           <p className="flex items-center gap-2 text-sm text-slate-600">
-            <Loader2 size={18} className="animate-spin" aria-hidden="true" /> Consultando dependencias...
+            <Loader2
+              size={18}
+              className="animate-spin"
+              aria-hidden="true"
+            />
+            Consultando dependencias...
           </p>
         )}
 
         {errorDetalle && (
-          <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <p
+            role="alert"
+            className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          >
             {errorDetalle}
           </p>
         )}
 
         {detalle && (
-          <section aria-labelledby="titulo-detalle-arco" className="rounded-2xl border border-slate-300 bg-white p-5">
+          <section
+            aria-labelledby="titulo-detalle-arco"
+            className="rounded-2xl border border-slate-300 bg-white p-5"
+          >
             <button
               type="button"
               disabled={simulando || ejecutando}
@@ -528,150 +764,352 @@ export default function CancelacionesAdmin() {
               }}
               className="mb-4 flex items-center gap-2 text-sm font-semibold disabled:opacity-50"
             >
-              <ArrowLeft size={16} aria-hidden="true" /> Cerrar detalle
+              <ArrowLeft size={16} aria-hidden="true" />
+              Cerrar detalle
             </button>
 
-            <h2 id="titulo-detalle-arco" className="text-xl font-bold">
+            <h2
+              id="titulo-detalle-arco"
+              className="text-xl font-bold"
+            >
               Revisión de solicitud #{detalle.solicitud.solicitudId}
             </h2>
+
             <p className="mt-1 text-sm text-slate-600">
-              Usuario #{detalle.solicitud.usuarioId} · Estado: {detalle.solicitud.estado ?? "Sin estado"} ·
-              Acceso: {detalle.solicitud.usuario?.activo === false ? "inactivo" : "activo o sin confirmar"}
+              Usuario #{detalle.solicitud.usuarioId} · Estado:{" "}
+              {detalle.solicitud.estado ?? "Sin estado"} · Acceso:{" "}
+              {detalle.solicitud.usuario?.activo === false
+                ? "inactivo"
+                : "activo o sin confirmar"}
             </p>
-            <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-600">
+
+            <div className="mt-4 rounded-xl border border-slate-300 p-4 text-sm">
+              <h3 className="font-bold">
+                Modalidad de la solicitud
+              </h3>
+
+              {modalidadEnDetalle ? (
+                <p className="mt-2 text-slate-700">
+                  El registro contiene la confirmación web de
+                  baja lógica. La simulación verificará nuevamente
+                  este consentimiento antes de permitir continuar.
+                </p>
+              ) : (
+                <p className="mt-2 text-slate-700">
+                  No consta consentimiento web para baja lógica.
+                  Esta solicitud debe revisarse como petición de
+                  eliminación de cuenta y datos personales, o
+                  gestionarse por su procedimiento correspondiente.
+                  No autoriza desactivar el acceso.
+                </p>
+              )}
+
+              {detalle.solicitud.esPrivada !== true && (
+                <p className="mt-2 font-semibold text-red-700">
+                  Atención: la solicitud no figura como privada.
+                  No puede procesarse como baja lógica.
+                </p>
+              )}
+            </div>
+
+            <h3 className="mt-5 font-bold">
+              Descripción de la solicitud
+            </h3>
+
+            <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600">
               {detalle.solicitud.descripcion}
             </p>
 
-            <h3 className="mt-6 text-base font-bold">Registros relacionados</h3>
+            <h3 className="mt-6 text-base font-bold">
+              Registros relacionados
+            </h3>
+
             <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {[
-                { label: "Compras", value: detalle.dependencias.compras },
-                { label: "Pagos", value: detalle.dependencias.pagos },
-                { label: "Inscripciones", value: detalle.dependencias.inscripciones },
-                { label: "Participantes", value: detalle.dependencias.participantes },
-                { label: "Registros de Soporte", value: detalle.dependencias.solicitudesSoporte },
+                {
+                  label: "Compras",
+                  value: detalle.dependencias.compras,
+                },
+                {
+                  label: "Pagos",
+                  value: detalle.dependencias.pagos,
+                },
+                {
+                  label: "Inscripciones",
+                  value: detalle.dependencias.inscripciones,
+                },
+                {
+                  label: "Participantes",
+                  value: detalle.dependencias.participantes,
+                },
+                {
+                  label: "Registros de Soporte",
+                  value: detalle.dependencias.solicitudesSoporte,
+                },
               ].map((item) => (
-                <div key={item.label} className="rounded-xl border border-slate-200 p-4">
-                  <p className="text-sm text-slate-600">{item.label}</p>
-                  <p className="mt-2 text-2xl font-bold">{item.value}</p>
+                <div
+                  key={item.label}
+                  className="rounded-xl border border-slate-200 p-4"
+                >
+                  <p className="text-sm text-slate-600">
+                    {item.label}
+                  </p>
+                  <p className="mt-2 text-2xl font-bold">
+                    {item.value}
+                  </p>
                 </div>
               ))}
             </div>
 
             <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-              {detalle.revision.mensaje} Ningún registro académico o financiero será eliminado por esta operación.
+              {detalle.revision.mensaje} Ningún registro académico
+              o financiero será eliminado por la baja lógica.
             </p>
 
             <div className="mt-5 space-y-4 rounded-xl border border-slate-200 p-4">
               <h3 className="flex items-center gap-2 text-base font-bold">
-                <LockKeyhole size={19} aria-hidden="true" /> Baja lógica del acceso
+                <LockKeyhole size={19} aria-hidden="true" />
+                Baja lógica del acceso
               </h3>
+
               <p className="text-sm text-slate-600">
-                Primero simula la operación. La desactivación real requiere una habilitación
-                expresa en el servidor y confirmación adicional del administrador.
+                Primero realiza una simulación. El servidor comprobará
+                la solicitud, el estado de la cuenta y el
+                consentimiento de baja lógica. La ejecución real
+                necesita autorización expresa adicional.
               </p>
 
               <button
                 type="button"
-                disabled={simulando || ejecutando || !pendiente || !cuentaActiva}
+                disabled={
+                  simulando ||
+                  ejecutando ||
+                  !pendiente ||
+                  !cuentaActiva ||
+                  !solicitudPrivada
+                }
                 onClick={() => void simularBaja()}
                 className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
               >
-                {simulando ? "Simulando..." : "Simular baja lógica"}
+                {simulando
+                  ? "Simulando..."
+                  : "Simular baja lógica"}
               </button>
 
               {!pendiente && (
-                <p className="text-sm text-slate-600">Solo pueden procesarse solicitudes pendientes.</p>
+                <p className="text-sm text-slate-600">
+                  Solo pueden procesarse solicitudes pendientes.
+                </p>
               )}
+
               {detalle.solicitud.usuario?.activo === false && (
-                <p className="text-sm text-slate-600">La cuenta ya figura como inactiva.</p>
+                <p className="text-sm text-slate-600">
+                  La cuenta ya figura como inactiva.
+                </p>
               )}
 
               {errorOperacion && (
-                <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                <p
+                  role="alert"
+                  className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+                >
                   {errorOperacion}
                 </p>
               )}
 
               {simulacion && (
-                <div className="space-y-2 rounded-lg bg-slate-50 p-4 text-sm">
-                  <p className="font-bold">{simulacion.message}</p>
-                  <p>Solicitud: #{simulacion.solicitudId}</p>
-                  <p>Usuario: #{simulacion.usuarioId}</p>
-                  <p>Estado: {simulacion.estadoSolicitud}</p>
-                  <p>Cuenta activa: {simulacion.cuentaActiva ? "Sí" : "No"}</p>
-                  <p>Ejecutada: {simulacion.ejecutada ? "Sí" : "No"}</p>
-                  <p>Registros eliminados: {simulacion.registrosEliminados}</p>
-                  <p className="font-semibold">Acciones previstas:</p>
+                <div className="space-y-3 rounded-lg bg-slate-50 p-4 text-sm">
+                  <p className="font-bold">
+                    {simulacion.message}
+                  </p>
+
+                  <p>
+                    Solicitud: #{simulacion.solicitudId}
+                  </p>
+                  <p>
+                    Usuario: #{simulacion.usuarioId}
+                  </p>
+                  <p>
+                    Estado: {simulacion.estadoSolicitud}
+                  </p>
+                  <p>
+                    Cuenta activa:{" "}
+                    {simulacion.cuentaActiva ? "Sí" : "No"}
+                  </p>
+                  <p>
+                    Ejecutada:{" "}
+                    {simulacion.ejecutada ? "Sí" : "No"}
+                  </p>
+                  <p>
+                    Registros eliminados:{" "}
+                    {simulacion.registrosEliminados}
+                  </p>
+
+                  <p className="font-semibold">
+                    Consentimiento de baja lógica:{" "}
+                    {simulacion.modalidadConfirmada === true
+                      ? "Confirmado por el servidor"
+                      : "No confirmado"}
+                  </p>
+
+                  <p className="font-semibold">
+                    Acciones previstas:
+                  </p>
+
                   <ul className="list-disc space-y-1 pl-5">
-                    {(simulacion.accionesPrevistas ?? []).map((accion) => (
-                      <li key={accion}>{accion}</li>
-                    ))}
+                    {(simulacion.accionesPrevistas ?? []).map(
+                      (accion) => (
+                        <li key={accion}>
+                          {accion}
+                        </li>
+                      ),
+                    )}
                   </ul>
-                  {simulacion.ejecucionHabilitada !== true ? (
-                    <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 font-semibold text-amber-900">
-                      La desactivación real está bloqueada por el servidor. No se modificó la cuenta.
+
+                  {simulacion.modalidadConfirmada !== true && (
+                    <p
+                      role="status"
+                      className="rounded-lg border border-red-200 bg-red-50 p-3 font-semibold text-red-800"
+                    >
+                      No se permite ejecutar la baja lógica.
+                      El titular no ha confirmado esta modalidad.
+                      Una solicitud de eliminación de datos
+                      necesita un procedimiento independiente.
                     </p>
-                  ) : (
-                    <div className="mt-4 space-y-3 border-t border-slate-300 pt-4">
-                      <p className="font-bold text-red-800">Confirmación de desactivación real</p>
-                      <p className="text-slate-700">
-                        Esta acción cerrará la solicitud y quitará el acceso a CMP_Site y CMP_Movil.
-                        No borrará información de la base de datos. Comprueba el ID del cliente.
-                      </p>
-                      <div>
-                        <label htmlFor="confirmar-id-arco" className="mb-1 block font-semibold">
-                          Escribe el ID del cliente: {detalle.solicitud.usuarioId}
-                        </label>
-                        <input
-                          id="confirmar-id-arco"
-                          type="text"
-                          inputMode="numeric"
-                          autoComplete="off"
-                          value={idConfirmado}
-                          onChange={(event: ChangeEvent<HTMLInputElement>) => setIdConfirmado(event.target.value)}
-                          className="w-full max-w-sm rounded-lg border border-slate-300 p-2"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="confirmar-frase-arco" className="mb-1 block font-semibold">
-                          Escribe exactamente: {CONFIRMACION_REQUERIDA}
-                        </label>
-                        <input
-                          id="confirmar-frase-arco"
-                          type="text"
-                          autoComplete="off"
-                          value={confirmacion}
-                          onChange={(event: ChangeEvent<HTMLInputElement>) => setConfirmacion(event.target.value)}
-                          className="w-full max-w-sm rounded-lg border border-slate-300 p-2"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        disabled={!confirmacionValida || ejecutando || simulando}
-                        onClick={() => void ejecutarBaja()}
-                        className="rounded-lg bg-red-800 px-4 py-2 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {ejecutando ? "Desactivando acceso..." : "Confirmar desactivación real"}
-                      </button>
-                    </div>
                   )}
+
+                  {simulacion.ejecucionHabilitada !== true && (
+                    <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 font-semibold text-amber-900">
+                      La desactivación real está bloqueada por
+                      el servidor. No se modificó la cuenta.
+                    </p>
+                  )}
+
+                  {simulacion.modalidadConfirmada === true &&
+                    simulacion.ejecucionHabilitada === true &&
+                    pendiente &&
+                    cuentaActiva &&
+                    solicitudPrivada && (
+                      <div className="mt-4 space-y-3 border-t border-slate-300 pt-4">
+                        <p className="font-bold text-red-800">
+                          Confirmación de desactivación real
+                        </p>
+
+                        <p className="text-slate-700">
+                          Esta acción cerrará la solicitud
+                          y quitará el acceso a CMP_Site y
+                          CMP_Movil. No borrará información.
+                          Comprueba el ID del cliente antes
+                          de continuar.
+                        </p>
+
+                        <div>
+                          <label
+                            htmlFor="confirmar-id-arco"
+                            className="mb-1 block font-semibold"
+                          >
+                            Escribe el ID del cliente:{" "}
+                            {detalle.solicitud.usuarioId}
+                          </label>
+
+                          <input
+                            id="confirmar-id-arco"
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            value={idConfirmado}
+                            onChange={(
+                              event: ChangeEvent<HTMLInputElement>,
+                            ) => setIdConfirmado(event.target.value)}
+                            className="w-full max-w-sm rounded-lg border border-slate-300 p-2"
+                          />
+                        </div>
+
+                        <div>
+                          <label
+                            htmlFor="confirmar-frase-arco"
+                            className="mb-1 block font-semibold"
+                          >
+                            Escribe exactamente:{" "}
+                            {CONFIRMACION_REQUERIDA}
+                          </label>
+
+                          <input
+                            id="confirmar-frase-arco"
+                            type="text"
+                            autoComplete="off"
+                            value={confirmacion}
+                            onChange={(
+                              event: ChangeEvent<HTMLInputElement>,
+                            ) => setConfirmacion(event.target.value)}
+                            className="w-full max-w-sm rounded-lg border border-slate-300 p-2"
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={
+                            !confirmacionValida ||
+                            ejecutando ||
+                            simulando
+                          }
+                          onClick={() => void ejecutarBaja()}
+                          className="rounded-lg bg-red-800 px-4 py-2 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {ejecutando
+                            ? "Desactivando acceso..."
+                            : "Confirmar desactivación real"}
+                        </button>
+                      </div>
+                    )}
                 </div>
               )}
 
               {resultadoReal && (
-                <div role="status" className="space-y-2 rounded-lg border border-slate-300 bg-slate-50 p-4 text-sm">
+                <div
+                  role="status"
+                  className="space-y-2 rounded-lg border border-slate-300 bg-slate-50 p-4 text-sm"
+                >
                   <p className="flex items-center gap-2 font-bold">
-                    <CheckCircle2 size={18} aria-hidden="true" /> {resultadoReal.message}
+                    <CheckCircle2
+                      size={18}
+                      aria-hidden="true"
+                    />
+                    {resultadoReal.message}
                   </p>
-                  <p>Solicitud: #{resultadoReal.solicitudId}</p>
-                  <p>Estado: {resultadoReal.estadoSolicitud}</p>
-                  <p>Cuenta activa: {resultadoReal.cuentaActiva ? "Sí" : "No"}</p>
-                  <p>Sesiones invalidadas: {resultadoReal.sesionesInvalidadas ? "Sí" : "No confirmado"}</p>
-                  <p>Registros eliminados: {resultadoReal.registrosEliminados}</p>
-                  <p>Datos personales eliminados: No</p>
+
+                  <p>
+                    Solicitud: #{resultadoReal.solicitudId}
+                  </p>
+                  <p>
+                    Estado: {resultadoReal.estadoSolicitud}
+                  </p>
+                  <p>
+                    Cuenta activa:{" "}
+                    {resultadoReal.cuentaActiva ? "Sí" : "No"}
+                  </p>
+                  <p>
+                    Consentimiento: confirmado
+                  </p>
+                  <p>
+                    Sesiones invalidadas:{" "}
+                    {resultadoReal.sesionesInvalidadas
+                      ? "Sí"
+                      : "No confirmado"}
+                  </p>
+                  <p>
+                    Registros eliminados:{" "}
+                    {resultadoReal.registrosEliminados}
+                  </p>
+                  <p>
+                    Datos personales eliminados: No
+                  </p>
+
                   {typeof resultadoReal.auditoriaId === "number" && (
-                    <p>Constancia de auditoría: #{resultadoReal.auditoriaId}</p>
+                    <p>
+                      Constancia de auditoría:{" "}
+                      #{resultadoReal.auditoriaId}
+                    </p>
                   )}
                 </div>
               )}

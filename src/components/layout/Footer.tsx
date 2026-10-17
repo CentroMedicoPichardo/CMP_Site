@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -34,10 +35,14 @@ interface EmpresaInfo {
 }
 
 /**
- * Une clases sin conservar saltos de línea o espacios de indentación.
- * Evita diferencias entre el HTML del servidor y el cliente.
+ * Une clases sin conservar saltos de línea
+ * o espacios de indentación.
+ * Evita diferencias entre el HTML del
+ * servidor y el cliente.
  */
-function cn(...classes: Array<string | false | null | undefined>) {
+function cn(
+  ...classes: Array<string | false | null | undefined>
+) {
   return classes.filter(Boolean).join(" ");
 }
 
@@ -310,7 +315,6 @@ export function Footer() {
                           size={17}
                           strokeWidth={1.8}
                         />
-
                         {link.label}
                       </Link>
                     </li>
@@ -333,53 +337,61 @@ export function Footer() {
               </h4>
 
               <ul className="space-y-5">
-                {direccionEmpresa && <li className="flex items-start gap-3 text-[0.95rem] leading-relaxed text-[#D2D8DF]">
-                  <MapPin
-                    size={21}
-                    className="mt-0.5 shrink-0 text-[#FFC300]"
-                    strokeWidth={1.8}
-                  />
-
-                  <span>{direccionEmpresa}</span>
-                </li>}
-
-                {telefonoEmpresa && <li className="flex items-center gap-3 text-[0.95rem] text-[#D2D8DF]">
-                  <Phone
-                    size={21}
-                    className="shrink-0 text-[#FFC300]"
-                    strokeWidth={1.8}
-                  />
-
-                  <a
-                    href={`tel:${telefonoLimpio}`}
-                    className="transition-colors hover:text-[#FFC300]"
-                  >
-                    {telefonoEmpresa}
-                  </a>
-                </li>}
-
-                {correoEmpresa && <li className="flex min-w-0 items-center gap-3 text-[#D2D8DF]">
-                  <Mail
-                    size={21}
-                    className="shrink-0 text-[#FFC300]"
-                    strokeWidth={1.8}
-                  />
-
-                  <a
-                    href={`mailto:${correoEmpresa}`}
-                    title={correoEmpresa}
-                    className={cn(
-                      "whitespace-nowrap text-sm",
-                      "transition-colors hover:text-[#FFC300]",
-                      "xl:text-[0.95rem]",
-                    )}
-                  >
-                    {correoEmpresa}
-                  </a>
-                </li>}
-                {!direccionEmpresa && !telefonoEmpresa && !correoEmpresa && (
-                  <li className="text-[#D2D8DF]">Información de contacto no disponible.</li>
+                {direccionEmpresa && (
+                  <li className="flex items-start gap-3 text-[0.95rem] leading-relaxed text-[#D2D8DF]">
+                    <MapPin
+                      size={21}
+                      className="mt-0.5 shrink-0 text-[#FFC300]"
+                      strokeWidth={1.8}
+                    />
+                    <span>{direccionEmpresa}</span>
+                  </li>
                 )}
+
+                {telefonoEmpresa && (
+                  <li className="flex items-center gap-3 text-[0.95rem] text-[#D2D8DF]">
+                    <Phone
+                      size={21}
+                      className="shrink-0 text-[#FFC300]"
+                      strokeWidth={1.8}
+                    />
+                    <a
+                      href={`tel:${telefonoLimpio}`}
+                      className="transition-colors hover:text-[#FFC300]"
+                    >
+                      {telefonoEmpresa}
+                    </a>
+                  </li>
+                )}
+
+                {correoEmpresa && (
+                  <li className="flex min-w-0 items-center gap-3 text-[#D2D8DF]">
+                    <Mail
+                      size={21}
+                      className="shrink-0 text-[#FFC300]"
+                      strokeWidth={1.8}
+                    />
+                    <a
+                      href={`mailto:${correoEmpresa}`}
+                      title={correoEmpresa}
+                      className={cn(
+                        "whitespace-nowrap text-sm",
+                        "transition-colors hover:text-[#FFC300]",
+                        "xl:text-[0.95rem]",
+                      )}
+                    >
+                      {correoEmpresa}
+                    </a>
+                  </li>
+                )}
+
+                {!direccionEmpresa &&
+                  !telefonoEmpresa &&
+                  !correoEmpresa && (
+                    <li className="text-[#D2D8DF]">
+                      Información de contacto no disponible.
+                    </li>
+                  )}
               </ul>
             </div>
           </div>
@@ -407,10 +419,7 @@ export function Footer() {
                 Aviso de Privacidad
               </Link>
 
-              <span
-                className="text-white/20"
-                aria-hidden="true"
-              >
+              <span className="text-white/20" aria-hidden="true">
                 |
               </span>
 
@@ -423,6 +432,22 @@ export function Footer() {
                 )}
               >
                 Términos de Uso
+              </Link>
+
+              <span className="text-white/20" aria-hidden="true">
+                |
+              </span>
+
+              {/* A17: enlace público de baja lógica */}
+              <Link
+                href="/eliminar-cuenta"
+                className={cn(
+                  "text-[0.85rem] text-[#BFC7D0]",
+                  "transition-colors duration-200",
+                  "hover:text-[#FFC300] hover:underline",
+                )}
+              >
+                Solicitar baja de cuenta
               </Link>
             </div>
           </div>

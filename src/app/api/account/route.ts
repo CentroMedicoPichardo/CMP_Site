@@ -19,6 +19,9 @@ import {
 const TITULO_SOLICITUD =
   "Solicitud ARCO - Eliminacion de cuenta";
 
+const MARCADOR_BAJA_LOGICA =
+  "[BAJA_LOGICA_CONFIRMADA_WEB]";
+
 const ESTADOS_ABIERTOS = [
   "pendiente",
   "respondida",
@@ -29,7 +32,7 @@ const MINUTOS_BLOQUEO = 15;
 
 function responder(
   data: unknown,
-  status = 200
+  status = 200,
 ) {
   return NextResponse.json(data, {
     status,
@@ -42,18 +45,27 @@ function responder(
 /**
  * A17 - Derecho ARCO de Cancelación.
  *
- * Primera etapa:
+ * DELETE /api/account
  *
- * Registra una solicitud privada de
- * eliminación para revisión administrativa.
+ * Registra una solicitud de eliminación
+ * desde CMP_Movil para su revisión
+ * administrativa.
  *
- * No elimina ni desactiva la cuenta.
+ * No elimina datos personales ni
+ * desactiva la cuenta.
+ *
+ * La reautenticación, el bloqueo por
+ * usuario y el registro de la solicitud
+ * se realizan dentro de una transacción.
+ *
+ * Las solicitudes móviles de eliminación
+ * permanecen separadas de las solicitudes
+ * web de baja lógica.
  */
 export async function DELETE(
-  request: Request
+  request: Request,
 ) {
-  // Solo se permite el access token
-  // utilizado por CMP_Movil.
+  // CMP_Movil debe utilizar un access token Bearer.
   const authorization =
     request.headers.get("authorization");
 
@@ -63,10 +75,9 @@ export async function DELETE(
   ) {
     return responder(
       {
-        message:
-          "Se requiere autenticación móvil",
+        message: "Se requiere autenticación móvil",
       },
-      401
+      401,
     );
   }
 
@@ -75,20 +86,20 @@ export async function DELETE(
 
   if (!session) {
     return error ?? responder(
-      { message: "No autenticado" },
-      401
+      {
+        message: "No autenticado",
+      },
+      401,
     );
   }
 
-  // Las cuentas administrativas requieren
-  // un procedimiento distinto.
   if (session.user.rol !== "cliente") {
     return responder(
       {
         message:
           "La cancelación de esta cuenta requiere atención administrativa",
       },
-      403
+      403,
     );
   }
 
@@ -105,7 +116,7 @@ export async function DELETE(
         message:
           "La solicitud no tiene un formato válido",
       },
-      400
+      400,
     );
   }
 
@@ -128,130 +139,184 @@ export async function DELETE(
         message:
           "Confirma la solicitud e ingresa tu contraseña actual",
       },
-      400
+      400,
     );
   }
 
+  const usuarioId = session.user.id;
+  const contrasena = body.contrasena;
+
   try {
-    const [usuario] = await db
-      .select({
-        id: usuarios.id,
-        contrasena: usuarios.contrasena,
-      })
-      .from(usuarios)
-      .where(
-        and(
-          eq(usuarios.id, session.user.id),
-          eq(usuarios.activo, true)
-        )
-      )
-      .limit(1);
-
-    if (!usuario) {
-      return responder(
-        {
-          message: "Cuenta no disponible",
-        },
-        404
-      );
-    }
-
-    // Reautenticación antes de registrar
-    // una solicitud sensible.
-    const contrasenaValida =
-      await bcrypt.compare(
-        body.contrasena,
-        usuario.contrasena
-      );
-
-    if (!contrasenaValida) {
-      // Reutiliza el contador de seguridad
-      // ya existente en seguridad.usuarios.
-      const [actualizado] = await db
-        .update(usuarios)
-        .set({
-          intentosFallidos: sql`
-            COALESCE(
-              ${usuarios.intentosFallidos},
-              0
-            ) + 1
-          `,
-        })
-        .where(
-          eq(usuarios.id, usuario.id)
-        )
-        .returning({
-          intentosFallidos:
-            usuarios.intentosFallidos,
-        });
-
-      const intentos =
-        actualizado?.intentosFallidos ?? 0;
-
-      if (intentos >= MAX_INTENTOS) {
-        const bloqueo = new Date();
-
-        bloqueo.setMinutes(
-          bloqueo.getMinutes() +
-            MINUTOS_BLOQUEO
-        );
-
-        await db
-          .update(usuarios)
-          .set({
-            bloqueadoHasta:
-              bloqueo.toISOString(),
-          })
-          .where(
-            eq(usuarios.id, usuario.id)
-          );
-
-        return responder(
-          {
-            message:
-              "Demasiados intentos incorrectos. " +
-              "La cuenta se bloqueó temporalmente.",
-          },
-          423
-        );
-      }
-
-      return responder(
-        {
-          message:
-            "La contraseña es incorrecta",
-        },
-        403
-      );
-    }
-
-    // Restablecer el contador después
-    // de verificar la contraseña.
-    await db
-      .update(usuarios)
-      .set({
-        intentosFallidos: 0,
-        bloqueadoHasta: null,
-      })
-      .where(
-        eq(usuarios.id, usuario.id)
-      );
-
-    /*
-     * La transacción y el bloqueo
-     * por usuario impiden que dos
-     * peticiones simultáneas creen
-     * dos solicitudes abiertas.
-     */
-    const resultado =
-      await db.transaction(async (tx) => {
+    const resultado = await db.transaction(
+      async (tx) => {
+        /*
+         * Bloqueo compartido con:
+         *
+         * - POST /api/account/web-request
+         * - POST /api/admin/arco/cancelaciones/[id]/desactivar
+         *
+         * Orden de bloqueo:
+         * advisory -> usuario -> solicitud.
+         */
         await tx.execute(sql`
           SELECT pg_advisory_xact_lock(
             170017,
-            ${usuario.id}
+            ${usuarioId}
           )
         `);
 
+        /*
+         * Releer la cuenta dentro de la transacción.
+         *
+         * Si un administrador ya la desactivó,
+         * no debe generarse una solicitud nueva
+         * utilizando una comprobación anterior.
+         */
+        const [usuario] = await tx
+          .select({
+            id: usuarios.id,
+            activo: usuarios.activo,
+            contrasena: usuarios.contrasena,
+            intentosFallidos: usuarios.intentosFallidos,
+            bloqueadoHasta: usuarios.bloqueadoHasta,
+          })
+          .from(usuarios)
+          .where(
+            eq(usuarios.id, usuarioId)
+          )
+          .limit(1)
+          .for("update");
+
+        if (
+          !usuario ||
+          usuario.activo !== true
+        ) {
+          return {
+            tipo: "error" as const,
+            status: 404,
+            message: "Cuenta no disponible",
+          };
+        }
+
+        /*
+         * Respetar el bloqueo temporal por
+         * intentos fallidos de contraseña.
+         */
+        const ahora = new Date();
+
+        const hasta = usuario.bloqueadoHasta
+          ? new Date(usuario.bloqueadoHasta)
+          : null;
+
+        const fechaBloqueoValida = Boolean(
+          hasta &&
+          !Number.isNaN(hasta.getTime())
+        );
+
+        if (
+          fechaBloqueoValida &&
+          hasta &&
+          hasta > ahora
+        ) {
+          return {
+            tipo: "error" as const,
+            status: 423,
+            message:
+              "La cuenta está bloqueada temporalmente.",
+          };
+        }
+
+        /*
+         * Al vencer un bloqueo temporal,
+         * comenzar un nuevo conteo de intentos.
+         */
+        const bloqueoVencido = Boolean(
+          fechaBloqueoValida &&
+          hasta &&
+          hasta <= ahora
+        );
+
+        const intentosAnteriores = bloqueoVencido
+          ? 0
+          : Math.max(
+              0,
+              Number(usuario.intentosFallidos ?? 0),
+            );
+
+        /*
+         * La contraseña se comprueba mientras
+         * la fila del usuario está bloqueada.
+         */
+        const contrasenaValida =
+          await bcrypt.compare(
+            contrasena,
+            usuario.contrasena,
+          );
+
+        if (!contrasenaValida) {
+          const intentos =
+            intentosAnteriores + 1;
+
+          const bloqueo =
+            intentos >= MAX_INTENTOS
+              ? new Date(
+                  ahora.getTime() +
+                  MINUTOS_BLOQUEO * 60_000,
+                ).toISOString()
+              : null;
+
+          await tx
+            .update(usuarios)
+            .set({
+              intentosFallidos: intentos,
+              bloqueadoHasta: bloqueo,
+            })
+            .where(
+              eq(usuarios.id, usuario.id),
+            );
+
+          if (intentos >= MAX_INTENTOS) {
+            return {
+              tipo: "error" as const,
+              status: 423,
+              message:
+                "Demasiados intentos incorrectos. " +
+                "La cuenta se bloqueó temporalmente.",
+            };
+          }
+
+          return {
+            tipo: "error" as const,
+            status: 403,
+            message:
+              "La contraseña es incorrecta",
+          };
+        }
+
+        /*
+         * Contraseña correcta:
+         * restablecer el contador.
+         */
+        await tx
+          .update(usuarios)
+          .set({
+            intentosFallidos: 0,
+            bloqueadoHasta: null,
+          })
+          .where(
+            eq(usuarios.id, usuario.id),
+          );
+
+        /*
+         * Buscar exclusivamente solicitudes
+         * móviles de eliminación abiertas.
+         *
+         * No reutilizar solicitudes web que
+         * contienen consentimiento de baja lógica.
+         *
+         * POSITION realiza una comparación
+         * literal y parametrizada del marcador.
+         */
         const [existente] = await tx
           .select({
             id: preguntasUsuarios.idPregunta,
@@ -262,25 +327,38 @@ export async function DELETE(
             and(
               eq(
                 preguntasUsuarios.idUsuario,
-                usuario.id
+                usuario.id,
               ),
               eq(
                 preguntasUsuarios.titulo,
-                TITULO_SOLICITUD
+                TITULO_SOLICITUD,
+              ),
+              eq(
+                preguntasUsuarios.esPrivada,
+                true,
               ),
               inArray(
                 preguntasUsuarios.estado,
-                ESTADOS_ABIERTOS
-              )
-            )
+                ESTADOS_ABIERTOS,
+              ),
+              sql<boolean>`
+                POSITION(
+                  ${MARCADOR_BAJA_LOGICA}
+                  IN ${preguntasUsuarios.descripcion}
+                ) = 0
+              `,
+            ),
           )
           .orderBy(
-            desc(preguntasUsuarios.idPregunta)
+            desc(
+              preguntasUsuarios.idPregunta,
+            ),
           )
           .limit(1);
 
         if (existente) {
           return {
+            tipo: "solicitud" as const,
             solicitudId: existente.id,
             estado:
               existente.estado ?? "pendiente",
@@ -288,6 +366,13 @@ export async function DELETE(
           };
         }
 
+        /*
+         * Crear una solicitud nueva
+         * de eliminación de datos.
+         *
+         * No convertir solicitudes anteriores
+         * ni modificar solicitudes de baja lógica.
+         */
         const [nueva] = await tx
           .insert(preguntasUsuarios)
           .values({
@@ -318,16 +403,31 @@ export async function DELETE(
 
         if (!nueva) {
           throw new Error(
-            "No se generó el folio"
+            "No se generó el folio",
           );
         }
 
         return {
+          tipo: "solicitud" as const,
           solicitudId: nueva.id,
           estado: "pendiente",
           yaExistia: false,
         };
-      });
+      },
+    );
+
+    /*
+     * Mantener los códigos y mensajes
+     * esperados por CMP_Movil.
+     */
+    if (resultado.tipo === "error") {
+      return responder(
+        {
+          message: resultado.message,
+        },
+        resultado.status,
+      );
+    }
 
     return responder(
       {
@@ -345,12 +445,12 @@ export async function DELETE(
 
         eliminacionCompletada: false,
       },
-      202
+      202,
     );
   } catch (errorServidor) {
     console.error(
       "Error al registrar cancelación:",
-      errorServidor
+      errorServidor,
     );
 
     return responder(
@@ -359,7 +459,7 @@ export async function DELETE(
           "No fue posible registrar " +
           "la solicitud de eliminación",
       },
-      500
+      500,
     );
   }
 }

@@ -1,16 +1,27 @@
+
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
-import BajaLogicaPanel from "@/components/admin/arco/BajaLogicaPanel";
 
 export const metadata: Metadata = {
   title: "Baja lógica administrativa | Centro Médico Pichardo",
 };
 
+/**
+ * A17 - Baja lógica de cuentas.
+ *
+ * La administración de solicitudes ARCO
+ * se centraliza en /arco/cancelaciones.
+ *
+ * Se conserva esta ruta para que los
+ * enlaces antiguos sigan funcionando,
+ * pero no se utiliza el panel duplicado.
+ *
+ * La ruta requiere autenticación
+ * con rol administrador.
+ */
 export default async function PaginaBajaLogica() {
   await requireRole("admin", "/acceder");
-  return (
-    <main className="min-h-screen p-5 md:p-10">
-      <BajaLogicaPanel />
-    </main>
-  );
+
+  redirect("/arco/cancelaciones");
 }

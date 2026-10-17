@@ -1,20 +1,27 @@
+
 // src/app/api/auth/login/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { usuarios, roles } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { SignJWT } from "jose";
-import { AUTH_COOKIE_NAME, normalizeRole } from "@/lib/auth";
+import {
+  AUTH_COOKIE_NAME,
+  normalizeRole,
+} from "@/lib/auth";
 
 const MAX_INTENTOS_FALLIDOS = 5;
 const TIEMPO_BLOQUEO_MINUTOS = 15;
 
-function getJwtSecret() {
+function getJwtSecret(): Uint8Array {
   const secret = process.env.JWT_SECRET;
 
   if (!secret) {
-    throw new Error("JWT_SECRET no está configurado");
+    throw new Error(
+      "JWT_SECRET no está configurado",
+    );
   }
 
   return new TextEncoder().encode(secret);
@@ -27,8 +34,11 @@ export async function POST(request: NextRequest) {
 
     if (!correo || !contrasena) {
       return NextResponse.json(
-        { message: "Correo y contraseña son requeridos" },
-        { status: 400 }
+        {
+          message:
+            "Correo y contraseña son requeridos",
+        },
+        { status: 400 },
       );
     }
 
@@ -38,8 +48,25 @@ export async function POST(request: NextRequest) {
 
     if (!usuario) {
       return NextResponse.json(
-        { message: "Credenciales incorrectas" },
-        { status: 401 }
+        {
+          message: "Credenciales incorrectas",
+        },
+        { status: 401 },
+      );
+    }
+
+    /*
+     * A17: rechazar cuentas desactivadas
+     * antes de modificar cualquier dato
+     * de seguridad o bloqueo temporal.
+     */
+    if (!usuario.activo) {
+      return NextResponse.json(
+        {
+          message:
+            "Usuario desactivado. Contacta al administrador",
+        },
+        { status: 403 },
       );
     }
 
@@ -47,23 +74,30 @@ export async function POST(request: NextRequest) {
       where: eq(roles.id, usuario.rolId),
     });
 
-    const nombreRol = normalizeRole(rolUsuario?.nombre);
+    const nombreRol = normalizeRole(
+      rolUsuario?.nombre,
+    );
 
     if (usuario.bloqueadoHasta) {
-      const fechaBloqueo = new Date(usuario.bloqueadoHasta);
+      const fechaBloqueo = new Date(
+        usuario.bloqueadoHasta,
+      );
+
       const ahora = new Date();
 
       if (fechaBloqueo > ahora) {
         const minutosRestantes = Math.ceil(
-          (fechaBloqueo.getTime() - ahora.getTime()) / (1000 * 60)
+          (fechaBloqueo.getTime() - ahora.getTime()) /
+            (1000 * 60),
         );
 
         return NextResponse.json(
           {
-            message: `Cuenta bloqueada. Intenta nuevamente en ${minutosRestantes} minutos`,
+            message:
+              `Cuenta bloqueada. Intenta nuevamente en ${minutosRestantes} minutos`,
             bloqueado: true,
           },
-          { status: 423 }
+          { status: 423 },
         );
       }
 
@@ -76,25 +110,24 @@ export async function POST(request: NextRequest) {
         .where(eq(usuarios.id, usuario.id));
     }
 
-    if (!usuario.activo) {
-      return NextResponse.json(
-        { message: "Usuario desactivado. Contacta al administrador" },
-        { status: 403 }
-      );
-    }
-
     const contrasenaValida = await bcrypt.compare(
       contrasena,
-      usuario.contrasena
+      usuario.contrasena,
     );
 
     if (!contrasenaValida) {
-      const nuevosIntentos = Number(usuario.intentosFallidos ?? 0) + 1;
+      const nuevosIntentos =
+        Number(usuario.intentosFallidos ?? 0) + 1;
 
-      if (nuevosIntentos >= MAX_INTENTOS_FALLIDOS) {
+      if (
+        nuevosIntentos >=
+        MAX_INTENTOS_FALLIDOS
+      ) {
         const fechaBloqueo = new Date();
+
         fechaBloqueo.setMinutes(
-          fechaBloqueo.getMinutes() + TIEMPO_BLOQUEO_MINUTOS
+          fechaBloqueo.getMinutes() +
+            TIEMPO_BLOQUEO_MINUTOS,
         );
 
         await db
@@ -107,10 +140,11 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json(
           {
-            message: `Demasiados intentos fallidos. Cuenta bloqueada por ${TIEMPO_BLOQUEO_MINUTOS} minutos`,
+            message:
+              `Demasiados intentos fallidos. Cuenta bloqueada por ${TIEMPO_BLOQUEO_MINUTOS} minutos`,
             bloqueado: true,
           },
-          { status: 423 }
+          { status: 423 },
         );
       }
 
@@ -121,13 +155,15 @@ export async function POST(request: NextRequest) {
         })
         .where(eq(usuarios.id, usuario.id));
 
-      const intentosRestantes = MAX_INTENTOS_FALLIDOS - nuevosIntentos;
+      const intentosRestantes =
+        MAX_INTENTOS_FALLIDOS - nuevosIntentos;
 
       return NextResponse.json(
         {
-          message: `Credenciales incorrectas. Te quedan ${intentosRestantes} intentos`,
+          message:
+            `Credenciales incorrectas. Te quedan ${intentosRestantes} intentos`,
         },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -142,28 +178,25 @@ export async function POST(request: NextRequest) {
     if (usuario.mfaHabilitado) {
       return NextResponse.json(
         {
-          message: "Autenticación de dos factores requerida",
+          message:
+            "Autenticación de dos factores requerida",
           requireMfa: true,
           email: usuario.correo,
         },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
-    const versionToken = Number(usuario.versionToken ?? 1);
+    const versionToken = Number(
+      usuario.versionToken ?? 1,
+    );
 
     const token = await new SignJWT({
-      // Se conserva por compatibilidad con el código que llegó de Git
       id: usuario.id,
-
-      // Se conserva para que tu auth.ts siga funcionando
       userId: usuario.id,
-
       email: usuario.correo,
       nombre: usuario.nombre,
       rol: nombreRol,
-
-      // Se conserva el control de versión del token
       version: versionToken,
     })
       .setProtectedHeader({ alg: "HS256" })
@@ -171,16 +204,24 @@ export async function POST(request: NextRequest) {
       .setExpirationTime("7d")
       .sign(getJwtSecret());
 
-    /* OBJETO USUARIO */
+    /*
+     * Construir el nombre sin espacios
+     * adicionales cuando falte algún apellido.
+     */
+    const nombreCompleto = [
+      usuario.nombre,
+      usuario.apellidoPaterno,
+      usuario.apellidoMaterno,
+    ]
+      .filter(Boolean)
+      .join(" ");
 
     const usuarioResponse = {
       id: usuario.id,
       nombre: usuario.nombre,
       apellidoPaterno: usuario.apellidoPaterno,
       apellidoMaterno: usuario.apellidoMaterno,
-      nombreCompleto: `${usuario.nombre} ${usuario.apellidoPaterno ?? ""} ${
-        usuario.apellidoMaterno ?? ""
-      }`.trim(),
+      nombreCompleto,
       correo: usuario.correo,
       email: usuario.correo,
       rol: nombreRol,
@@ -191,7 +232,7 @@ export async function POST(request: NextRequest) {
         message: "Login exitoso",
         usuario: usuarioResponse,
       },
-      { status: 200 }
+      { status: 200 },
     );
 
     response.cookies.set(AUTH_COOKIE_NAME, token, {
@@ -202,7 +243,7 @@ export async function POST(request: NextRequest) {
       maxAge: 60 * 60 * 24 * 7,
     });
 
-    // Limpieza de cookies antiguas inseguras.
+    // Limpiar cookies antiguas.
     response.cookies.set("token", "", {
       path: "/",
       maxAge: 0,
@@ -220,11 +261,16 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error("Error en login:", error);
+    console.error(
+      "Error en login:",
+      error,
+    );
 
     return NextResponse.json(
-      { message: "Error interno del servidor" },
-      { status: 500 }
+      {
+        message: "Error interno del servidor",
+      },
+      { status: 500 },
     );
   }
 }
