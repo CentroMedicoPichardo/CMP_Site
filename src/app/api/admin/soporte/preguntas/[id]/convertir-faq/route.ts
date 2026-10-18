@@ -1,12 +1,16 @@
+
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
+
 import { requireApiRole } from "@/lib/auth";
 import { db } from "@/lib/db";
+
 import {
   categoriasAyuda,
   preguntasFrecuentes,
   preguntasUsuarios,
 } from "@/lib/schema/index";
+
 import {
   normalizarTags,
   parseIdPositivo,
@@ -14,11 +18,19 @@ import {
   validarRespuestaFaq,
 } from "@/lib/soporte/validaciones";
 
+const TITULO_SOLICITUD_ARCO =
+  "Solicitud ARCO - Eliminacion de cuenta";
+
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  {
+    params,
+  }: {
+    params: Promise<{ id: string }>;
+  }
 ) {
-  const { session, error } = await requireApiRole("admin");
+  const { session, error } =
+    await requireApiRole("admin");
 
   if (error) {
     return error;
@@ -27,131 +39,280 @@ export async function POST(
   if (!session) {
     return NextResponse.json(
       { message: "No autenticado" },
-      { status: 401 },
+      { status: 401 }
     );
   }
 
   try {
     const { id } = await params;
-    const idPreguntaUsuario = parseIdPositivo(id);
+
+    const idPreguntaUsuario =
+      parseIdPositivo(id);
 
     if (idPreguntaUsuario === null) {
       return NextResponse.json(
-        { error: "El identificador de la pregunta no es válido." },
-        { status: 400 },
+        {
+          error:
+            "El identificador de la pregunta no es válido.",
+        },
+        { status: 400 }
       );
     }
 
-    const body = (await request.json()) as {
-      idCategoria?: unknown;
-      pregunta?: unknown;
-      respuesta?: unknown;
-      esDestacada?: unknown;
-      tags?: unknown;
-    };
+    const body =
+      (await request.json()) as {
+        idCategoria?: unknown;
+        pregunta?: unknown;
+        respuesta?: unknown;
+        esDestacada?: unknown;
+        tags?: unknown;
+      };
 
-    const idCategoria = parseIdPositivo(
-      body.idCategoria as string | number | null | undefined,
-    );
-    const errorPregunta = validarPreguntaFaq(body.pregunta);
-    const errorRespuesta = validarRespuestaFaq(body.respuesta);
+    const idCategoria =
+      parseIdPositivo(
+        body.idCategoria as
+          | string
+          | number
+          | null
+          | undefined
+      );
 
-    if (idCategoria === null || errorPregunta || errorRespuesta) {
+    const errorPregunta =
+      validarPreguntaFaq(body.pregunta);
+
+    const errorRespuesta =
+      validarRespuestaFaq(body.respuesta);
+
+    if (
+      idCategoria === null ||
+      errorPregunta ||
+      errorRespuesta
+    ) {
       return NextResponse.json(
         {
           error:
             idCategoria === null
               ? "Selecciona una categoría válida."
-              : errorPregunta ?? errorRespuesta,
+              : errorPregunta ??
+                errorRespuesta,
         },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
-    const faq = await db.transaction(async (tx) => {
-      const [preguntaUsuario] = await tx
-        .select({
-          idPregunta: preguntasUsuarios.idPregunta,
-          idPreguntaFaq: preguntasUsuarios.idPreguntaFaq,
-        })
-        .from(preguntasUsuarios)
-        .where(eq(preguntasUsuarios.idPregunta, idPreguntaUsuario))
-        .limit(1);
+    const faq = await db.transaction(
+      async (tx) => {
+        const [preguntaUsuario] =
+          await tx
+            .select({
+              idPregunta:
+                preguntasUsuarios.idPregunta,
+              idPreguntaFaq:
+                preguntasUsuarios.idPreguntaFaq,
+              titulo:
+                preguntasUsuarios.titulo,
+            })
+            .from(preguntasUsuarios)
+            .where(
+              eq(
+                preguntasUsuarios.idPregunta,
+                idPreguntaUsuario
+              )
+            )
+            .limit(1);
 
-      if (!preguntaUsuario) {
-        return null;
+        if (!preguntaUsuario) {
+          return null;
+        }
+
+        /*
+         * Una solicitud ARCO nunca
+         * debe publicarse como FAQ.
+         */
+        if (
+          preguntaUsuario.titulo ===
+          TITULO_SOLICITUD_ARCO
+        ) {
+          throw new Error(
+            "SOLICITUD_ARCO"
+          );
+        }
+
+        if (
+          preguntaUsuario.idPreguntaFaq
+        ) {
+          throw new Error(
+            "YA_CONVERTIDA"
+          );
+        }
+
+        const [categoria] = await tx
+          .select({
+            idCategoria:
+              categoriasAyuda.idCategoria,
+          })
+          .from(categoriasAyuda)
+          .where(
+            eq(
+              categoriasAyuda.idCategoria,
+              idCategoria
+            )
+          )
+          .limit(1);
+
+        if (!categoria) {
+          throw new Error(
+            "CATEGORIA_NO_EXISTE"
+          );
+        }
+
+        const [creada] = await tx
+          .insert(preguntasFrecuentes)
+          .values({
+            idCategoria,
+            pregunta:
+              String(
+                body.pregunta
+              ).trim(),
+            respuesta:
+              String(
+                body.respuesta
+              ).trim(),
+            esDestacada:
+              body.esDestacada === true,
+            activo: true,
+            orden: 0,
+            tags:
+              normalizarTags(
+                body.tags
+              ),
+            creadoPor:
+              session.user.id,
+            updatedAt:
+              new Date().toISOString(),
+          })
+          .returning();
+
+        /*
+         * Segunda protección:
+         * también restringimos la
+         * actualización en SQL.
+         */
+        const [actualizada] =
+          await tx
+            .update(
+              preguntasUsuarios
+            )
+            .set({
+              estado:
+                "convertida_faq",
+              idPreguntaFaq:
+                creada.idPregunta,
+              updatedAt:
+                new Date().toISOString(),
+            })
+            .where(
+              and(
+                eq(
+                  preguntasUsuarios.idPregunta,
+                  idPreguntaUsuario
+                ),
+                ne(
+                  preguntasUsuarios.titulo,
+                  TITULO_SOLICITUD_ARCO
+                )
+              )
+            )
+            .returning({
+              idPregunta:
+                preguntasUsuarios.idPregunta,
+            });
+
+        /*
+         * Si no se actualiza el
+         * registro, revertimos toda
+         * la transacción, incluida
+         * la creación de la FAQ.
+         */
+        if (!actualizada) {
+          throw new Error(
+            "SOLICITUD_ARCO"
+          );
+        }
+
+        return creada;
       }
-
-      if (preguntaUsuario.idPreguntaFaq) {
-        throw new Error("YA_CONVERTIDA");
-      }
-
-      const [categoria] = await tx
-        .select({ idCategoria: categoriasAyuda.idCategoria })
-        .from(categoriasAyuda)
-        .where(eq(categoriasAyuda.idCategoria, idCategoria))
-        .limit(1);
-
-      if (!categoria) {
-        throw new Error("CATEGORIA_NO_EXISTE");
-      }
-
-      const [creada] = await tx
-        .insert(preguntasFrecuentes)
-        .values({
-          idCategoria,
-          pregunta: String(body.pregunta).trim(),
-          respuesta: String(body.respuesta).trim(),
-          esDestacada: body.esDestacada === true,
-          activo: true,
-          orden: 0,
-          tags: normalizarTags(body.tags),
-          creadoPor: session.user.id,
-          updatedAt: new Date().toISOString(),
-        })
-        .returning();
-
-      await tx
-        .update(preguntasUsuarios)
-        .set({
-          estado: "convertida_faq",
-          idPreguntaFaq: creada.idPregunta,
-          updatedAt: new Date().toISOString(),
-        })
-        .where(eq(preguntasUsuarios.idPregunta, idPreguntaUsuario));
-
-      return creada;
-    });
+    );
 
     if (!faq) {
       return NextResponse.json(
-        { error: "Pregunta no encontrada." },
-        { status: 404 },
+        {
+          error:
+            "Pregunta no encontrada.",
+        },
+        { status: 404 }
       );
     }
 
-    return NextResponse.json(faq, { status: 201 });
+    return NextResponse.json(
+      faq,
+      { status: 201 }
+    );
   } catch (errorConversion: unknown) {
-    if (errorConversion instanceof Error) {
-      if (errorConversion.message === "YA_CONVERTIDA") {
+    if (
+      errorConversion instanceof Error
+    ) {
+      if (
+        errorConversion.message ===
+        "SOLICITUD_ARCO"
+      ) {
         return NextResponse.json(
-          { error: "Esta pregunta ya fue convertida en FAQ." },
-          { status: 409 },
+          {
+            error:
+              "Las solicitudes de eliminación de cuenta no pueden convertirse en preguntas frecuentes.",
+          },
+          { status: 409 }
         );
       }
 
-      if (errorConversion.message === "CATEGORIA_NO_EXISTE") {
+      if (
+        errorConversion.message ===
+        "YA_CONVERTIDA"
+      ) {
         return NextResponse.json(
-          { error: "La categoría seleccionada no existe." },
-          { status: 400 },
+          {
+            error:
+              "Esta pregunta ya fue convertida en FAQ.",
+          },
+          { status: 409 }
+        );
+      }
+
+      if (
+        errorConversion.message ===
+        "CATEGORIA_NO_EXISTE"
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "La categoría seleccionada no existe.",
+          },
+          { status: 400 }
         );
       }
     }
 
-    console.error("Error al convertir pregunta en FAQ:", errorConversion);
+    console.error(
+      "Error al convertir pregunta en FAQ:",
+      errorConversion
+    );
+
     return NextResponse.json(
-      { error: "No fue posible convertir la pregunta en FAQ." },
-      { status: 500 },
+      {
+        error:
+          "No fue posible convertir la pregunta en FAQ.",
+      },
+      { status: 500 }
     );
   }
 }

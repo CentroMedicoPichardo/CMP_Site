@@ -14,6 +14,7 @@ import {
   HelpCircle,
   History,
   LayoutDashboard,
+  ShieldAlert,
   LifeBuoy,
   ShoppingBag,
   Stethoscope,
@@ -234,4 +235,14 @@ export const adminSidebarItems: SidebarItem[] = [
       "Solicitudes y atención a usuarios",
     category: "SOPORTE",
   },
+
+
+  {
+    label: "Cancelación de cuentas",
+    href: adminRoutes.arcoCancelaciones,
+    icon: ShieldAlert,
+    description: "Revisión de solicitudes ARCO",
+    category: "SOPORTE",
+  },
+
 ];

@@ -1,3 +1,4 @@
+
 // src/app/api/auth/mobile/login/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
@@ -86,6 +87,20 @@ export async function POST(
       );
     }
 
+    // A17: rechazar cuentas desactivadas antes
+    // de cualquier modificación de bloqueo.
+    if (!usuario.activo) {
+      return NextResponse.json(
+        {
+          message:
+            "Usuario desactivado. Contacta al administrador",
+        },
+        {
+          status: 403,
+        }
+      );
+    }
+
     const rolUsuario =
       await db.query.roles.findFirst({
         where: eq(
@@ -147,18 +162,6 @@ export async function POST(
             usuario.id
           )
         );
-    }
-
-    if (!usuario.activo) {
-      return NextResponse.json(
-        {
-          message:
-            "Usuario desactivado. Contacta al administrador",
-        },
-        {
-          status: 403,
-        }
-      );
     }
 
     const contrasenaValida =
