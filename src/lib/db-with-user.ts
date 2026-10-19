@@ -74,7 +74,8 @@ export async function withUserEmail<T>(
     console.log(`✅ Operación completada con usuario: ${userEmail}`);
     return result;
   } catch (error) {
-    console.error(`❌ Error en operación con usuario: ${userEmail}`, error);
+    // Los errores Drizzle pueden incluir parámetros privados, como el enlace Drive.
+    console.error(`❌ Error en operación con usuario: ${userEmail}`);
     throw error;
   } finally {
     // Limpiar la tabla temporal

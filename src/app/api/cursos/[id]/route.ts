@@ -166,7 +166,7 @@ export async function GET(
         );
 
     const resultado = await db
-      .select(cursoSelect)
+      .select({...cursoSelect, ...(isAdmin ? {urlMaterialesDrive: cursos.urlMaterialesDrive} : {})})
       .from(cursos)
       .leftJoin(
         instructores,
@@ -210,7 +210,7 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(curso);
+    return NextResponse.json(curso, {headers: {"Cache-Control": "private, no-store, max-age=0", Vary: "Authorization, Cookie"}});
   } catch (error: unknown) {
     console.error(
       "Error en GET curso:",
@@ -296,6 +296,7 @@ export async function PUT(
             costo: input.costo,
             urlImagenPortada:
               input.urlImagenPortada,
+            urlMaterialesDrive: input.urlMaterialesDrive,
 
             activo: input.activo,
             updatedAt: sql`CURRENT_TIMESTAMP`,
@@ -332,6 +333,7 @@ export async function PUT(
             costo: cursos.costo,
             urlImagenPortada:
               cursos.urlImagenPortada,
+            urlMaterialesDrive: cursos.urlMaterialesDrive,
             activo: cursos.activo,
 
             createdAt: cursos.createdAt,
@@ -355,10 +357,7 @@ export async function PUT(
       cursoActualizado
     );
   } catch (error: unknown) {
-    console.error(
-      "Error en PUT curso:",
-      error
-    );
+    console.error("Error en PUT curso");
 
     const databaseResponse =
       databaseErrorResponse(error);

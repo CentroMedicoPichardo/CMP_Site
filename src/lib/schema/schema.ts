@@ -321,6 +321,7 @@ export const cursosInAcademia = academia.table("cursos", {
 	cupoMaximo: integer("cupo_maximo").notNull(),
 	costo: numeric({ precision: 10, scale:  2 }).default('0.00'),
 	urlImagenPortada: text("url_imagen_portada"),
+	urlMaterialesDrive: text("url_materiales_drive"),
 	activo: boolean().default(true),
 	cuposOcupados: integer("cupos_ocupados").default(0),
 	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),

@@ -1,5 +1,7 @@
 // src/lib/validators/cursos.ts
 
+import { normalizarCarpetaDrive } from "@/lib/cursos/materiales";
+
 import type {
   ActualizarCursoInput,
   CambiarEstadoCursoInput,
@@ -207,6 +209,13 @@ function validarCamposComunesCurso(
       "La URL de la imagen no es válida";
   }
 
+  const driveInput = value.urlMaterialesDrive;
+  const urlMaterialesDrive = driveInput === null || (typeof driveInput === "string" && driveInput.trim() === "")
+    ? null : normalizarCarpetaDrive(driveInput);
+  if (driveInput !== undefined && driveInput !== null && !(typeof driveInput === "string" && driveInput.trim() === "") && !urlMaterialesDrive) {
+    fieldErrors.urlMaterialesDrive = "Usa una URL HTTPS de una carpeta de drive.google.com o deja el campo vacío";
+  }
+
   if (Object.keys(fieldErrors).length > 0) {
     return {
       success: false,
@@ -231,6 +240,7 @@ function validarCamposComunesCurso(
       cupoMaximo: cupoMaximo as number,
       costo: costo as string,
       urlImagenPortada,
+      ...(driveInput !== undefined ? {urlMaterialesDrive} : {}),
     },
   };
 }
