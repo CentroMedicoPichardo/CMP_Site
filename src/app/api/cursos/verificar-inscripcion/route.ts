@@ -8,6 +8,7 @@ import {
   inArray,
 } from "drizzle-orm";
 
+import { ESTADOS_INSCRIPCION_VIGENTES } from "@/lib/cursos/materiales";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { inscripcionesCursos } from "@/lib/schema";
@@ -28,12 +29,7 @@ interface VerificarInscripcionResponse {
   inscripciones: InscripcionResumen[];
 }
 
-const ESTADOS_VIGENTES = [
-  "activo",
-  "Activo",
-  "confirmada",
-  "Confirmada",
-] as const;
+const ESTADOS_VIGENTES = ESTADOS_INSCRIPCION_VIGENTES;
 
 function respuestaSinInscripcion(
   autenticado: boolean

@@ -266,7 +266,7 @@ export async function GET(
     }
 
     const data = await db
-      .select(cursoSelect)
+      .select({...cursoSelect, ...(isAdmin ? {urlMaterialesDrive: cursos.urlMaterialesDrive} : {})})
       .from(cursos)
       .leftJoin(
         instructores,
@@ -406,6 +406,7 @@ export async function POST(
             costo: input.costo,
             urlImagenPortada:
               input.urlImagenPortada,
+            urlMaterialesDrive: input.urlMaterialesDrive,
 
             activo: true,
           })
@@ -442,6 +443,7 @@ export async function POST(
             costo: cursos.costo,
             urlImagenPortada:
               cursos.urlImagenPortada,
+            urlMaterialesDrive: cursos.urlMaterialesDrive,
             activo: cursos.activo,
 
             createdAt:
@@ -468,10 +470,7 @@ export async function POST(
       { status: 201 },
     );
   } catch (error: unknown) {
-    console.error(
-      "Error en POST cursos:",
-      error,
-    );
+    console.error("Error en POST curso");
 
     const databaseResponse =
       databaseErrorResponse(error);

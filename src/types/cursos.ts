@@ -20,6 +20,7 @@ export interface CursoBase {
 
   costo: string | null;
   urlImagenPortada: string | null;
+  urlMaterialesDrive?: string | null;
   activo: boolean;
 
   createdAt?: string | null;
@@ -78,6 +79,7 @@ export interface CursoFormData {
 
   costo: string;
   urlImagenPortada: string | null;
+  urlMaterialesDrive: string | null;
   activo: boolean;
 }
 
@@ -98,6 +100,7 @@ export interface CursoWriteFields {
   cupoMaximo: number;
   costo: string;
   urlImagenPortada: string | null;
+  urlMaterialesDrive?: string | null;
 }
 
 export type CrearCursoInput = CursoWriteFields;

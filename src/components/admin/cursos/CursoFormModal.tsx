@@ -33,6 +33,7 @@ import {
   X,
 } from "lucide-react";
 
+import { normalizarCarpetaDrive } from "@/lib/cursos/materiales";
 import { CloudinaryUploader } from "@/components/admin/cloudinary/CloudinaryUploader";
 
 import type {
@@ -111,6 +112,7 @@ const FORM_DATA_INICIAL: CursoFormData = {
   cuposOcupados: 0,
   costo: "0.00",
   urlImagenPortada: "",
+  urlMaterialesDrive: "",
   activo: true,
 };
 
@@ -437,6 +439,7 @@ export function CursoFormModal({
             ? String(curso.costo)
             : "0.00",
         urlImagenPortada: curso.urlImagenPortada ?? "",
+        urlMaterialesDrive: curso.urlMaterialesDrive ?? "",
         activo: curso.activo ?? true,
       });
     } else {
@@ -581,6 +584,7 @@ export function CursoFormModal({
       cupoMaximo: numeroSeguro(data.cupoMaximo),
       costo: String(data.costo || "0.00"),
       urlImagenPortada: textoSeguro(data.urlImagenPortada) || null,
+      urlMaterialesDrive: textoSeguro(data.urlMaterialesDrive) || null,
     };
 
     return editing
@@ -643,6 +647,10 @@ export function CursoFormModal({
     if (!Number.isFinite(costoNumero) || costoNumero < 0) {
       nuevosErrores.costo =
         "El costo debe ser un número mayor o igual que cero.";
+    }
+
+    if (formData.urlMaterialesDrive?.trim() && !normalizarCarpetaDrive(formData.urlMaterialesDrive)) {
+      nuevosErrores.urlMaterialesDrive = "Usa el enlace HTTPS de una carpeta de drive.google.com.";
     }
 
     setErrors(nuevosErrores);
@@ -1137,6 +1145,16 @@ export function CursoFormModal({
                       )}
                     </div>
                   </div>
+                </section>
+
+                <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
+                  <EtiquetaCampo htmlFor="curso-materiales-drive">Materiales del curso en Google Drive (opcional)</EtiquetaCampo>
+                  <input id="curso-materiales-drive" name="urlMaterialesDrive" type="url"
+                    value={formData.urlMaterialesDrive ?? ""} onChange={handleChange} disabled={saving}
+                    aria-invalid={Boolean(errors.urlMaterialesDrive)} aria-describedby="curso-materiales-ayuda"
+                    className={cn(claseCampoBase, errors.urlMaterialesDrive ? claseCampoError : claseCampoNormal)} />
+                  <p id="curso-materiales-ayuda" className="mt-2 text-xs text-gray-600">Pega el enlace de una carpeta HTTPS de drive.google.com. Borra el campo para quitarlo. La app lo entrega solo a inscripciones autorizadas entre el inicio y fin del curso. Los permisos de Drive se gestionan por separado.</p>
+                  <MensajeError mensaje={errors.urlMaterialesDrive} />
                 </section>
 
                 <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
