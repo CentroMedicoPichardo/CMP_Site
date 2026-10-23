@@ -68,6 +68,7 @@ export const vwMetricasMensualesCursos = generatedSchema.vwMetricasMensualesCurs
 // ========== SEGURIDAD ==========
 export const usuarios = generatedSchema.usuariosInSeguridad;
 export const roles = generatedSchema.rolesInSeguridad;
+export const preferenciasPrivacidad = generatedSchema.preferenciasPrivacidadInSeguridad;
 export const auditoriaAcciones = generatedSchema.auditoriaAccionesInSeguridad;
 export const monitoreoRendimiento = generatedSchema.monitoreoRendimientoInSeguridad;
 export const alertasSeguridad = generatedSchema.alertasSeguridadInSeguridad;

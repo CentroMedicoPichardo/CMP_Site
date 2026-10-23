@@ -178,6 +178,20 @@ export const usuariosInSeguridad = seguridad.table("usuarios", {
 	unique("usuarios_correo_unique").on(table.correo),
 ]);
 
+export const preferenciasPrivacidadInSeguridad = seguridad.table("preferencias_privacidad", {
+	usuarioId: integer("usuario_id").primaryKey().notNull(),
+	comunicacionesNoEsenciales: boolean("comunicaciones_no_esenciales").default(false).notNull(),
+	analitica: boolean().default(false).notNull(),
+	compartirProgreso: boolean("compartir_progreso").default(false).notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.usuarioId],
+			foreignColumns: [usuariosInSeguridad.id],
+			name: "preferencias_privacidad_usuario_id_usuarios_id_fk"
+		}).onDelete("cascade"),
+]);
+
 export const monitoreoRendimientoInSeguridad = seguridad.table("monitoreo_rendimiento", {
 	idMonitoreo: serial("id_monitoreo").primaryKey().notNull(),
 	fechaHora: timestamp("fecha_hora", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),
