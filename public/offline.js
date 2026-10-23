@@ -212,7 +212,40 @@
     content.appendChild(sectionHead(isDoctor ? "Equipo médico" : "Nuestros servicios", snapshots[key]));
     if (!snapshots[key]) content.appendChild(empty());
     else if (!snapshots[key].data.length) content.appendChild(panel("Sin resultados", "No hay elementos publicados en la última actualización."));
-    else content.appendChild(await cards(snapshots[key].data, isDoctor ? "doctor" : "service"));
+    else {
+      const grid = await cards(snapshots[key].data, isDoctor ? "doctor" : "service");
+      if (!isDoctor) {
+        const search = el("div", "offline-search");
+        const label = el("label", "", "Buscar en servicios guardados");
+        const input = el("input");
+        const result = el("p", "meta");
+        input.id = "offline-service-search";
+        input.type = "search";
+        input.placeholder = "Buscar servicio";
+        label.htmlFor = input.id;
+        result.setAttribute("role", "status");
+        result.setAttribute("aria-live", "polite");
+        input.setAttribute("aria-describedby", "offline-service-result");
+        result.id = "offline-service-result";
+        const articles = Array.from(grid.children);
+        input.addEventListener("input", () => {
+          const term = input.value.trim().toLocaleLowerCase("es-MX");
+          let count = 0;
+          articles.forEach((article, index) => {
+            const item = snapshots.servicios.data[index];
+            const title = (item.titulo || "").toLocaleLowerCase("es-MX");
+            const description = (item.descripcion || "").toLocaleLowerCase("es-MX");
+            const visible = title.includes(term) || description.includes(term);
+            article.hidden = !visible;
+            if (visible) count += 1;
+          });
+          result.textContent = `${count} ${count === 1 ? "servicio encontrado" : "servicios encontrados"} en los datos guardados.`;
+        });
+        append(search, label, input, result);
+        content.appendChild(search);
+      }
+      content.appendChild(grid);
+    }
   }
 
   readSnapshots().then(render).catch(() => {

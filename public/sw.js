@@ -1,4 +1,4 @@
-const CACHE_NAME = "cmp-public-offline-v3";
+const CACHE_NAME = "cmp-public-offline-v4";
 const CACHE_PREFIX = "cmp-public-offline-";
 const OFFLINE_URL = "/offline.html";
 const OFFLINE_ROUTES = new Set(["/", "/quienes-somos", "/servicios", "/directorio-medico"]);
