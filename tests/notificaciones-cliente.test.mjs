@@ -57,6 +57,15 @@ function environment(options = {}) {
             const id = Number(paramFor(q.condition, "id_notificacion"));
             rows = rows.filter(r => Number(r.idNotificacion) === id);
           }
+          // Listado y conteo solo ven Enviada/Leída; la busqueda por id (PATCH) no filtra por estado.
+          const porId = /"id_notificacion" = \$/.test(q.condition.sql);
+          const estados = /"estado_envio" in \(([^)]*)\)/.exec(q.condition.sql);
+          if (!porId) assert.ok(estados, "listado y conteo deben filtrar por estado_envio: " + q.condition.sql);
+          if (estados) {
+            const permitidos = estados[1].match(/\$(\d+)/g).map(p => q.condition.params[Number(p.slice(1)) - 1]);
+            assert.deepEqual([...permitidos].sort(), ["Enviada", "Leída"]);
+            rows = rows.filter(r => permitidos.includes(r.estadoEnvio));
+          }
           if ("total" in q.shape) {
             return [{total: rows.length, noLeidas: rows.filter(r => r.estadoEnvio !== "Leída").length}];
           }
@@ -153,17 +162,43 @@ test("GET lista solo las del usuario: excluye ajenas y las de solo curso, con DT
   assert.equal(response.status, 200);
   assert.match(response.headers.get("cache-control"), /no-store/);
   const body = await response.json();
-  assert.deepEqual(body.notifications.map(n => n.id), [3, 2, 1]);
-  assert.equal(body.total, 3);
-  assert.equal(body.unreadCount, 2);
+  assert.deepEqual(body.notifications.map(n => n.id), [2, 1]);
+  assert.equal(body.total, 2);
+  assert.equal(body.unreadCount, 1);
   assert.equal(body.page, 1);
   assert.equal(body.pageSize, 20);
-  assert.deepEqual(body.notifications[2], {
+  assert.deepEqual(body.notifications[1], {
     id: 1, courseId: 10, enrollmentId: 1, sessionId: null, evaluationId: null, type: "Aviso general",
     title: "Titulo 1", message: "Mensaje 1", channel: "Sistema", deliveryStatus: "Enviada",
     scheduledAt: null, sentAt: "2026-10-20T10:00:00.000Z", readAt: null,
   });
-  assert.equal(body.notifications[1].readAt, "2026-10-21T08:00:00.000Z");
+  assert.equal(body.notifications[0].readAt, "2026-10-21T08:00:00.000Z");
+});
+
+for (const estado of ["Pendiente", "Procesando", "Fallida", "Cancelada"]) {
+  test("GET no lista ni cuenta notificaciones en estado " + estado, async () => {
+    const env = environment({rows: [fila(1), fila(2, {estadoEnvio: "Leída", fechaLectura: "2026-10-21 08:00:00.000"}),
+      fila(6, {estadoEnvio: estado, fechaEnvio: null}), fila(7, {estadoEnvio: estado, fechaEnvio: null, inscripcionId: 2})]});
+    const body = await (await env.list()).json();
+    assert.deepEqual(body.notifications.map(n => n.id), [2, 1]);
+    assert.ok(body.notifications.every(n => ["Enviada", "Leída"].includes(n.deliveryStatus)));
+    assert.equal(body.total, 2);
+    assert.equal(body.unreadCount, 1);
+  });
+}
+
+test("GET con solo estados internos devuelve lista vacia y contadores en cero", async () => {
+  const rows = ["Pendiente", "Procesando", "Fallida", "Cancelada"].map((estadoEnvio, i) => fila(i + 1, {estadoEnvio, fechaEnvio: null}));
+  const body = await (await environment({rows}).list()).json();
+  assert.deepEqual(body, {notifications: [], unreadCount: 0, page: 1, pageSize: 20, total: 0});
+});
+
+test("la paginacion y el total ignoran las notificaciones no visibles", async () => {
+  const rows = [...Array.from({length: 12}, (_, i) => fila(i + 1)), ...Array.from({length: 8}, (_, i) => fila(i + 20, {estadoEnvio: "Fallida", fechaEnvio: null}))];
+  const body = await (await environment({rows}).list("?page=2&pageSize=10")).json();
+  assert.deepEqual(body.notifications.map(n => n.id), [2, 1]);
+  assert.equal(body.total, 12);
+  assert.equal(body.unreadCount, 12);
 });
 
 test("otro usuario solo ve lo suyo", async () => {
@@ -209,7 +244,7 @@ for (const query of ["?pageSize=51", "?pageSize=1000", "?pageSize=0", "?pageSize
 test("PATCH marca como leida, devuelve la notificacion y baja el unreadCount", async () => {
   const env = environment({rows: [...propias(), ajena()]});
   const before = await (await env.list()).json();
-  assert.equal(before.unreadCount, 2);
+  assert.equal(before.unreadCount, 1);
   const response = await env.read(1);
   assert.equal(response.status, 200);
   assert.match(response.headers.get("cache-control"), /no-store/);
@@ -219,7 +254,7 @@ test("PATCH marca como leida, devuelve la notificacion y baja el unreadCount", a
   assert.equal(new Date(body.readAt).toISOString(), body.readAt);
   assert.ok(new Date(body.readAt) >= new Date(body.sentAt));
   assert.equal(env.seen.updates.length, 1);
-  assert.equal((await (await env.list()).json()).unreadCount, 1);
+  assert.equal((await (await env.list()).json()).unreadCount, 0);
   // la ajena no cambia
   assert.equal(env.state.rows.find(r => r.idNotificacion === 4n).estadoEnvio, "Enviada");
 });

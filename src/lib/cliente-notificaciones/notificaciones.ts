@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import {
@@ -6,16 +6,35 @@ import {
   notificacionesAcademicas,
 } from "@/lib/schema";
 
-// Alcance: solo se exponen notificaciones ligadas a una
-// inscripción (inscripcion_id no nulo), cuyo dueño se
-// obtiene por inscripciones_cursos.usuario_id.
-// Las notificaciones de solo curso_id (avisos a todo el
-// curso) NO se exponen por ahora: estado_envio y
-// fecha_lectura son compartidos por toda la fila, y el
-// esquema actual no permite registrar la lectura por
-// usuario. El INNER JOIN con la inscripción las excluye.
+// Alcance (dos filtros):
+// 1. Solo se exponen notificaciones ligadas a una
+//    inscripción (inscripcion_id no nulo), cuyo dueño se
+//    obtiene por inscripciones_cursos.usuario_id.
+//    Las notificaciones de solo curso_id (avisos a todo el
+//    curso) NO se exponen por ahora: estado_envio y
+//    fecha_lectura son compartidos por toda la fila, y el
+//    esquema actual no permite registrar la lectura por
+//    usuario. El INNER JOIN con la inscripción las excluye.
+// 2. Solo se exponen las enviadas o leídas. Pendiente,
+//    Procesando, Fallida y Cancelada son estados internos
+//    del envío: no tienen fecha_envio, no se pueden marcar
+//    como leídas (chk_notificacion_enviada) y contarlas en
+//    unreadCount dejaría un contador imposible de bajar.
 
 export const ESTADO_LEIDA = "Leída";
+
+export const ESTADOS_VISIBLES_CLIENTE = [
+  "Enviada",
+  ESTADO_LEIDA,
+];
+
+// Condición para listar y contar solo lo visible al cliente.
+export function condicionEstadoVisible() {
+  return inArray(
+    notificacionesAcademicas.estadoEnvio,
+    ESTADOS_VISIBLES_CLIENTE
+  );
+}
 
 export const camposNotificacion = {
   idNotificacion:

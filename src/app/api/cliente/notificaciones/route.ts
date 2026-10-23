@@ -1,6 +1,6 @@
 
 import { NextResponse } from "next/server";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import {
@@ -11,6 +11,7 @@ import { requireApiAuth } from "@/lib/auth";
 import {
   aNotificacionDto,
   camposNotificacion,
+  condicionEstadoVisible,
   totalesNotificaciones,
 } from "@/lib/cliente-notificaciones/notificaciones";
 
@@ -94,9 +95,12 @@ export async function GET(request: Request) {
     );
   }
 
-  const propias = eq(
-    inscripcionesCursos.usuarioId,
-    session.user.id
+  const propias = and(
+    eq(
+      inscripcionesCursos.usuarioId,
+      session.user.id
+    ),
+    condicionEstadoVisible()
   );
 
   try {
