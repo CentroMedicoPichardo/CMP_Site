@@ -6,37 +6,10 @@ import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
 import { usuarios } from "@/lib/schema";
+import { validarContrasena } from "@/lib/validarContrasena";
 
 const ERROR_ENLACE =
   "El enlace es inválido, expiró o ya fue utilizado. Solicita uno nuevo.";
-
-function validarContrasena(valor: string): string | null {
-  if (valor.length < 8 || Buffer.byteLength(valor, "utf8") > 72) {
-    return "La contraseña debe tener al menos 8 caracteres y no superar 72 bytes.";
-  }
-
-  if (
-    !/^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/.test(
-      valor
-    )
-  ) {
-    return "La contraseña debe contener letras, números y un símbolo.";
-  }
-
-  const secuencias = [
-    "123", "234", "345", "456", "789", "abc", "qwe",
-  ];
-
-  if (
-    secuencias.some((secuencia) =>
-      valor.toLowerCase().includes(secuencia)
-    )
-  ) {
-    return "La contraseña contiene una secuencia insegura.";
-  }
-
-  return null;
-}
 
 export async function POST(request: Request) {
   try {
