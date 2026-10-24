@@ -1,0 +1,68 @@
+name: Anonimizar cuentas canceladas
+
+# Anonimización final (B-6.3) de las cuentas con baja lógica cuya
+# retención de 18 meses ya se cumplió.
+#
+# Secrets requeridos del repositorio:
+#   CMP_SITE_URL                    URL base de producción, sin "/" final.
+#   ARCO_ANONIMIZACION_JOB_SECRET   Mismo valor que en Vercel.
+#
+# Variable opcional del repositorio:
+#   ARCO_ANONIMIZACION_MODO         "simular" (por defecto) o "ejecutar".
+#
+# Aunque el modo sea "ejecutar", el servidor solo modifica datos si tiene
+# ARCO_ANONIMIZACION_HABILITADA=true; si no, responde 423 y este job falla.
+
+on:
+  schedule:
+    # Una vez al día, 09:00 UTC.
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: "simular (solo consulta) o ejecutar (modifica datos)"
+        type: choice
+        options:
+          - simular
+          - ejecutar
+        default: simular
+
+permissions: {}
+
+concurrency:
+  group: anonimizar-cuentas-canceladas
+  cancel-in-progress: false
+
+jobs:
+  anonimizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Llamar al job de anonimización
+        env:
+          CMP_SITE_URL: ${{ secrets.CMP_SITE_URL }}
+          ARCO_ANONIMIZACION_JOB_SECRET: ${{ secrets.ARCO_ANONIMIZACION_JOB_SECRET }}
+          MODO: ${{ inputs.modo || vars.ARCO_ANONIMIZACION_MODO || 'simular' }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CMP_SITE_URL}" ] || [ -z "${ARCO_ANONIMIZACION_JOB_SECRET}" ]; then
+            echo "Faltan los secrets CMP_SITE_URL o ARCO_ANONIMIZACION_JOB_SECRET." >&2
+            exit 1
+          fi
+
+          case "${MODO}" in
+            simular|ejecutar) ;;
+            *) echo "Modo inválido: ${MODO}" >&2; exit 1 ;;
+          esac
+
+          echo "Modo: ${MODO}"
+
+          curl --silent --show-error --fail-with-body \
+            --max-time 120 \
+            --request POST \
+            --header "Authorization: Bearer ${ARCO_ANONIMIZACION_JOB_SECRET}" \
+            --header "Content-Type: application/json" \
+            --data "{\"modo\":\"${MODO}\"}" \
+            "${CMP_SITE_URL}/api/sistema/jobs/anonimizar-cuentas"
+          echo

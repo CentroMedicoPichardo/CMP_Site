@@ -29,6 +29,13 @@
       "when": 1792724486002,
       "tag": "0003_preferencias_privacidad",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792883030277,
+      "tag": "0004_fecha_anonimizacion",
+      "breakpoints": true
     }
   ]
 }
