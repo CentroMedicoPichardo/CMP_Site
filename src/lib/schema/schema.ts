@@ -169,6 +169,7 @@ export const usuariosInSeguridad = seguridad.table("usuarios", {
 	mfaHabilitado: boolean("mfa_habilitado").default(false),
 	secretoMfa: text("secreto_mfa"),
 	activo: boolean().default(true),
+	fechaAnonimizacion: timestamp("fecha_anonimizacion", { mode: 'string' }),
 }, (table) => [
 	foreignKey({
 			columns: [table.rolId],

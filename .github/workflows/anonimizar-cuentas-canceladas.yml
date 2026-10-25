@@ -1,0 +1,41 @@
+# Anonimización final (B-6.3) de las cuentas con baja lógica cuya
+# retención de 18 meses ya se cumplió.
+#
+# Requiere el secret ARCO_ANONIMIZACION_JOB_SECRET, configurado en
+# Settings -> Secrets and variables -> Actions de este repositorio, con el
+# MISMO valor que la variable de entorno ARCO_ANONIMIZACION_JOB_SECRET en
+# Vercel.
+#
+# El servidor solo modifica datos si además tiene
+# ARCO_ANONIMIZACION_HABILITADA=true; si no, responde 423 y este workflow
+# falla (curl -f).
+
+name: Anonimizar cuentas canceladas
+
+on:
+  schedule:
+    # Una vez al día, 09:00 UTC.
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: anonimizar-cuentas-canceladas
+  cancel-in-progress: false
+
+jobs:
+  anonimizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Anonimizar cuentas con retención cumplida
+        env:
+          ARCO_ANONIMIZACION_JOB_SECRET: ${{ secrets.ARCO_ANONIMIZACION_JOB_SECRET }}
+        run: |
+          curl -f --silent --show-error --max-time 120 \
+            --request POST \
+            --header "Authorization: Bearer ${ARCO_ANONIMIZACION_JOB_SECRET}" \
+            --header "Content-Type: application/json" \
+            --data '{"modo":"ejecutar"}' \
+            "https://cmp-site.vercel.app/api/sistema/jobs/anonimizar-cuentas"
