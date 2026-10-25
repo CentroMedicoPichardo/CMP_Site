@@ -292,6 +292,9 @@ test("ejecutar anonimiza solo las elegibles, con los valores indicados", async (
   assert.equal(env.seen.hashCalls.length, 2);
   assert.ok(env.seen.hashCalls.every(c => c.cost === 12 && /^[0-9a-f]{64}$/.test(c.value)));
   assert.notEqual(env.seen.hashCalls[0].value, env.seen.hashCalls[1].value);
+  // el UNIQUE de correo se conserva en toda la tabla
+  const correos = env.state.users.map(u => u.correo);
+  assert.equal(new Set(correos).size, correos.length);
   // las demas cuentas no cambian
   for (const id of [3, 4, 5, 6, 7, 8, 9]) assert.deepEqual(env.user(id), antes.find(u => u.id === id), "cuenta " + id);
 });
@@ -403,12 +406,14 @@ test("migracion 0004: solo agrega la columna nullable; snapshot y journal consis
 
 test("workflow: una vez al dia, secretos desde GitHub Secrets, sin imprimir el secreto", () => {
   const yml = readFileSync(".github/workflows/anonimizar-cuentas-canceladas.yml", "utf8");
-  assert.match(yml, /schedule:\s*\n\s*#.*\n\s*- cron: "\d+ \d+ \* \* \*"/);
+  assert.match(yml, /schedule:\s*\n\s*#.*\n\s*- cron: "0 9 \* \* \*"/);
   assert.match(yml, /workflow_dispatch:/);
   assert.match(yml, /secrets\.ARCO_ANONIMIZACION_JOB_SECRET/);
-  assert.match(yml, /secrets\.CMP_SITE_URL/);
-  assert.match(yml, /\/api\/sistema\/jobs\/anonimizar-cuentas/);
-  assert.match(yml, /--fail-with-body/);
+  assert.match(yml, /"https:\/\/cmp-site\.vercel\.app\/api\/sistema\/jobs\/anonimizar-cuentas"/);
+  assert.match(yml, /--request POST/);
+  assert.match(yml, /--data '\{"modo":"ejecutar"\}'/);
+  assert.match(yml, /curl -f /);
+  assert.match(yml, /Settings -> Secrets and variables -> Actions/);
   assert.match(yml, /permissions: \{\}/);
   assert.doesNotMatch(yml, /echo[^\n]*\$\{?ARCO_ANONIMIZACION_JOB_SECRET/);
   assert.doesNotMatch(yml, /set -x/);
