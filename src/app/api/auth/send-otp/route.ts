@@ -5,13 +5,12 @@ import { usuariosInSeguridad } from '@/lib/schema/index';
 import { eq } from 'drizzle-orm';
 import { guardarOTP } from '@/lib/otpStore';
 import { sendVerificationEmail } from '@/lib/email';
+import { enmascararCorreo } from '@/lib/enmascararCorreo';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { email, nombre } = body;
-
-    console.log("📧 POST /api/auth/send-otp recibido:", { email, nombre });
 
     if (!email) {
       return NextResponse.json({ error: "El email es requerido" }, { status: 400 });
@@ -29,11 +28,8 @@ export async function POST(request: Request) {
     // Generar código de 6 dígitos
     const codigo = Math.floor(100000 + Math.random() * 900000).toString();
     
-    console.log("🔑 Código generado:", codigo);
-    console.log("=========================================");
-    console.log(`🔐 CÓDIGO DE VERIFICACIÓN PARA: ${email}`);
-    console.log(`📱 CÓDIGO: ${codigo}`);
-    console.log("=========================================");
+    // Nunca registrar el código: quien lea los logs podría usarlo.
+    console.log(`Código OTP generado para ${enmascararCorreo(email)}`);
     
     // Guardar en memoria
     guardarOTP(email, codigo, 10);
@@ -45,7 +41,7 @@ export async function POST(request: Request) {
       const emailResult = await sendVerificationEmail(email, nombreCompleto, codigo);
       if (emailResult.success) {
         emailEnviado = true;
-        console.log(`✅ Email enviado exitosamente a ${email}`);
+        console.log(`✅ Email enviado exitosamente a ${enmascararCorreo(email)}`);
       } else {
         console.error(`❌ Falló el envío de email:`, emailResult.error);
       }

@@ -1,6 +1,7 @@
 // src/lib/db-with-user.ts
 import { db } from './db';
 import { sql } from 'drizzle-orm';
+import { enmascararCorreo } from './enmascararCorreo';
 
 function decodeCookieValue(value: string): string {
   try {
@@ -52,8 +53,6 @@ export async function withUserEmail<T>(
   const userEmail = email && email !== 'sistema' ? email : 'sistema';
   
   try {
-    console.log(`🔐 Estableciendo email de usuario en tabla temporal: ${userEmail}`);
-    
     // Crear una tabla temporal si no existe (solo una vez)
     await db.execute(sql.raw(`
       CREATE TEMP TABLE IF NOT EXISTS temp_user_context (
@@ -71,17 +70,15 @@ export async function withUserEmail<T>(
     
     const result = await callback();
     
-    console.log(`✅ Operación completada con usuario: ${userEmail}`);
     return result;
   } catch (error) {
     // Los errores Drizzle pueden incluir parámetros privados, como el enlace Drive.
-    console.error(`❌ Error en operación con usuario: ${userEmail}`);
+    console.error(`❌ Error en operación con usuario: ${enmascararCorreo(userEmail)}`);
     throw error;
   } finally {
     // Limpiar la tabla temporal
     await db.execute(sql.raw(`
       DELETE FROM temp_user_context WHERE key = 'current_user_email'
     `));
-    console.log(`🔓 Contexto limpiado`);
   }
 }
