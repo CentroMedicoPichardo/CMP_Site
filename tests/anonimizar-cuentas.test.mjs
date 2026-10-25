@@ -395,8 +395,10 @@ test("migracion 0004: solo agrega la columna nullable; snapshot y journal consis
   for (const field of ["id", "prevId"]) {delete current[field]; delete previous[field];}
   assert.deepEqual(current, previous);
   const journal = JSON.parse(readFileSync("drizzle/meta/_journal.json", "utf8")).entries;
-  assert.equal(journal.at(-1).tag, "0004_fecha_anonimizacion");
-  assert.equal(journal.at(-1).idx, journal.length - 1);
+  // Se busca por tag: migraciones posteriores no deben romper esta prueba.
+  const entrada = journal.find(e => e.tag === "0004_fecha_anonimizacion");
+  assert.ok(entrada);
+  assert.equal(entrada.idx, journal.indexOf(entrada));
   const migration = readFileSync("drizzle/0004_fecha_anonimizacion.sql", "utf8");
   assert.match(migration, /ALTER TABLE "seguridad"\."usuarios" ADD COLUMN IF NOT EXISTS "fecha_anonimizacion" timestamp;/);
   assert.doesNotMatch(migration, /NOT NULL|DROP|DELETE|UPDATE/i);

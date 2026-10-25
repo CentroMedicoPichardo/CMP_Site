@@ -5,9 +5,14 @@ import { db } from "@/lib/db";
 import {
   usuariosInSeguridad,
   rolesInSeguridad,
+  aceptacionesLegales,
 } from "@/lib/schema/index";
 import { eq } from "drizzle-orm";
 import { otpMemoria, verificarOTP } from "@/lib/otpStore";
+import {
+  TIPOS_DOCUMENTO_LEGAL,
+  obtenerDocumentosLegalesVigentes,
+} from "@/lib/legal/documentos";
 
 const ROL_POR_DEFECTO = 1; // ID del rol cliente
 
@@ -106,6 +111,40 @@ export async function POST(request: Request) {
       );
     }
 
+    // Nunca se registra a un usuario sin un Aviso de Privacidad y
+    // unos Términos vigentes a los que referenciar su aceptación.
+    // Se comprueba antes de verificar el OTP, que se consume al
+    // validarse, para que el usuario no pierda su código.
+    const documentosVigentes =
+      await obtenerDocumentosLegalesVigentes();
+
+    const documentosAceptables = TIPOS_DOCUMENTO_LEGAL.map(
+      (tipo) =>
+        documentosVigentes.find(
+          (documento) => documento.tipo === tipo
+        )
+    );
+
+    if (documentosAceptables.some((documento) => !documento)) {
+      console.error(
+        "Registro bloqueado: falta un documento legal vigente",
+        TIPOS_DOCUMENTO_LEGAL.filter(
+          (tipo) =>
+            !documentosVigentes.some(
+              (documento) => documento.tipo === tipo
+            )
+        )
+      );
+
+      return NextResponse.json(
+        {
+          message:
+            "El registro no está disponible por el momento. Inténtalo más tarde.",
+        },
+        { status: 500 }
+      );
+    }
+
     const otpValidation = verificarOTP(correo, codigoVerificacion);
 
     if (!otpValidation.valido) {
@@ -151,23 +190,39 @@ export async function POST(request: Request) {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(contrasena, salt);
 
-    const nuevosUsuarios = await db
-      .insert(usuariosInSeguridad)
-      .values({
-        nombre,
-        apellidoPaterno,
-        apellidoMaterno,
-        edad,
-        sexo,
-        telefono,
-        correo,
-        contrasena: hashedPassword,
-        rolId: ROL_POR_DEFECTO,
-        activo: true,
-      })
-      .returning();
+    // El usuario y su aceptación de los documentos vigentes se
+    // guardan en la misma transacción: no queda una cuenta sin
+    // constancia de la versión que aceptó.
+    const usuarioCreado = await db.transaction(async (tx) => {
+      const [creado] = await tx
+        .insert(usuariosInSeguridad)
+        .values({
+          nombre,
+          apellidoPaterno,
+          apellidoMaterno,
+          edad,
+          sexo,
+          telefono,
+          correo,
+          contrasena: hashedPassword,
+          rolId: ROL_POR_DEFECTO,
+          activo: true,
+        })
+        .returning();
 
-    const usuarioCreado = nuevosUsuarios[0];
+      if (!creado) {
+        return undefined;
+      }
+
+      await tx.insert(aceptacionesLegales).values(
+        documentosVigentes.map((documento) => ({
+          usuarioId: creado.id,
+          idDocumento: documento.idDocumento,
+        }))
+      );
+
+      return creado;
+    });
 
     if (!usuarioCreado) {
       return NextResponse.json(

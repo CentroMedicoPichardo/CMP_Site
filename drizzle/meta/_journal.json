@@ -36,6 +36,13 @@
       "when": 1792883030277,
       "tag": "0004_fecha_anonimizacion",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792896496492,
+      "tag": "0005_documentos_legales",
+      "breakpoints": true
     }
   ]
 }
