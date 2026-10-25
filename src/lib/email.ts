@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { enmascararCorreo } from '@/lib/enmascararCorreo';
 
 // ✅ Configurar transporter
 const transporter = nodemailer.createTransport({
@@ -38,14 +39,14 @@ export async function sendEmail(
 
     const info = await transporter.sendMail(mailOptions);
 
-    console.log(`✅ Email enviado a ${to}`);
+    console.log(`✅ Email enviado a ${enmascararCorreo(to)}`);
     return {
       success: true,
       messageId: info.messageId
     };
 
   } catch (error: any) {
-    console.error(`❌ Error enviando a ${to}:`, error.message);
+    console.error(`❌ Error enviando a ${enmascararCorreo(to)}:`, error.message);
     return {
       success: false,
       error: error.message
