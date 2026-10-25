@@ -193,6 +193,41 @@ export const preferenciasPrivacidadInSeguridad = seguridad.table("preferencias_p
 		}).onDelete("cascade"),
 ]);
 
+export const documentosLegalesInSeguridad = seguridad.table("documentos_legales", {
+	idDocumento: serial("id_documento").primaryKey().notNull(),
+	tipo: varchar({ length: 30 }).notNull(),
+	version: varchar({ length: 20 }).notNull(),
+	resumen: text().notNull(),
+	contenido: text().notNull(),
+	vigenteDesde: timestamp("vigente_desde", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+	activo: boolean().default(true).notNull(),
+	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+	uniqueIndex("idx_documento_legal_activo_unico").using("btree", table.tipo.asc().nullsLast().op("text_ops")).where(sql`(activo = true)`),
+	unique("uq_documento_legal_tipo_version").on(table.tipo, table.version),
+	check("chk_documento_legal_tipo", sql`(tipo)::text = ANY ((ARRAY['aviso_privacidad'::character varying, 'terminos_condiciones'::character varying])::text[])`),
+]);
+
+export const aceptacionesLegalesInSeguridad = seguridad.table("aceptaciones_legales", {
+	idAceptacion: bigserial("id_aceptacion", { mode: "number" }).primaryKey().notNull(),
+	usuarioId: integer("usuario_id").notNull(),
+	idDocumento: integer("id_documento").notNull(),
+	fechaAceptacion: timestamp("fecha_aceptacion", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+	index("idx_aceptaciones_legales_usuario").using("btree", table.usuarioId.asc().nullsLast().op("int4_ops")),
+	foreignKey({
+			columns: [table.usuarioId],
+			foreignColumns: [usuariosInSeguridad.id],
+			name: "fk_aceptacion_legal_usuario"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.idDocumento],
+			foreignColumns: [documentosLegalesInSeguridad.idDocumento],
+			name: "fk_aceptacion_legal_documento"
+		}),
+	unique("uq_aceptacion_usuario_documento").on(table.usuarioId, table.idDocumento),
+]);
+
 export const monitoreoRendimientoInSeguridad = seguridad.table("monitoreo_rendimiento", {
 	idMonitoreo: serial("id_monitoreo").primaryKey().notNull(),
 	fechaHora: timestamp("fecha_hora", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`),

@@ -28,6 +28,7 @@ import {
 import axios from "axios";
 import { toast } from "react-toastify";
 
+import { ResumenLegalRegistro } from "@/components/public/legal/ResumenLegalRegistro";
 import { RegisterSocialButtons } from "./RegisterSocialButtons";
 import { VerifyCodeForm } from "./VerifyCodeForm";
 
@@ -1248,6 +1249,8 @@ export function RegisterForm({
                     .
                   </span>
                 </label>
+
+                <ResumenLegalRegistro />
 
                 {errores.terminos && (
                   <MensajeError
