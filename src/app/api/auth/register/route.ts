@@ -13,6 +13,10 @@ import {
   TIPOS_DOCUMENTO_LEGAL,
   obtenerDocumentosLegalesVigentes,
 } from "@/lib/legal/documentos";
+import {
+  MENSAJE_EDAD_MINIMA,
+  validarEdadRegistro,
+} from "@/lib/validarEdad";
 
 const ROL_POR_DEFECTO = 1; // ID del rol cliente
 
@@ -26,16 +30,6 @@ function normalizarTexto(valor: unknown, maxLength = 255) {
 
 function normalizarCorreo(valor: unknown) {
   return normalizarTexto(valor, 150).toLowerCase();
-}
-
-function normalizarEdad(valor: unknown) {
-  const edad = Number(valor);
-
-  if (!Number.isInteger(edad) || edad <= 0 || edad > 120) {
-    return null;
-  }
-
-  return edad;
 }
 
 function correoValido(correo: string) {
@@ -71,7 +65,7 @@ export async function POST(request: Request) {
     const nombre = normalizarTexto(body.nombre, 100);
     const apellidoPaterno = normalizarTexto(body.apellidoPaterno, 100);
     const apellidoMaterno = normalizarTexto(body.apellidoMaterno, 100) || null;
-    const edad = normalizarEdad(body.edad);
+    const resultadoEdad = validarEdadRegistro(body.edad);
     const sexo = normalizarTexto(body.sexo, 30);
     const telefono = normalizarTexto(body.telefono, 30);
     const correo = normalizarCorreo(body.correo);
@@ -92,7 +86,13 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!nombre || !apellidoPaterno || !edad || !sexo || !telefono) {
+    if (
+      !nombre ||
+      !apellidoPaterno ||
+      (!resultadoEdad.valida && resultadoEdad.motivo === "invalida") ||
+      !sexo ||
+      !telefono
+    ) {
       return NextResponse.json(
         {
           message:
@@ -101,6 +101,18 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // Solo las cuentas de titulares exigen mayoría de edad; los
+    // participantes de un curso pueden ser menores. Se rechaza antes
+    // de verificar el OTP para no consumir el código.
+    if (!resultadoEdad.valida) {
+      return NextResponse.json(
+        { message: MENSAJE_EDAD_MINIMA },
+        { status: 400 }
+      );
+    }
+
+    const edad = resultadoEdad.edad;
 
     const errorContrasena = validarContrasena(contrasena);
 
